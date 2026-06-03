@@ -1,11 +1,10 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, FileText, CalendarDays, Wallet, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, CalendarDays, CalendarClock } from 'lucide-react';
 import { DashboardLayout } from '../components/layouts/DashboardLayout';
 import { CustomerHome } from './customer/CustomerHome';
 import { CustomerOrders } from './customer/CustomerOrders';
 import { CustomerBills } from './customer/CustomerBills';
 import { CustomerCalendar } from './customer/CustomerCalendar';
-import { CustomerWallet } from './customer/CustomerWallet';
 import { CustomerSubscription } from './customer/CustomerSubscription';
 import { ProfilePage } from './shared/ProfilePage';
 
@@ -23,7 +22,6 @@ const TITLES: Record<string, string> = {
   '/customer/calendar':     'Delivery Calendar',
   '/customer/bills':        'My Bills',
   '/customer/profile':      'My Profile',
-  '/customer/wallet':       'My Wallet',
 };
 
 export default function CustomerDashboard() {
@@ -44,7 +42,7 @@ export default function CustomerDashboard() {
         <Route path="calendar" element={<CustomerCalendar />} />
         <Route path="bills"    element={<CustomerBills />} />
         <Route path="profile"  element={<ProfilePage />} />
-        <Route path="wallet"   element={<CustomerWallet />} />
+        <Route path="wallet"   element={<Navigate to="/customer" replace />} />
         <Route path="*"        element={<Navigate to="/customer" replace />} />
       </Routes>
     </DashboardLayout>

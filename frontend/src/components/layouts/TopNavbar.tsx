@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, ChevronDown, LogOut, User, CheckCheck, Wallet, MapPin } from 'lucide-react';
+import { Bell, Search, ChevronDown, LogOut, User, CheckCheck, MapPin } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotificationCenter } from '../../context/NotificationContext';
 import api from '../../api/axios';
@@ -29,7 +29,6 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [defaultAddress, setDefaultAddress] = useState<UserAddress | null>(null);
 
   const profileRef = useRef<HTMLDivElement>(null);
@@ -44,13 +43,6 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
-
-  // Fetch wallet balance for customers
-  useEffect(() => {
-    if (isCustomer) {
-      api.get('/wallet').then(({ data }) => setWalletBalance(data.balance)).catch(() => { });
-    }
-  }, [user]);
 
   // Fetch default address for customer mobile header
   useEffect(() => {
@@ -145,20 +137,6 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">
               <User className="w-4 h-4" /> My Profile
             </button>
-            {isCustomer && (
-              <button
-                onClick={() => { setProfileOpen(false); navigate('/customer/wallet'); }}
-                className="w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-                <span className="flex items-center gap-2.5">
-                  <Wallet className="w-4 h-4" /> My Wallet
-                </span>
-                {walletBalance !== null && (
-                  <span className="text-xs font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
-                    ₹{walletBalance.toFixed(0)}
-                  </span>
-                )}
-              </button>
-            )}
             <button onClick={handleLogout}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors">
               <LogOut className="w-4 h-4" /> Sign out

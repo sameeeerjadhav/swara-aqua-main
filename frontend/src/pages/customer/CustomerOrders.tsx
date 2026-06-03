@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Package, X, ChevronRight, MapPin, FileText, Droplets, RefreshCw, Navigation, Home, Briefcase, Check, Wallet, CreditCard, Banknote, Map } from 'lucide-react';
+import { Plus, Package, X, ChevronRight, MapPin, FileText, Droplets, RefreshCw, Navigation, Home, Briefcase, Check, Map } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
@@ -12,8 +12,6 @@ import { ordersApi, Order, TimelineEntry, Delivery } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
 import { useNotificationCenter } from '../../context/NotificationContext';
 import { addressApi, UserAddress } from '../../api/address';
-import { walletApi } from '../../api/wallet';
-import { loadRazorpay } from '../../utils/razorpay';
 import { MapPicker } from '../../components/ui/MapPicker';
 
 
@@ -42,7 +40,6 @@ export const CustomerOrders = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [submitting,    setSubmitting]    = useState(false);
   const [cancelling,    setCancelling]    = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0);
   const [orderSuccess,  setOrderSuccess]  = useState<{ orderId: number; quantity: number; total: number; mode: string; scheduledForTomorrow?: boolean } | null>(null);
   const [cancelReason, setCancelReason]   = useState('');
   const [showReasonModal, setShowReasonModal] = useState<number | null>(null); // order id
@@ -61,15 +58,7 @@ export const CustomerOrders = () => {
     deliveryDate: '',
     notes:        '',
     address:      '',
-    paymentMode:  'cod' as 'cod' | 'wallet' | 'razorpay',
   });
-
-  // Load wallet balance when form opens
-  useEffect(() => {
-    if (showForm) {
-      walletApi.get().then(({ data }) => setWalletBalance(data.balance)).catch(() => {});
-    }
-  }, [showForm]);
 
   // Show error toast if load failed
   useEffect(() => {
@@ -77,7 +66,7 @@ export const CustomerOrders = () => {
   }, [error]);
 
   const resetForm = () =>
-    setForm({ type: 'instant', quantity: 1, deliveryDate: '', notes: '', address: '', paymentMode: 'cod' });
+    setForm({ type: 'instant', quantity: 1, deliveryDate: '', notes: '', address: '' });
 
   // ── Place order ──────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,13 +75,9 @@ export const CustomerOrders = () => {
     if (form.type === 'preorder' && !form.deliveryDate) {
       toast('Please select a delivery date for preorder', 'error'); return;
     }
-    if (form.paymentMode === 'wallet' && walletBalance < totalAmount) {
-      toast(`Insufficient wallet balance. Have ₹${walletBalance}, need ₹${totalAmount}`, 'error'); return;
-    }
 
     setSubmitting(true);
     try {
-      // 1. Place the order first
       const { data: orderData } = await ordersApi.create({
         type:         form.type,
         quantity:     form.quantity,
@@ -104,60 +89,17 @@ export const CustomerOrders = () => {
 
       const orderId: number = orderData.orderId;
       const scheduledForTomorrow: boolean = orderData.scheduledForTomorrow || false;
-      let modeLabel = 'Cash on Delivery';
-
-      // 2. Handle payment
-      if (form.paymentMode === 'wallet') {
-        await walletApi.payOrder(orderId);
-        modeLabel = 'Paid via Wallet';
-
-      } else if (form.paymentMode === 'razorpay') {
-        const rzpLoaded = await loadRazorpay();
-        if (!rzpLoaded) { toast('Razorpay failed to load', 'error'); setSubmitting(false); return; }
-
-        const { data: rzpOrder } = await walletApi.createTopupOrder(totalAmount);
-
-        await new Promise<void>((resolve, reject) => {
-          const options = {
-            key:         rzpOrder.keyId,
-            amount:      rzpOrder.amount,
-            currency:    rzpOrder.currency,
-            name:        'Swara Aqua',
-            description: `Order #${orderId} — ${form.quantity} jars`,
-            order_id:    rzpOrder.orderId,
-            handler: async (response: any) => {
-              try {
-                await walletApi.verifyTopup({
-                  razorpay_order_id:   response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature:  response.razorpay_signature,
-                  amount:              rzpOrder.amount,
-                });
-                await walletApi.payOrder(orderId);
-                resolve();
-              } catch { reject(new Error('Payment verification failed')); }
-            },
-            modal: { ondismiss: () => reject(new Error('dismissed')) },
-            theme: { color: '#2563eb' },
-          };
-          const rzp = new (window as any).Razorpay(options);
-          rzp.open();
-        });
-        modeLabel = 'Paid via Razorpay';
-      }
+      const modeLabel = 'Cash on Delivery';
 
       await enablePush();
 
-      // Show success screen (server sends one push — no duplicate local alert)
       setOrderSuccess({ orderId, quantity: form.quantity, total: totalAmount, mode: modeLabel, scheduledForTomorrow });
 
       setShowForm(false);
       resetForm();
       await refresh();
     } catch (err: any) {
-      if (err?.message !== 'dismissed') {
-        toast(err?.response?.data?.message || err?.message || 'Failed to place order', 'error');
-      }
+      toast(err?.response?.data?.message || err?.message || 'Failed to place order', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -400,54 +342,22 @@ export const CustomerOrders = () => {
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all resize-none" />
                   </div>
 
-                  {/* Payment method — stacked on mobile, row on desktop */}
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Payment Method</label>
-                    <div className="flex flex-col sm:grid sm:grid-cols-3 gap-2">
-                      {([
-                        { key: 'cod',      label: 'Cash on Delivery', shortLabel: 'Cash / COD', icon: <Banknote className="w-5 h-5 sm:w-4 sm:h-4" /> },
-                        { key: 'wallet',   label: `Wallet (₹${walletBalance})`, shortLabel: `Wallet · ₹${walletBalance}`, icon: <Wallet className="w-5 h-5 sm:w-4 sm:h-4" /> },
-                        { key: 'razorpay', label: 'Pay Online', shortLabel: 'Pay Online', icon: <CreditCard className="w-5 h-5 sm:w-4 sm:h-4" /> },
-                      ] as const).map(({ key, label, shortLabel, icon }) => (
-                        <button key={key} type="button"
-                          onClick={() => setForm(f => ({ ...f, paymentMode: key }))}
-                          className={`
-                            flex items-center gap-3 py-3 px-4 rounded-xl text-sm font-semibold border transition-all
-                            sm:flex-col sm:items-center sm:gap-1.5 sm:py-3 sm:px-2 sm:text-xs
-                            ${form.paymentMode === key
-                              ? 'bg-brand-600 text-white border-brand-600 shadow-brand'
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-brand-300 hover:bg-brand-50'}`}>
-                          {icon}
-                          <span className="sm:hidden">{shortLabel}</span>
-                          <span className="hidden sm:inline text-center leading-tight">{label}</span>
-                          {form.paymentMode === key && (
-                            <Check className="w-4 h-4 ml-auto sm:hidden" />
-                          )}
-                        </button>
-                      ))}
+                  {/* Payment method — Cash on Delivery only */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+                      <span className="text-base">💵</span>
                     </div>
-                    {form.paymentMode === 'wallet' && walletBalance < totalAmount && (
-                      <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
-                        Insufficient balance — need ₹{totalAmount - walletBalance} more.
-                        <a href="/customer/wallet" className="underline font-semibold">Top up</a>
-                      </p>
-                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">Cash on Delivery</p>
+                      <p className="text-xs text-slate-400">Pay when your water arrives</p>
+                    </div>
                   </div>
 
                   {/* Sticky submit on mobile */}
                   <div className="sticky bottom-0 pt-2 pb-1 bg-white -mx-5 px-5 md:relative md:mx-0 md:px-0 md:pt-0 md:pb-0">
                     <Button type="submit" loading={submitting} size="lg" className="w-full !py-4 md:!py-3.5 text-sm"
                       icon={<Droplets className="w-4 h-4" />}>
-                      <span className="sm:hidden">
-                        {form.paymentMode === 'cod' ? `Place Order · ₹${totalAmount}`
-                         : form.paymentMode === 'wallet' ? `Pay ₹${totalAmount} · Wallet`
-                         : `Pay ₹${totalAmount} · Online`}
-                      </span>
-                      <span className="hidden sm:inline">
-                        {form.paymentMode === 'cod'      ? `Place Order — Pay ₹${totalAmount} on delivery`
-                         : form.paymentMode === 'wallet' ? `Pay ₹${totalAmount} from Wallet`
-                         : `Pay ₹${totalAmount} via Razorpay`}
-                      </span>
+                      Place Order · ₹{totalAmount}
                     </Button>
                   </div>
                 </form>

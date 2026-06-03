@@ -1,0 +1,7 @@
+PassengerEnabled on
+PassengerAppRoot /home/u182510996/swara_aqua/backend
+PassengerStartupFile app.js
+PassengerAppType node
+PassengerNodejs /usr/bin/node
+
+Options -MultiViews

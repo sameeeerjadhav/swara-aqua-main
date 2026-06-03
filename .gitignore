@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment files — NEVER commit real secrets
+backend/.env
+frontend/.env
+backend/config/firebase-service-account.json
+**/firebase-service-account.json
+!**/firebase-service-account.json.example
+
+# Build output
+backend/dist/
+backend/public/
+frontend/dist/
+frontend/dev-dist/
+
+# Uploaded files — kept on server, not in git
+backend/uploads/banners/*.jpg
+backend/uploads/banners/*.jpeg
+backend/uploads/banners/*.png
+backend/uploads/banners/*.webp
+backend/uploads/bills/
+# Keep the .gitkeep placeholder
+!backend/assets/bill/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/

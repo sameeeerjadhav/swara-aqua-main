@@ -1,0 +1,62 @@
+import axios from 'axios';
+
+// In production the frontend is served by the same Express server,
+// so relative /api works. In dev, Vite proxies /api → localhost:5000.
+const BACKEND_ORIGIN = import.meta.env.VITE_API_URL || '';
+
+const BASE_URL = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : '/api';
+
+/**
+ * Resolves a relative backend path like /uploads/banners/xx.jpg
+ * to a full URL when the backend is on a different origin.
+ */
+export const getUploadUrl = (path: string): string => {
+  if (!path) return '';
+  // Already an absolute URL — leave as-is
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  // Relative path — prefix with backend origin if configured
+  return BACKEND_ORIGIN ? `${BACKEND_ORIGIN}${path}` : path;
+};
+
+
+const api = axios.create({
+  baseURL: BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
+});
+
+// Attach token to every request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('accessToken');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// Auto-refresh on 401
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
+          localStorage.setItem('accessToken', data.accessToken);
+          original.headers.Authorization = `Bearer ${data.accessToken}`;
+          return api(original);
+        } catch {
+          localStorage.clear();
+          window.location.href = '/login';
+        }
+      } else {
+        localStorage.clear();
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;

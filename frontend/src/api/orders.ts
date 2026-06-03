@@ -19,6 +19,7 @@ export interface Order {
   customer_name?: string;
   customer_phone?: string;
   staff_name?: string;
+  paid_online?: boolean; // true if a completed online payment exists
 }
 
 export interface Delivery {

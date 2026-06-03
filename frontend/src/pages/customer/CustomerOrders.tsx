@@ -570,7 +570,7 @@ export const CustomerOrders = () => {
               {/* Pay Now / Paid indicator — for non-cancelled orders */}
               {order.status !== 'cancelled' && (
                 <div className="mt-3 pt-3 border-t border-slate-50" onClick={e => e.stopPropagation()}>
-                  {paidOrderIds.has(order.id) ? (
+                  {(order.paid_online || paidOrderIds.has(order.id)) ? (
                     <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
                       <Check className="w-3.5 h-3.5 text-green-600" />
                       <span className="text-xs font-bold text-green-700">Payment Done — Thank you!</span>
@@ -739,7 +739,7 @@ export const CustomerOrders = () => {
                     {!['completed', 'cancelled'].includes(selected.order.status) && (
                       <>
                         {/* Pay Now / Paid indicator in detail modal */}
-                        {paidOrderIds.has(selected.order.id) ? (
+                        {(paidOrderIds.has(selected.order.id) || selected.order.paid_online) ? (
                           <div className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-green-50 border border-green-200">
                             <Check className="w-4 h-4 text-green-600" />
                             <span className="text-sm font-bold text-green-700">Payment Successful — Thank you!</span>

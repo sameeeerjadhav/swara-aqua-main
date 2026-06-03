@@ -23,6 +23,7 @@ export interface Order {
   customer_name?: string;
   customer_phone?: string;
   staff_name?: string;
+  paid_online?: boolean;  // true if a completed online payment exists in transactions
 }
 
 export interface Delivery {
@@ -45,10 +46,16 @@ const orderQuery = (where: string) => `
     o.*,
     c.name  AS customer_name,
     c.phone AS customer_phone,
-    s.name  AS staff_name
+    s.name  AS staff_name,
+    CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END AS paid_online
   FROM orders o
   JOIN  users c ON c.id = o.customer_id
   LEFT JOIN users s ON s.id = o.staff_id
+  LEFT JOIN transactions t
+    ON  t.order_id  = o.id
+    AND t.mode      = 'online'
+    AND t.status    = 'completed'
+    AND t.type      = 'credit'
   ${where}
   ORDER BY o.created_at DESC
 `;

@@ -4,6 +4,7 @@ import {
   createOrder, getOrders, getOrderById, cancelOrder,
   assignOrder, updateOrderStatus, getOrderStats, getStaffList,
   completeDelivery, getDeliveries, getCalendarData, getDailySummary,
+  createOrderPayment, verifyOrderPayment,
 } from '../controllers/order.controller';
 
 const router = Router();
@@ -23,5 +24,9 @@ router.get('/:id',         authenticate,  getOrderById);      // all roles
 router.put('/:id/assign',  ...allowAdmin, assignOrder);       // admin
 router.put('/:id/status',  authenticate,  updateOrderStatus); // staff + admin
 router.delete('/:id',      authenticate,  cancelOrder);       // customer
+
+// Razorpay payment for an order (customer)
+router.post('/:id/pay/create',  authenticate, createOrderPayment);
+router.post('/:id/pay/verify',  authenticate, verifyOrderPayment);
 
 export default router;

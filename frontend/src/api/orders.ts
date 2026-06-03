@@ -90,4 +90,18 @@ export const ordersApi = {
       empty_collected: number;
       cash_in_hand: number;
     }>('/orders/daily-summary'),
+
+  // Razorpay payment for an order
+  createOrderPayment: (orderId: number) =>
+    api.post<{ rzpOrderId: string; amount: number; currency: string; keyId: string; orderAmount: number }>(
+      `/orders/${orderId}/pay/create`
+    ),
+
+  verifyOrderPayment: (orderId: number, data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => api.post<{ message: string; orderId: number; amount: number }>(
+    `/orders/${orderId}/pay/verify`, data
+  ),
 };

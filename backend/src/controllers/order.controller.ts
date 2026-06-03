@@ -7,6 +7,8 @@ import * as Inv from '../models/inventory.model';
 import * as SSE from '../services/sse.service';
 import pool from '../config/db';
 import { RowDataPacket } from 'mysql2';
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
 
 const DEFAULT_PRICE = 50;
 
@@ -579,6 +581,117 @@ export const getDailySummary = async (req: AuthRequest, res: Response): Promise<
     });
   } catch (err) {
     console.error('getDailySummary error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── Razorpay Order Payment ────────────────────────────────────────────────────
+
+// Lazy-init Razorpay instance (same pattern as wallet controller)
+let _razorpay: Razorpay | null = null;
+const getRazorpay = () => {
+  if (!_razorpay) {
+    const key_id     = process.env.RAZORPAY_KEY_ID     || '';
+    const key_secret = process.env.RAZORPAY_KEY_SECRET || '';
+    if (!key_id || !key_secret) throw new Error('Razorpay keys not configured');
+    _razorpay = new Razorpay({ key_id, key_secret });
+  }
+  return _razorpay;
+};
+
+// POST /api/orders/:id/pay/create  — create Razorpay order for paying an app order
+export const createOrderPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orderId = Number(req.params.id);
+    const order = await OrderModel.getOrderById(orderId);
+    if (!order) { res.status(404).json({ message: 'Order not found' }); return; }
+    if (order.customer_id !== req.user!.id) { res.status(403).json({ message: 'Access denied' }); return; }
+    if (order.status === 'cancelled') { res.status(400).json({ message: 'Cannot pay for a cancelled order' }); return; }
+
+    const amount = Number(order.total_amount);
+    if (!amount || amount < 1) { res.status(400).json({ message: 'Invalid order amount' }); return; }
+
+    const rzpOrder = await getRazorpay().orders.create({
+      amount:   Math.round(amount * 100), // paise
+      currency: 'INR',
+      receipt:  `order_${orderId}_${Date.now()}`,
+      notes:    { userId: String(req.user!.id), orderId: String(orderId), purpose: 'order_payment' },
+    });
+
+    res.json({
+      rzpOrderId: rzpOrder.id,
+      amount:     rzpOrder.amount,
+      currency:   rzpOrder.currency,
+      keyId:      process.env.RAZORPAY_KEY_ID,
+      orderAmount: amount,
+    });
+  } catch (err) {
+    console.error('createOrderPayment error:', err);
+    res.status(500).json({ message: 'Failed to create payment order' });
+  }
+};
+
+// POST /api/orders/:id/pay/verify  — verify Razorpay payment for an app order
+export const verifyOrderPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orderId = Number(req.params.id);
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      res.status(400).json({ message: 'Missing payment verification fields' }); return;
+    }
+
+    const order = await OrderModel.getOrderById(orderId);
+    if (!order) { res.status(404).json({ message: 'Order not found' }); return; }
+    if (order.customer_id !== req.user!.id) { res.status(403).json({ message: 'Access denied' }); return; }
+
+    // Verify Razorpay signature
+    const expectedSig = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSig !== razorpay_signature) {
+      res.status(400).json({ message: 'Payment verification failed — invalid signature' }); return;
+    }
+
+    const amount = Number(order.total_amount);
+    const userId = req.user!.id;
+
+    // Record the payment transaction
+    await pool.query(
+      `INSERT INTO transactions
+         (customer_id, order_id, amount, mode, type, status, note)
+       VALUES (?, ?, ?, 'online', 'credit', 'completed', ?)`,
+      [userId, orderId, amount, `Online payment for Order #${orderId} via Razorpay (${razorpay_payment_id})`]
+    );
+
+    // Notify customer
+    notify(() =>
+      NotifService.sendToUser({
+        userId,
+        title: '✅ Payment Successful!',
+        body:  `₹${amount} paid for Order #${orderId} via Razorpay.`,
+        type:  'payment',
+        data:  { orderId: String(orderId) },
+      })
+    );
+
+    notify(() =>
+      NotifService.sendToRole(
+        'admin',
+        '💳 Online Payment Received',
+        `Order #${orderId} — ₹${amount} paid online by customer.`,
+        'payment',
+        { orderId: String(orderId) }
+      )
+    );
+
+    SSE.broadcastToRole('admin', 'order_updated', { orderId, status: 'paid_online' });
+
+    res.json({ message: 'Payment verified successfully', orderId, amount });
+  } catch (err) {
+    console.error('verifyOrderPayment error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };

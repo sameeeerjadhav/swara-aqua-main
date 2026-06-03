@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Package, X, ChevronRight, MapPin, FileText, Droplets, RefreshCw, Navigation, Home, Briefcase, Check, Map } from 'lucide-react';
+import { Plus, Package, X, ChevronRight, MapPin, FileText, Droplets, RefreshCw, Navigation, Home, Briefcase, Check, Map, CreditCard } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotificationCenter } from '../../context/NotificationContext';
 import { addressApi, UserAddress } from '../../api/address';
 import { MapPicker } from '../../components/ui/MapPicker';
+import { loadRazorpay } from '../../utils/razorpay';
 
 
 
@@ -43,6 +44,7 @@ export const CustomerOrders = () => {
   const [orderSuccess,  setOrderSuccess]  = useState<{ orderId: number; quantity: number; total: number; mode: string; scheduledForTomorrow?: boolean } | null>(null);
   const [cancelReason, setCancelReason]   = useState('');
   const [showReasonModal, setShowReasonModal] = useState<number | null>(null); // order id
+  const [payingOrderId, setPayingOrderId] = useState<number | null>(null);
 
   // Auto-open form if navigated with ?new=1
   useEffect(() => {
@@ -144,6 +146,53 @@ export const CustomerOrders = () => {
       }
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // ── Pay now via Razorpay ─────────────────────────────────────────────────────
+  const handlePayNow = async (order: Order) => {
+    setPayingOrderId(order.id);
+    try {
+      const rzpLoaded = await loadRazorpay();
+      if (!rzpLoaded) { toast('Razorpay failed to load. Please try again.', 'error'); return; }
+
+      const { data } = await ordersApi.createOrderPayment(order.id);
+
+      await new Promise<void>((resolve, reject) => {
+        const options = {
+          key:         data.keyId,
+          amount:      data.amount,
+          currency:    data.currency,
+          name:        'Swara Aqua',
+          description: `Payment for Order #${order.id} (${order.quantity} jars)`,
+          order_id:    data.rzpOrderId,
+          prefill: {
+            name:  user?.name  || '',
+            contact: user?.phone || '',
+          },
+          handler: async (response: any) => {
+            try {
+              await ordersApi.verifyOrderPayment(order.id, {
+                razorpay_order_id:   response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature:  response.razorpay_signature,
+              });
+              toast(`✅ ₹${data.orderAmount} paid for Order #${order.id}!`, 'success');
+              setSelected(null);
+              await refresh();
+              resolve();
+            } catch { reject(new Error('Verification failed')); }
+          },
+          modal: { ondismiss: () => reject(new Error('dismissed')) },
+          theme: { color: '#2563eb' },
+        };
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+      });
+    } catch (err: any) {
+      if (err?.message !== 'dismissed') toast(err?.response?.data?.message || 'Payment failed', 'error');
+    } finally {
+      setPayingOrderId(null);
     }
   };
 
@@ -418,6 +467,20 @@ export const CustomerOrders = () => {
                 </div>
               </div>
 
+              {/* Pay Now button — for non-cancelled orders */}
+              {order.status !== 'cancelled' && (
+                <div className="mt-3 pt-3 border-t border-slate-50" onClick={e => e.stopPropagation()}>
+                  <button
+                    onClick={() => handlePayNow(order)}
+                    disabled={payingOrderId === order.id}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-xs font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    {payingOrderId === order.id ? 'Opening Payment…' : `Pay Now · ₹${order.total_amount}`}
+                  </button>
+                </div>
+              )}
+
               {order.address && (
                 <p className="text-xs text-slate-400 mt-2 flex items-center gap-1 truncate">
                   <MapPin className="w-3 h-3 shrink-0" />{order.address}
@@ -568,6 +631,16 @@ export const CustomerOrders = () => {
                     {/* Cancel button — smart policy */}
                     {!['completed', 'cancelled'].includes(selected.order.status) && (
                       <>
+                        {/* Pay Now button in detail modal */}
+                        <button
+                          onClick={() => handlePayNow(selected.order)}
+                          disabled={payingOrderId === selected.order.id}
+                          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60 shadow-lg shadow-brand-500/20"
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          {payingOrderId === selected.order.id ? 'Opening Razorpay…' : `Pay ₹${selected.order.total_amount} via Razorpay`}
+                        </button>
+
                         {(() => {
                           const ageMs = Date.now() - new Date(selected.order.created_at).getTime();
                           const isWithinHour = ageMs < 60 * 60 * 1000;

@@ -67,8 +67,8 @@ JWT_REFRESH_EXPIRES_IN=7d
 FRONTEND_URL=https://swaraaqua.labxco.in,https://wheat-woodpecker-720684.hostingersite.com
 # Firebase: use JSON file (upload backend/config/firebase-service-account.json via File Manager)
 FIREBASE_SERVICE_ACCOUNT_PATH=config/firebase-service-account.json
-RAZORPAY_KEY_ID=CHANGE_ME_RAZORPAY_KEY_ID
-RAZORPAY_KEY_SECRET=CHANGE_ME_RAZORPAY_KEY_SECRET
+RAZORPAY_KEY_ID=rzp_test_SxC45uO6pN1sID
+RAZORPAY_KEY_SECRET=aVd4Um78bK3Y3q4BKCLABkm9
 EOF
   echo "✅ .env created — IMPORTANT: edit $APPDIR/backend/.env and replace all CHANGE_ME_ values with real secrets"
 else

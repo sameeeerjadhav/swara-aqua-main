@@ -34,6 +34,32 @@ export interface Bill {
   customer_phone?: string;
 }
 
+export interface BillingSummary {
+  total_bills: number;
+  total_billed: number;
+  total_paid: number;
+  total_pending: number;
+  paid_count: number;
+  partial_count: number;
+  unpaid_count: number;
+  online_paid: number;
+  cash_paid: number;
+  cash_pending_verification: number;
+  tx_total_paid: number;
+}
+
+export interface CustomerSummary {
+  customer_id: number;
+  customer_name: string;
+  customer_phone: string;
+  total_billed: number;
+  total_paid: number;
+  total_pending: number;
+  bill_count: number;
+  due_bills: number;
+  latest_due_date: string | null;
+}
+
 export interface RevenuePoint {
   date?: string;
   month?: string;
@@ -85,6 +111,9 @@ export const billingApi = {
 
   myTransactions: (params?: { mode?: string }) =>
     api.get<{ transactions: Transaction[] }>('/inventory/transactions', { params }),
+
+  summary: (params?: { month?: string }) =>
+    api.get<{ summary: BillingSummary; customers: CustomerSummary[] }>('/billing/summary', { params }),
 
   get: (id: number) =>
     api.get<{ bill: Bill }>(`/billing/${id}`),

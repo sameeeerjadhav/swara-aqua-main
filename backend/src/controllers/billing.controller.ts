@@ -194,6 +194,74 @@ export const payBillWithWallet = async (req: AuthRequest, res: Response): Promis
   }
 };
 
+// ── GET /api/billing/summary  (admin) ────────────────────────────────────────
+export const getBillingSummary = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { month } = req.query as Record<string, string>;
+
+    // ── Aggregate from bills table ──────────────────────────────────────────
+    const billConditions = month ? `WHERE b.month = '${month}'` : '';
+    const [billAgg] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        COUNT(*)                                                         AS total_bills,
+        COALESCE(SUM(b.total_amount), 0)                                 AS total_billed,
+        COALESCE(SUM(b.paid_amount), 0)                                  AS total_paid,
+        COALESCE(SUM(b.total_amount - b.paid_amount), 0)                 AS total_pending,
+        COALESCE(SUM(CASE WHEN b.status = 'paid'    THEN 1 ELSE 0 END), 0) AS paid_count,
+        COALESCE(SUM(CASE WHEN b.status = 'partial' THEN 1 ELSE 0 END), 0) AS partial_count,
+        COALESCE(SUM(CASE WHEN b.status = 'unpaid'  THEN 1 ELSE 0 END), 0) AS unpaid_count
+      FROM bills b
+      ${billConditions}
+    `);
+
+    // ── Aggregate cash vs online from transactions ──────────────────────────
+    // Only credit transactions that are completed
+    const txConditions = month
+      ? `AND DATE_FORMAT(t.created_at, '%Y-%m') = '${month}'`
+      : '';
+    const [txAgg] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        COALESCE(SUM(CASE WHEN t.mode = 'online' AND t.status = 'completed' THEN t.amount ELSE 0 END), 0) AS online_paid,
+        COALESCE(SUM(CASE WHEN t.mode = 'cash'   AND t.status = 'completed' THEN t.amount ELSE 0 END), 0) AS cash_paid,
+        COALESCE(SUM(CASE WHEN t.mode = 'cash'   AND t.status = 'pending'   THEN t.amount ELSE 0 END), 0) AS cash_pending_verification,
+        COALESCE(SUM(CASE WHEN t.status = 'completed' THEN t.amount ELSE 0 END), 0) AS tx_total_paid
+      FROM transactions t
+      WHERE t.type = 'credit'
+      ${txConditions}
+    `);
+
+    // ── Per-customer breakdown ──────────────────────────────────────────────
+    const [custBreakdown] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        u.id                                                             AS customer_id,
+        u.name                                                           AS customer_name,
+        u.phone                                                          AS customer_phone,
+        COALESCE(SUM(b.total_amount), 0)                                 AS total_billed,
+        COALESCE(SUM(b.paid_amount), 0)                                  AS total_paid,
+        COALESCE(SUM(b.total_amount - b.paid_amount), 0)                 AS total_pending,
+        COUNT(b.id)                                                      AS bill_count,
+        COALESCE(SUM(CASE WHEN b.status = 'unpaid' OR b.status = 'partial' THEN 1 ELSE 0 END), 0) AS due_bills,
+        MAX(b.due_date)                                                  AS latest_due_date
+      FROM users u
+      LEFT JOIN bills b ON b.customer_id = u.id ${month ? `AND b.month = '${month}'` : ''}
+      WHERE u.role = 'customer'
+      GROUP BY u.id, u.name, u.phone
+      ORDER BY total_pending DESC, u.name ASC
+    `);
+
+    res.json({
+      summary: {
+        ...billAgg[0],
+        ...txAgg[0],
+      },
+      customers: custBreakdown,
+    });
+  } catch (err) {
+    console.error('getBillingSummary error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
 // ── Delivery Report — flexible date range ────────────────────────────────────
 
 const getReportData = async (customerId: number, startDate: string, endDate: string) => {

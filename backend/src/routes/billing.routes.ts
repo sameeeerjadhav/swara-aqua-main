@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, allowAdmin } from '../middleware/auth.middleware';
 import {
   generateBills, getBills, getBillById, downloadBillPDF, recordPayment, payBillWithWallet,
-  getDeliveryReport, getDeliveryReportPDF,
+  getDeliveryReport, getDeliveryReportPDF, getBillingSummary,
 } from '../controllers/billing.controller';
 import {
   getRevenue, getPendingPayments, getStaffPerformance, getCustomerGrowth,
@@ -16,6 +16,7 @@ router.get('/reports/revenue',           ...allowAdmin, getRevenue);
 router.get('/reports/pending',           ...allowAdmin, getPendingPayments);
 router.get('/reports/staff-performance', ...allowAdmin, getStaffPerformance);
 router.get('/reports/customer-growth',   ...allowAdmin, getCustomerGrowth);
+router.get('/summary',                   ...allowAdmin, getBillingSummary);
 
 // ── Delivery report (flexible date range — admin + customer) ──────────────────
 router.get('/delivery-report',           authenticate, getDeliveryReport);
@@ -29,4 +30,3 @@ router.patch('/:id/pay',    ...allowAdmin, recordPayment);
 router.patch('/:id/pay-wallet', authenticate, payBillWithWallet);
 
 export default router;
-

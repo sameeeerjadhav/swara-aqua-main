@@ -47,14 +47,6 @@ export const CustomerOrders = () => {
   const [payingOrderId, setPayingOrderId] = useState<number | null>(null);
   const [paidOrderIds,  setPaidOrderIds]  = useState<Set<number>>(new Set());
 
-  // Auto-open form if navigated with ?new=1
-  useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      setShowForm(true);
-      setSearchParams({}, { replace: true });
-    }
-  }, [searchParams]);
-
   const [form, setForm] = useState({
     type:         'instant' as Order['type'],
     quantity:     1,
@@ -73,6 +65,27 @@ export const CustomerOrders = () => {
     setForm({ type: 'instant', quantity: 1, deliveryDate: '', notes: '', address: '' });
     setPaymentMode('cod');
   };
+
+  // ── Open order form — pre-fill default address ─────────────────────────────
+  const openForm = async () => {
+    try {
+      const { data } = await addressApi.list();
+      const def = data.addresses.find(a => a.is_default) || data.addresses[0];
+      setForm(f => ({ ...f, address: def?.address ?? '' }));
+    } catch {
+      // silently ignore — form opens without pre-fill
+    }
+    setShowForm(true);
+  };
+
+  // Auto-open form if navigated with ?new=1 (must be after openForm)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      openForm();
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   // ── Place order ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -551,7 +564,7 @@ export const CustomerOrders = () => {
           </div>
           <p className="text-sm font-bold text-slate-700 mb-1">No orders yet</p>
           <p className="text-xs text-slate-400 mb-5">Place your first water order to get started.</p>
-          <Button size="sm" onClick={() => setShowForm(true)} icon={<Plus className="w-3.5 h-3.5" />}>
+          <Button size="sm" onClick={openForm} icon={<Plus className="w-3.5 h-3.5" />}>
             Place First Order
           </Button>
         </div>

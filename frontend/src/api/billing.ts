@@ -1,5 +1,21 @@
 import api from './axios';
 
+// ── Per-order transaction record ──────────────────────────────────────────────
+export interface Transaction {
+  id: number;
+  customer_id: number;
+  order_id: number | null;
+  amount: number;
+  mode: 'cash' | 'online' | 'advance';
+  type: 'credit' | 'debit';
+  collected_by: number | null;
+  status: 'pending' | 'completed';
+  note: string | null;
+  created_at: string;
+  customer_name?: string;
+  staff_name?: string;
+}
+
 export interface Bill {
   id: number;
   customer_id: number;
@@ -66,6 +82,9 @@ export const billingApi = {
 
   list: (params?: Record<string, string>) =>
     api.get<{ bills: Bill[] }>('/billing', { params }),
+
+  myTransactions: (params?: { mode?: string }) =>
+    api.get<{ transactions: Transaction[] }>('/inventory/transactions', { params }),
 
   get: (id: number) =>
     api.get<{ bill: Bill }>(`/billing/${id}`),

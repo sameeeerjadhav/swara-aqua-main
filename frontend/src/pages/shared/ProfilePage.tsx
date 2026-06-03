@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Phone, LogOut, Edit3, Key, MapPin,
   Check, ChevronRight, Eye, EyeOff, Plus, Trash2,
-  Home, Briefcase, Star, Wallet,
+  Home, Briefcase, Star,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import api from '../../api/axios';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom'; // kept for wallet restore
 
 const inputCls = 'w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all';
 
@@ -18,7 +18,7 @@ type Section = 'name' | 'password' | null;
 export const ProfilePage = () => {
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // kept for wallet restore
 
   const [openSection, setOpenSection] = useState<Section>(null);
   const toggle = (s: Section) => setOpenSection(prev => prev === s ? null : s);
@@ -210,7 +210,9 @@ export const ProfilePage = () => {
         </motion.div>
       )}
 
-      {/* ── Wallet shortcut (customer only) ── */}
+      {/* ── Wallet shortcut TEMPORARILY HIDDEN (Razorpay approval pending) ──
+           To restore: uncomment useNavigate import & declaration above,
+           add Wallet to lucide imports, then uncomment this block:
       {user?.role === 'customer' && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
           <button onClick={() => navigate('/customer/wallet')}
@@ -226,6 +228,7 @@ export const ProfilePage = () => {
           </button>
         </motion.div>
       )}
+      ── */}
 
       {/* ── Sign out ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>

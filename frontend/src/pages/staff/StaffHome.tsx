@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Truck, CheckCircle2, Clock, IndianRupee, Package,
-  Droplets, ArrowRight, Wallet, MapPin, ChevronRight,
+  CheckCircle2, Clock, IndianRupee, Package,
+  Droplets, ArrowRight, MapPin, ChevronRight,
   Zap, UserRound,
 } from 'lucide-react';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -192,7 +192,7 @@ export const StaffHome = () => {
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-400 p-4">
             <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
             <div className="flex items-center gap-2 mb-3">
-              <Wallet className="w-4 h-4 text-white/70" />
+              <IndianRupee className="w-4 h-4 text-white/70" />
               <p className="text-[11px] font-bold text-white/70 uppercase tracking-wide">Cash in hand</p>
             </div>
             <p className="text-3xl font-extrabold text-white leading-none">

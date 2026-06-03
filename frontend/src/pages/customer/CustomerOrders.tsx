@@ -62,16 +62,19 @@ export const CustomerOrders = () => {
     notes:        '',
     address:      '',
   });
+  const [paymentMode, setPaymentMode] = useState<'cod' | 'online'>('cod');
 
   // Show error toast if load failed
   useEffect(() => {
     if (error) toast(error, 'error');
   }, [error]);
 
-  const resetForm = () =>
+  const resetForm = () => {
     setForm({ type: 'instant', quantity: 1, deliveryDate: '', notes: '', address: '' });
+    setPaymentMode('cod');
+  };
 
-  // ── Place order ──────────────────────────────────────────────────────────────
+  // ── Place order ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (form.quantity < 1) { toast('Quantity must be at least 1', 'error'); return; }
@@ -80,7 +83,9 @@ export const CustomerOrders = () => {
     }
 
     setSubmitting(true);
+    let orderId: number | null = null;
     try {
+      // Step 1: always create the order first
       const { data: orderData } = await ordersApi.create({
         type:         form.type,
         quantity:     form.quantity,
@@ -90,17 +95,77 @@ export const CustomerOrders = () => {
         address:      form.address || undefined,
       });
 
-      const orderId: number = orderData.orderId;
+      orderId = orderData.orderId as number;
       const scheduledForTomorrow: boolean = orderData.scheduledForTomorrow || false;
-      const modeLabel = 'Cash on Delivery';
 
       await enablePush();
 
-      setOrderSuccess({ orderId, quantity: form.quantity, total: totalAmount, mode: modeLabel, scheduledForTomorrow });
+      // Step 2: if online payment selected — open Razorpay immediately
+      if (paymentMode === 'online') {
+        const rzpLoaded = await loadRazorpay();
+        if (!rzpLoaded) {
+          // Cancel the order we just created
+          await ordersApi.cancel(orderId, { reason: 'Payment checkout failed to load' });
+          toast('Razorpay failed to load. Order not placed.', 'error');
+          return;
+        }
 
-      setShowForm(false);
-      resetForm();
-      await refresh();
+        const { data: payData } = await ordersApi.createOrderPayment(orderId);
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const options = {
+              key:         payData.keyId,
+              amount:      payData.amount,
+              currency:    payData.currency,
+              name:        'Swara Aqua',
+              description: `Payment for Order #${orderId} (${form.quantity} jar${form.quantity > 1 ? 's' : ''})`,
+              order_id:    payData.rzpOrderId,
+              prefill: {
+                name:    user?.name  || '',
+                contact: user?.phone || '',
+              },
+              handler: async (response: any) => {
+                try {
+                  await ordersApi.verifyOrderPayment(orderId!, {
+                    razorpay_order_id:   response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature:  response.razorpay_signature,
+                  });
+                  // Mark as paid so Pay Now button on the card is hidden
+                  setPaidOrderIds(prev => new Set(prev).add(orderId!));
+                  resolve();
+                } catch { reject(new Error('Verification failed')); }
+              },
+              modal: { ondismiss: () => reject(new Error('dismissed')) },
+              theme: { color: '#2563eb' },
+            };
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
+          });
+
+          // Payment succeeded — show success screen
+          setOrderSuccess({ orderId: orderId!, quantity: form.quantity, total: totalAmount, mode: 'Online Payment', scheduledForTomorrow });
+          setShowForm(false);
+          resetForm();
+          await refresh();
+        } catch (payErr: any) {
+          // Payment failed or dismissed — cancel the order
+          try { await ordersApi.cancel(orderId!, { reason: 'Online payment not completed' }); } catch {}
+          await refresh();
+          if (payErr?.message !== 'dismissed') {
+            toast('Payment failed. Your order has been cancelled.', 'error');
+          } else {
+            toast('Payment cancelled. Order not placed.', 'warning');
+          }
+        }
+      } else {
+        // COD flow — order already placed, just show success
+        setOrderSuccess({ orderId: orderId!, quantity: form.quantity, total: totalAmount, mode: 'Cash on Delivery', scheduledForTomorrow });
+        setShowForm(false);
+        resetForm();
+        await refresh();
+      }
     } catch (err: any) {
       toast(err?.response?.data?.message || err?.message || 'Failed to place order', 'error');
     } finally {
@@ -394,22 +459,54 @@ export const CustomerOrders = () => {
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all resize-none" />
                   </div>
 
-                  {/* Payment method — Cash on Delivery only */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
-                      <span className="text-base">💵</span>
+                  {/* Payment method selector */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Payment Method</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* COD option */}
+                      <button type="button" onClick={() => setPaymentMode('cod')}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left ${
+                          paymentMode === 'cod'
+                            ? 'bg-green-50 border-green-400 ring-2 ring-green-400/20'
+                            : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                        }`}>
+                        <span className="text-xl">💵</span>
+                        <div>
+                          <p className={`text-xs font-bold ${paymentMode === 'cod' ? 'text-green-700' : 'text-slate-700'}`}>Cash on Delivery</p>
+                          <p className="text-[10px] text-slate-400 leading-tight">Pay on arrival</p>
+                        </div>
+                        {paymentMode === 'cod' && <Check className="w-4 h-4 text-green-600 ml-auto shrink-0" />}
+                      </button>
+
+                      {/* Online option */}
+                      <button type="button" onClick={() => setPaymentMode('online')}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left ${
+                          paymentMode === 'online'
+                            ? 'bg-brand-50 border-brand-400 ring-2 ring-brand-400/20'
+                            : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                        }`}>
+                        <CreditCard className={`w-5 h-5 shrink-0 ${paymentMode === 'online' ? 'text-brand-600' : 'text-slate-400'}`} />
+                        <div>
+                          <p className={`text-xs font-bold ${paymentMode === 'online' ? 'text-brand-700' : 'text-slate-700'}`}>Online Payment</p>
+                          <p className="text-[10px] text-slate-400 leading-tight">Pay via Razorpay</p>
+                        </div>
+                        {paymentMode === 'online' && <Check className="w-4 h-4 text-brand-600 ml-auto shrink-0" />}
+                      </button>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">Cash on Delivery</p>
-                      <p className="text-xs text-slate-400">Pay when your water arrives</p>
-                    </div>
+
+                    {paymentMode === 'online' && (
+                      <p className="text-[11px] text-brand-500 font-medium mt-2 flex items-center gap-1.5">
+                        <CreditCard className="w-3 h-3" />
+                        Razorpay checkout will open after placing order
+                      </p>
+                    )}
                   </div>
 
                   {/* Sticky submit on mobile */}
                   <div className="sticky bottom-0 pt-2 pb-1 bg-white -mx-5 px-5 md:relative md:mx-0 md:px-0 md:pt-0 md:pb-0">
                     <Button type="submit" loading={submitting} size="lg" className="w-full !py-4 md:!py-3.5 text-sm"
-                      icon={<Droplets className="w-4 h-4" />}>
-                      Place Order · ₹{totalAmount}
+                      icon={paymentMode === 'online' ? <CreditCard className="w-4 h-4" /> : <Droplets className="w-4 h-4" />}>
+                      {paymentMode === 'online' ? `Place & Pay · ₹${totalAmount}` : `Place Order · ₹${totalAmount}`}
                     </Button>
                   </div>
                 </form>

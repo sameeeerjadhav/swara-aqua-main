@@ -40,10 +40,10 @@ function resolvePath(type, data) {
 }
 
 function extractPayload(raw) {
-  if (!raw) return { title: 'Swara Aqua', body: 'You have a new update', data: {} };
+  if (!raw) return { title: 'New Update', body: 'You have a new update', data: {} };
 
   var data = raw.data || {};
-  var title = raw.notification?.title || data.title || 'Swara Aqua';
+  var title = raw.notification?.title || data.title || 'New Update';
   var body = raw.notification?.body || data.body || 'You have a new update';
 
   return { title: title, body: body, data: data };
@@ -63,7 +63,7 @@ function showSystemNotification(raw) {
   shownTags.add(tag);
   setTimeout(function() { shownTags.delete(tag); }, 30000);
 
-  var displayTitle = String(title).includes('Swara Aqua') ? title : 'Swara Aqua — ' + title;
+  var displayTitle = String(title);
 
   return self.registration.showNotification(displayTitle, {
     body: String(body),

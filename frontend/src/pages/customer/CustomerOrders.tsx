@@ -415,19 +415,42 @@ export const CustomerOrders = () => {
                     </div>
                   </div>
 
-                  {/* Quantity + total */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Quantity (Jars)</label>
-                      <input
-                        type="number" min={1} value={form.quantity}
-                        onChange={e => setForm(f => ({ ...f, quantity: Math.max(1, Number(e.target.value)) }))}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all font-semibold" />
-                    </div>
-                    <div className="flex flex-col justify-end">
-                      <div className="bg-gradient-to-br from-brand-50 to-aqua-400/10 border border-brand-100 rounded-2xl px-4 py-3 text-center">
-                        <p className="text-xs text-brand-500 font-medium">Total Amount</p>
-                        <p className="text-xl font-bold text-brand-700">₹{totalAmount}</p>
+                  {/* Quantity stepper + total */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Quantity (Jars)</label>
+                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
+                      {/* Decrement */}
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, quantity: Math.max(1, f.quantity - 1) }))}
+                        disabled={form.quantity <= 1}
+                        className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-lg shadow-sm hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 active:scale-90 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-slate-200 disabled:hover:text-slate-600 shrink-0"
+                      >
+                        −
+                      </button>
+
+                      {/* Count display */}
+                      <div className="flex-1 text-center">
+                        <p className="text-2xl font-extrabold text-slate-800 leading-none">{form.quantity}</p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">jar{form.quantity !== 1 ? 's' : ''}</p>
+                      </div>
+
+                      {/* Increment */}
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, quantity: f.quantity + 1 }))}
+                        className="w-9 h-9 rounded-xl bg-brand-600 border border-brand-600 flex items-center justify-center text-white font-bold text-lg shadow-sm hover:bg-brand-700 active:scale-90 transition-all shrink-0"
+                      >
+                        +
+                      </button>
+
+                      {/* Divider */}
+                      <div className="w-px h-10 bg-slate-200 shrink-0" />
+
+                      {/* Total */}
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] text-slate-400 font-medium">Total</p>
+                        <p className="text-xl font-extrabold text-brand-700 leading-none">₹{totalAmount}</p>
                       </div>
                     </div>
                   </div>

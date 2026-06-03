@@ -45,6 +45,7 @@ export const CustomerOrders = () => {
   const [cancelReason, setCancelReason]   = useState('');
   const [showReasonModal, setShowReasonModal] = useState<number | null>(null); // order id
   const [payingOrderId, setPayingOrderId] = useState<number | null>(null);
+  const [paidOrderIds,  setPaidOrderIds]  = useState<Set<number>>(new Set());
 
   // Auto-open form if navigated with ?new=1
   useEffect(() => {
@@ -177,6 +178,8 @@ export const CustomerOrders = () => {
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature:  response.razorpay_signature,
               });
+              // Mark as paid locally so the button disappears immediately
+              setPaidOrderIds(prev => new Set(prev).add(order.id));
               toast(`✅ ₹${data.orderAmount} paid for Order #${order.id}!`, 'success');
               setSelected(null);
               await refresh();
@@ -467,17 +470,24 @@ export const CustomerOrders = () => {
                 </div>
               </div>
 
-              {/* Pay Now button — for non-cancelled orders */}
+              {/* Pay Now / Paid indicator — for non-cancelled orders */}
               {order.status !== 'cancelled' && (
                 <div className="mt-3 pt-3 border-t border-slate-50" onClick={e => e.stopPropagation()}>
-                  <button
-                    onClick={() => handlePayNow(order)}
-                    disabled={payingOrderId === order.id}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-xs font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
-                  >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    {payingOrderId === order.id ? 'Opening Payment…' : `Pay Now · ₹${order.total_amount}`}
-                  </button>
+                  {paidOrderIds.has(order.id) ? (
+                    <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
+                      <Check className="w-3.5 h-3.5 text-green-600" />
+                      <span className="text-xs font-bold text-green-700">Payment Done — Thank you!</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handlePayNow(order)}
+                      disabled={payingOrderId === order.id}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-xs font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      {payingOrderId === order.id ? 'Opening Payment…' : `Pay Now · ₹${order.total_amount}`}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -631,15 +641,22 @@ export const CustomerOrders = () => {
                     {/* Cancel button — smart policy */}
                     {!['completed', 'cancelled'].includes(selected.order.status) && (
                       <>
-                        {/* Pay Now button in detail modal */}
-                        <button
-                          onClick={() => handlePayNow(selected.order)}
-                          disabled={payingOrderId === selected.order.id}
-                          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60 shadow-lg shadow-brand-500/20"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                          {payingOrderId === selected.order.id ? 'Opening Razorpay…' : `Pay ₹${selected.order.total_amount} via Razorpay`}
-                        </button>
+                        {/* Pay Now / Paid indicator in detail modal */}
+                        {paidOrderIds.has(selected.order.id) ? (
+                          <div className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-green-50 border border-green-200">
+                            <Check className="w-4 h-4 text-green-600" />
+                            <span className="text-sm font-bold text-green-700">Payment Successful — Thank you!</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handlePayNow(selected.order)}
+                            disabled={payingOrderId === selected.order.id}
+                            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60 shadow-lg shadow-brand-500/20"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            {payingOrderId === selected.order.id ? 'Opening Razorpay…' : `Pay ₹${selected.order.total_amount} via Razorpay`}
+                          </button>
+                        )}
 
                         {(() => {
                           const ageMs = Date.now() - new Date(selected.order.created_at).getTime();

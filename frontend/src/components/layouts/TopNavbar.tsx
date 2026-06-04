@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Search, ChevronDown, LogOut, User, CheckCheck, MapPin, Wallet } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotificationCenter } from '../../context/NotificationContext';
-import api from '../../api/axios';
 import { addressApi, type UserAddress } from '../../api/address';
 
 export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress?: () => void }) => {
@@ -28,21 +27,8 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
       : '/customer/profile';
 
   const [profileOpen, setProfileOpen] = useState(false);
-  const [bellOpen, setBellOpen] = useState(false);
+  const [bellOpen,    setBellOpen]    = useState(false);
   const [defaultAddress, setDefaultAddress] = useState<UserAddress | null>(null);
-
-  const profileRef = useRef<HTMLDivElement>(null);
-  const bellRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdowns on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   // Fetch default address for customer mobile header
   useEffect(() => {
@@ -65,98 +51,113 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
     order: '📦', payment: '💳', delivery: '🚚', approval: '✅', stock: '⚠️', general: '🔔',
   };
 
-  // ── Notification dropdown (shared between both headers) ──
-  const NotificationDropdown = () => (
-    <AnimatePresence>
-      {bellOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: 6, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 6, scale: 0.96 }}
-          transition={{ duration: 0.15 }}
-          className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-[4.5rem] sm:top-full sm:mt-2 sm:w-80 bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden z-50"
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <p className="text-sm font-bold text-slate-800">Notifications</p>
-            {unreadCount > 0 && (
-              <button onClick={markAllRead}
-                className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-semibold transition-colors">
-                <CheckCheck className="w-3.5 h-3.5" /> Mark all read
-              </button>
-            )}
-          </div>
-
-          <div className="max-h-[60vh] sm:max-h-80 overflow-y-auto">
-            {notifications.length === 0 ? (
-              <div className="py-8 text-center">
-                <Bell className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                <p className="text-xs text-slate-400">No notifications yet</p>
-              </div>
-            ) : (
-              notifications.map(n => (
-                <div key={n.id}
-                  className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer ${!n.is_read ? 'bg-brand-50/40' : ''}`}
-                  onClick={() => !n.is_read && markRead(n.id)}
-                >
-                  <span className="text-lg shrink-0 mt-0.5">{typeIcon[n.type] || '🔔'}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-semibold text-slate-800 truncate ${!n.is_read ? 'text-slate-900' : ''}`}>{n.title}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
-                  </div>
-                  {!n.is_read && (
-                    <div className="w-2 h-2 bg-brand-500 rounded-full shrink-0 mt-1.5" />
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+  // ── Transparent backdrop — closes whichever dropdown is open ──────────────────
+  // Renders BEHIND the dropdown (z-[9998]) so taps outside hit the backdrop,
+  // but taps on dropdown buttons pass through to the buttons above.
+  const Backdrop = ({ onClose }: { onClose: () => void }) => (
+    <div
+      className="fixed inset-0 z-[9998]"
+      onPointerDown={e => { e.preventDefault(); onClose(); }}
+    />
   );
 
-  // ── Profile dropdown (shared) ──
-  const ProfileDropdown = () => (
-    <AnimatePresence>
-      {profileOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: 6, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 6, scale: 0.96 }}
-          transition={{ duration: 0.15 }}
-          // fixed on mobile — escapes the header's stacking context so buttons are clickable
-          // sm:absolute — reverts to standard dropdown behaviour on desktop
-          className="fixed top-[4.5rem] right-4 sm:absolute sm:top-full sm:right-0 sm:mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[9999]"
-        >
-          <div className="px-4 py-3 border-b border-slate-100">
-            <p className="text-sm font-semibold text-slate-800">{user?.name}</p>
-            <p className="text-xs text-slate-400">{user?.phone}</p>
-          </div>
-          <div className="p-1.5">
-            <button
-              onClick={() => { setProfileOpen(false); navigate(profilePath); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-              <User className="w-4 h-4" /> My Profile
-            </button>
+  // ── Notification dropdown ─────────────────────────────────────────────────────
+  const NotificationPanel = () => (
+    <>
+      {bellOpen && <Backdrop onClose={() => setBellOpen(false)} />}
+      <AnimatePresence>
+        {bellOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden z-[9999]"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <p className="text-sm font-bold text-slate-800">Notifications</p>
+              {unreadCount > 0 && (
+                <button onClick={markAllRead}
+                  className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-semibold transition-colors">
+                  <CheckCheck className="w-3.5 h-3.5" /> Mark all read
+                </button>
+              )}
+            </div>
 
-            {/* Advance Balance — customers only */}
-            {isCustomer && (
+            <div className="max-h-[60vh] sm:max-h-80 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <div className="py-8 text-center">
+                  <Bell className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-xs text-slate-400">No notifications yet</p>
+                </div>
+              ) : (
+                notifications.map(n => (
+                  <div key={n.id}
+                    className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer ${!n.is_read ? 'bg-brand-50/40' : ''}`}
+                    onClick={() => !n.is_read && markRead(n.id)}
+                  >
+                    <span className="text-lg shrink-0 mt-0.5">{typeIcon[n.type] || '🔔'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold text-slate-800 truncate ${!n.is_read ? 'text-slate-900' : ''}`}>{n.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                    </div>
+                    {!n.is_read && (
+                      <div className="w-2 h-2 bg-brand-500 rounded-full shrink-0 mt-1.5" />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+
+  // ── Profile dropdown ──────────────────────────────────────────────────────────
+  const ProfilePanel = () => (
+    <>
+      {profileOpen && <Backdrop onClose={() => setProfileOpen(false)} />}
+      <AnimatePresence>
+        {profileOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="fixed top-[4.5rem] right-4 sm:absolute sm:top-full sm:right-0 sm:mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[9999]"
+          >
+            <div className="px-4 py-3 border-b border-slate-100">
+              <p className="text-sm font-semibold text-slate-800">{user?.name}</p>
+              <p className="text-xs text-slate-400">{user?.phone}</p>
+            </div>
+            <div className="p-1.5">
               <button
-                onClick={() => { setProfileOpen(false); navigate('/customer/advance'); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-purple-600 hover:bg-purple-50 transition-colors">
-                <Wallet className="w-4 h-4" /> Advance Balance
+                onClick={() => { setProfileOpen(false); navigate(profilePath); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                <User className="w-4 h-4" /> My Profile
               </button>
-            )}
 
-            <button onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors">
-              <LogOut className="w-4 h-4" /> Sign out
-            </button>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+              {/* Advance Balance — customers only */}
+              {isCustomer && (
+                <button
+                  onClick={() => { setProfileOpen(false); navigate('/customer/advance'); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-purple-600 hover:bg-purple-50 transition-colors">
+                  <Wallet className="w-4 h-4" /> Advance Balance
+                </button>
+              )}
+
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors">
+                <LogOut className="w-4 h-4" /> Sign out
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 
   return (
@@ -170,7 +171,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
               <div className="flex items-center justify-between px-5 pt-3 pb-14">
                 <h2 className="text-2xl font-extrabold text-white italic">Order Jar</h2>
                 <div className="flex items-center gap-1 shrink-0">
-                  <div className="relative" ref={bellRef}>
+                  <div className="relative">
                     <button onClick={() => { setBellOpen(!bellOpen); if (!bellOpen) refresh(); }}
                       className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors">
                       <Bell className="w-5 h-5 text-white" />
@@ -180,14 +181,14 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
                         </span>
                       )}
                     </button>
-                    <NotificationDropdown />
+                    <NotificationPanel />
                   </div>
-                  <div className="relative" ref={profileRef}>
+                  <div className="relative">
                     <button onClick={() => setProfileOpen(!profileOpen)}
                       className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm hover:bg-white/30 transition-colors">
                       {user?.name?.charAt(0).toUpperCase()}
                     </button>
-                    <ProfileDropdown />
+                    <ProfilePanel />
                   </div>
                 </div>
               </div>
@@ -207,8 +208,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
                     </div>
                     <button
                       onClick={onOrderPress}
-                      className="bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-full hover:bg-brand-600 active:scale-95 transition-all shrink-0 ml-2"
-                    >
+                      className="bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-full hover:bg-brand-600 active:scale-95 transition-all shrink-0 ml-2">
                       + New Order
                     </button>
                   </div>
@@ -237,7 +237,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
               </div>
 
               <div className="flex items-center gap-1 shrink-0">
-                <div className="relative" ref={bellRef}>
+                <div className="relative">
                   <button onClick={() => { setBellOpen(!bellOpen); if (!bellOpen) refresh(); }}
                     className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors">
                     <Bell className="w-5 h-5 text-white" />
@@ -247,15 +247,15 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
                       </span>
                     )}
                   </button>
-                  <NotificationDropdown />
+                  <NotificationPanel />
                 </div>
 
-                <div className="relative" ref={profileRef}>
+                <div className="relative">
                   <button onClick={() => setProfileOpen(!profileOpen)}
                     className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm hover:bg-white/30 transition-colors">
                     {user?.name?.charAt(0).toUpperCase()}
                   </button>
-                  <ProfileDropdown />
+                  <ProfilePanel />
                 </div>
               </div>
             </div>
@@ -275,22 +275,21 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
           </div>
 
           {/* Notification Bell */}
-          <div className="relative" ref={isCustomer ? undefined : bellRef}>
+          <div className="relative">
             <button onClick={() => { setBellOpen(!bellOpen); if (!bellOpen) refresh(); }}
               className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors">
-              <Bell className="w-4.5 h-4.5 text-slate-500" />
+              <Bell className="w-5 h-5 text-slate-500" />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
-
-            {!isCustomer && <NotificationDropdown />}
+            <NotificationPanel />
           </div>
 
-          {/* Profile dropdown */}
-          <div className="relative" ref={profileRef}>
+          {/* Profile */}
+          <div className="relative">
             <button onClick={() => setProfileOpen(!profileOpen)}
               className="flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-xl hover:bg-slate-100 transition-colors">
               <div className="w-8 h-8 bg-gradient-aqua rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm">
@@ -302,8 +301,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
             </button>
-
-            <ProfileDropdown />
+            <ProfilePanel />
           </div>
         </div>
       </header>

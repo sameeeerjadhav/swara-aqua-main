@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UsersRound, Package, Bell, Warehouse, CreditCard, FileText, BarChart2, Image, UserRound } from 'lucide-react';
+import { LayoutDashboard, Users, UsersRound, Package, Bell, Warehouse, CreditCard, FileText, BarChart2, Image, UserRound, Wallet } from 'lucide-react';
 import { DashboardLayout } from '../components/layouts/DashboardLayout';
 import { AdminHome } from './admin/AdminHome';
 import { AdminUsers } from './admin/AdminUsers';
@@ -29,6 +29,7 @@ const NAV = [
   { label: 'Banners',      icon: Image,           to: '/admin/banners' },
   { label: 'Casual Deliveries',   icon: UserRound, to: '/admin/casual-deliveries' },
   { label: 'Notifications', icon: Bell, to: '/admin/notifications' },
+  { label: 'Advance Requests', icon: Wallet, to: '/admin/advance-requests' },
 ];
 
 const TITLES: Record<string, string> = {

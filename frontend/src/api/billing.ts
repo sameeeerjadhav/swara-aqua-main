@@ -60,6 +60,24 @@ export interface CustomerSummary {
   latest_due_date: string | null;
 }
 
+export interface ClearDuesBill {
+  id: number;
+  month: string;
+  due: number;
+  status: 'unpaid' | 'partial';
+}
+
+export interface ClearDuesOrderResponse {
+  rzpOrderId: string;
+  amount: number;      // total in paise (base + platform fee)
+  currency: string;
+  keyId: string;
+  totalDue: number;    // base in rupees
+  platformFee: number;
+  billCount: number;
+  bills: ClearDuesBill[];
+}
+
 export interface RevenuePoint {
   date?: string;
   month?: string;
@@ -125,6 +143,16 @@ export const billingApi = {
 
   recordPayment: (id: number, amount: number) =>
     api.patch(`/billing/${id}/pay`, { amount }),
+
+  // ── Clear All Dues ──────────────────────────────────────────────────────────
+  clearDuesOrder: () =>
+    api.post<ClearDuesOrderResponse>('/billing/clear-dues/order'),
+
+  clearDuesVerify: (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+    api.post<{ message: string; totalPaid: number; billsCleared: number }>('/billing/clear-dues/verify', data),
+
+  clearDuesWallet: () =>
+    api.post<{ message: string; totalPaid: number; billsCleared: number }>('/billing/clear-dues/wallet'),
 
   // Reports
   revenue: (params?: Record<string, string>) =>

@@ -194,6 +194,208 @@ export const payBillWithWallet = async (req: AuthRequest, res: Response): Promis
   }
 };
 
+// ── POST /api/billing/clear-dues/wallet  (customer) ──────────────────────────
+// Pay all unpaid/partial bills via wallet, oldest first.
+export const clearDuesWallet = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+
+    // Load all unpaid / partial bills for this customer, oldest month first
+    const allBills = await BillingModel.getBills({ customerId: userId });
+    const dueBills = allBills
+      .filter(b => b.status !== 'paid')
+      .sort((a, b) => a.month.localeCompare(b.month)); // oldest first
+
+    if (dueBills.length < 2) {
+      res.status(400).json({ message: 'Not enough unpaid bills to use Clear All Dues' }); return;
+    }
+
+    const totalDue = dueBills.reduce((s, b) =>
+      s + parseFloat((Number(b.total_amount) - Number(b.paid_amount)).toFixed(2)), 0
+    );
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Check wallet balance
+      const [userRows] = await conn.query<RowDataPacket[]>(
+        'SELECT wallet_balance FROM users WHERE id = ? FOR UPDATE',
+        [userId]
+      );
+      const walletBalance = Number(userRows[0]?.wallet_balance ?? 0);
+      if (walletBalance < totalDue) {
+        await conn.rollback();
+        res.status(400).json({
+          message: `Insufficient wallet balance. Need ₹${totalDue.toFixed(2)}, have ₹${walletBalance.toFixed(2)}`,
+        }); return;
+      }
+
+      // Debit wallet once
+      await conn.query('UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ?', [totalDue, userId]);
+      await conn.query(
+        `INSERT INTO wallet_transactions (user_id, type, amount, mode, status, reference_id, note)
+         VALUES (?, 'debit', ?, 'wallet', 'completed', ?, ?)`,
+        [userId, totalDue, `clear-dues-${Date.now()}`, `Cleared ${dueBills.length} bills via wallet`]
+      );
+
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+
+    // Record payment on each bill oldest → newest
+    for (const bill of dueBills) {
+      const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
+      if (due > 0) await BillingModel.recordBillPayment(bill.id, due);
+    }
+
+    notify(() =>
+      NotifService.sendToUser({
+        userId,
+        title: '✅ All Dues Cleared',
+        body:  `₹${totalDue.toFixed(2)} paid via wallet — ${dueBills.length} bills cleared.`,
+        type:  'payment',
+      })
+    );
+
+    res.json({ message: 'All dues cleared via wallet', totalPaid: totalDue, billsCleared: dueBills.length });
+  } catch (err) {
+    console.error('clearDuesWallet error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── POST /api/billing/clear-dues/order  (customer) ───────────────────────────
+// Create a Razorpay order for total dues + one platform fee.
+export const clearDuesOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const Razorpay = (await import('razorpay')).default;
+    const { withPlatformFee } = await import('../utils/platformFee');
+
+    const userId = req.user!.id;
+    const allBills = await BillingModel.getBills({ customerId: userId });
+    const dueBills = allBills
+      .filter(b => b.status !== 'paid')
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    if (dueBills.length < 2) {
+      res.status(400).json({ message: 'Not enough unpaid bills' }); return;
+    }
+
+    const totalDue = parseFloat(
+      dueBills.reduce((s, b) =>
+        s + parseFloat((Number(b.total_amount) - Number(b.paid_amount)).toFixed(2)), 0
+      ).toFixed(2)
+    );
+
+    const { fee: platformFee, total: chargeAmount } = withPlatformFee(totalDue);
+
+    const key_id     = process.env.RAZORPAY_KEY_ID     || '';
+    const key_secret = process.env.RAZORPAY_KEY_SECRET || '';
+    if (!key_id || !key_secret) { res.status(500).json({ message: 'Razorpay not configured' }); return; }
+
+    const rzp = new Razorpay({ key_id, key_secret });
+    const rzpOrder = await rzp.orders.create({
+      amount:   Math.round(chargeAmount * 100),
+      currency: 'INR',
+      receipt:  `cleardues_${userId}_${Date.now()}`,
+      notes:    {
+        userId:      String(userId),
+        purpose:     'clear_dues',
+        billIds:     dueBills.map(b => b.id).join(','),
+        platformFee: String(platformFee),
+      },
+    });
+
+    res.json({
+      rzpOrderId:  rzpOrder.id,
+      amount:      rzpOrder.amount,
+      currency:    rzpOrder.currency,
+      keyId:       key_id,
+      totalDue,
+      platformFee,
+      billCount:   dueBills.length,
+      bills:       dueBills.map(b => ({
+        id:     b.id,
+        month:  b.month,
+        due:    parseFloat((Number(b.total_amount) - Number(b.paid_amount)).toFixed(2)),
+        status: b.status,
+      })),
+    });
+  } catch (err) {
+    console.error('clearDuesOrder error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── POST /api/billing/clear-dues/verify  (customer) ──────────────────────────
+// Verify Razorpay payment and credit all bills oldest first.
+export const clearDuesVerify = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const crypto = await import('crypto');
+    const { withPlatformFee } = await import('../utils/platformFee');
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      res.status(400).json({ message: 'Missing payment verification fields' }); return;
+    }
+
+    const expectedSig = crypto.default
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSig !== razorpay_signature) {
+      res.status(400).json({ message: 'Payment verification failed — invalid signature' }); return;
+    }
+
+    const userId = req.user!.id;
+    const allBills = await BillingModel.getBills({ customerId: userId });
+    const dueBills = allBills
+      .filter(b => b.status !== 'paid')
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    const totalDue = parseFloat(
+      dueBills.reduce((s, b) =>
+        s + parseFloat((Number(b.total_amount) - Number(b.paid_amount)).toFixed(2)), 0
+      ).toFixed(2)
+    );
+
+    // Record payment on each bill oldest → newest; only the base amount (not the fee)
+    for (const bill of dueBills) {
+      const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
+      if (due > 0) {
+        await BillingModel.recordBillPayment(bill.id, due);
+        // Record transaction
+        await pool.query(
+          `INSERT INTO transactions
+             (customer_id, amount, mode, type, status, note)
+           VALUES (?, ?, 'online', 'credit', 'completed', ?)`,
+          [userId, due, `Bill payment for ${bill.month} via Razorpay (${razorpay_payment_id}) — Clear All Dues`]
+        );
+      }
+    }
+
+    notify(() =>
+      NotifService.sendToUser({
+        userId,
+        title: '✅ All Dues Cleared',
+        body:  `₹${totalDue.toFixed(2)} paid online — ${dueBills.length} bills cleared.`,
+        type:  'payment',
+      })
+    );
+
+    res.json({ message: 'All dues cleared', totalPaid: totalDue, billsCleared: dueBills.length });
+  } catch (err) {
+    console.error('clearDuesVerify error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
 // ── GET /api/billing/summary  (admin) ────────────────────────────────────────
 export const getBillingSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

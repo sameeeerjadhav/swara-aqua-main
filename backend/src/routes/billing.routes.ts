@@ -3,6 +3,7 @@ import { authenticate, allowAdmin } from '../middleware/auth.middleware';
 import {
   generateBills, getBills, getBillById, downloadBillPDF, recordPayment, payBillWithWallet,
   getDeliveryReport, getDeliveryReportPDF, getBillingSummary,
+  clearDuesWallet, clearDuesOrder, clearDuesVerify,
 } from '../controllers/billing.controller';
 import {
   getRevenue, getPendingPayments, getStaffPerformance, getCustomerGrowth,
@@ -17,6 +18,11 @@ router.get('/reports/pending',           ...allowAdmin, getPendingPayments);
 router.get('/reports/staff-performance', ...allowAdmin, getStaffPerformance);
 router.get('/reports/customer-growth',   ...allowAdmin, getCustomerGrowth);
 router.get('/summary',                   ...allowAdmin, getBillingSummary);
+
+// ── Clear All Dues (customer) ─────────────────────────────────────────────────
+router.post('/clear-dues/wallet',        authenticate, clearDuesWallet);
+router.post('/clear-dues/order',         authenticate, clearDuesOrder);
+router.post('/clear-dues/verify',        authenticate, clearDuesVerify);
 
 // ── Delivery report (flexible date range — admin + customer) ──────────────────
 router.get('/delivery-report',           authenticate, getDeliveryReport);

@@ -5,11 +5,14 @@ import {
   CheckCircle2, AlertCircle, Clock, Banknote,
   CalendarDays, CalendarRange, Calendar as CalendarIcon,
   CreditCard, Filter, RefreshCw, Package, Wifi, WifiOff,
+  Sparkles, Wallet, X, ChevronRight, ReceiptText,
 } from 'lucide-react';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { billingApi, Bill, Transaction } from '../../api/billing';
+import { billingApi, Bill, Transaction, ClearDuesBill, ClearDuesOrderResponse } from '../../api/billing';
+import { walletApi } from '../../api/wallet';
 import { eachDateInRange } from '../../utils/date';
+import { loadRazorpay } from '../../utils/razorpay';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -36,7 +39,7 @@ const thisMonthStart = () => {
 type PayFilter = 'all' | 'online' | 'cash' | 'pending';
 type ReportMode = 'monthly' | 'day' | 'range';
 
-// ── Mode config ───────────────────────────────────────────────────────────────
+// ── Mode / status config ──────────────────────────────────────────────────────
 const MODE_CFG = {
   online:  { label: 'Online',  icon: CreditCard, bg: 'bg-blue-50', border: 'border-blue-200',  text: 'text-blue-700',   dot: 'bg-blue-400'  },
   cash:    { label: 'Cash',    icon: Banknote,   bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700',  dot: 'bg-green-400' },
@@ -52,7 +55,224 @@ const BILL_STATUS = {
   unpaid:  { label: 'Unpaid',  bg: 'bg-red-50 border-red-200',      text: 'text-red-600',    icon: AlertCircle },
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Clear All Dues modal ──────────────────────────────────────────────────────
+interface ClearDuesModalProps {
+  dueBills: Bill[];
+  totalDue: number;
+  walletBalance: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const ClearDuesModal = ({ dueBills, totalDue, walletBalance, onClose, onSuccess }: ClearDuesModalProps) => {
+  const { toast } = useToast();
+  const [mode, setMode] = useState<'wallet' | 'razorpay'>(
+    walletBalance >= totalDue ? 'wallet' : 'razorpay'
+  );
+  const [paying, setPaying] = useState(false);
+
+  // Platform fee helper (mirrors backend slab)
+  const getPlatformFee = (base: number) => {
+    if (base < 100)  return 5;
+    if (base < 300)  return 10;
+    if (base < 500)  return 15;
+    return 20;
+  };
+  const platformFee  = getPlatformFee(totalDue);
+  const totalCharged = mode === 'razorpay' ? totalDue + platformFee : totalDue;
+
+  const handlePay = async () => {
+    setPaying(true);
+    try {
+      if (mode === 'wallet') {
+        await billingApi.clearDuesWallet();
+        toast(`✅ All dues cleared via wallet!`, 'success');
+        onSuccess();
+      } else {
+        // Load Razorpay SDK
+        const rzpLoaded = await loadRazorpay();
+        if (!rzpLoaded) { toast('Razorpay failed to load', 'error'); return; }
+
+        const { data } = await billingApi.clearDuesOrder();
+        await new Promise<void>((resolve, reject) => {
+          const options = {
+            key:         data.keyId,
+            amount:      data.amount,
+            currency:    data.currency,
+            name:        'Swara Aqua',
+            description: `Clear ${data.billCount} bills · ₹${data.totalDue} + ₹${data.platformFee} fee`,
+            order_id:    data.rzpOrderId,
+            handler: async (response: any) => {
+              try {
+                await billingApi.clearDuesVerify({
+                  razorpay_order_id:   response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature:  response.razorpay_signature,
+                });
+                toast(`✅ ₹${data.totalDue} paid — all ${data.billCount} bills cleared!`, 'success');
+                resolve();
+              } catch { reject(new Error('Verification failed')); }
+            },
+            modal: { ondismiss: () => reject(new Error('dismissed')) },
+            theme: { color: '#2563eb' },
+          };
+          const rzp = new (window as any).Razorpay(options);
+          rzp.open();
+        });
+        onSuccess();
+      }
+    } catch (err: any) {
+      if (err?.message !== 'dismissed') {
+        toast(err?.response?.data?.message || err?.message || 'Payment failed', 'error');
+      }
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const canUseWallet = walletBalance >= totalDue;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+      onClick={onClose}>
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="bg-slate-900 px-5 pt-6 pb-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-500/20 flex items-center justify-center">
+                <ReceiptText className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-white font-bold text-base">Clear All Dues</h2>
+                <p className="text-slate-400 text-xs mt-0.5">{dueBills.length} bills · oldest first</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Bills breakdown */}
+          <div className="space-y-1.5">
+            {dueBills.map((b, i) => {
+              const due = Math.max(0, Number(b.total_amount) - Number(b.paid_amount));
+              const cfg = BILL_STATUS[b.status] || BILL_STATUS.unpaid;
+              return (
+                <div key={b.id} className="flex items-center justify-between bg-slate-800 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-500 w-4">{i + 1}.</span>
+                    <div className="w-8 h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center">
+                      <span className="text-white text-[9px] font-bold leading-none">
+                        {MONTH_NAMES[Number(b.month.split('-')[1]) - 1]}
+                      </span>
+                      <span className="text-slate-500 text-[8px] leading-none mt-0.5">
+                        {b.month.split('-')[0].slice(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-white text-xs font-semibold">
+                        {MONTH_NAMES[Number(b.month.split('-')[1]) - 1]} {b.month.split('-')[0]}
+                      </p>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.bg.includes('red') ? 'border-red-200' : 'border-amber-200'}`}>
+                        {cfg.label}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-red-400 font-bold text-sm">₹{due.toFixed(0)}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Total row */}
+          <div className="flex items-center justify-between mt-3 bg-red-950/40 border border-red-800/40 rounded-xl px-4 py-3">
+            <p className="text-slate-300 text-sm font-semibold">Total Outstanding</p>
+            <p className="text-red-400 font-extrabold text-lg">₹{totalDue.toFixed(0)}</p>
+          </div>
+        </div>
+
+        {/* Payment method selector */}
+        <div className="px-5 py-4 space-y-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pay via</p>
+
+          <div className="grid grid-cols-2 gap-2">
+            {/* Wallet */}
+            <button disabled={!canUseWallet} onClick={() => setMode('wallet')}
+              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border transition-all text-left relative
+                ${!canUseWallet ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200' :
+                  mode === 'wallet' ? 'bg-green-50 border-green-400 ring-2 ring-green-400/20' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+              <Wallet className={`w-5 h-5 ${mode === 'wallet' && canUseWallet ? 'text-green-600' : 'text-slate-400'}`} />
+              <div>
+                <p className={`text-xs font-bold ${mode === 'wallet' && canUseWallet ? 'text-green-700' : 'text-slate-700'}`}>Wallet</p>
+                <p className="text-[10px] text-slate-400">
+                  Balance: ₹{walletBalance.toFixed(0)}
+                </p>
+              </div>
+              {!canUseWallet && (
+                <span className="text-[9px] text-red-500 font-bold">Insufficient</span>
+              )}
+            </button>
+
+            {/* Razorpay */}
+            <button onClick={() => setMode('razorpay')}
+              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border transition-all text-left
+                ${mode === 'razorpay' ? 'bg-brand-50 border-brand-400 ring-2 ring-brand-400/20' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+              <CreditCard className={`w-5 h-5 ${mode === 'razorpay' ? 'text-brand-600' : 'text-slate-400'}`} />
+              <div>
+                <p className={`text-xs font-bold ${mode === 'razorpay' ? 'text-brand-700' : 'text-slate-700'}`}>Online</p>
+                <p className="text-[10px] text-slate-400">Razorpay</p>
+              </div>
+              {mode === 'razorpay' && (
+                <span className="text-[9px] text-amber-600 font-bold">+₹{platformFee} fee</span>
+              )}
+            </button>
+          </div>
+
+          {/* Fee notice for online */}
+          {mode === 'razorpay' && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+              <CreditCard className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <p className="text-[11px] text-amber-700 font-medium">
+                ₹{platformFee} platform fee applies · you pay ₹{totalCharged.toFixed(0)} total
+              </p>
+            </div>
+          )}
+
+          {/* Pay button */}
+          <button
+            onClick={handlePay}
+            disabled={paying}
+            className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]
+              ${paying
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : mode === 'wallet'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-brand-600 text-white hover:bg-brand-700'}`}>
+            {paying ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Processing…</>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                {mode === 'wallet'
+                  ? `Pay ₹${totalDue.toFixed(0)} via Wallet`
+                  : `Pay ₹${totalCharged.toFixed(0)} via Razorpay`}
+              </>
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// ── Main component ─────────────────────────────────────────────────────────────
 export const CustomerBills = () => {
   const { toast } = useToast();
 
@@ -61,11 +281,13 @@ export const CustomerBills = () => {
   const [bills,        setBills]        = useState<Bill[]>([]);
   const [txLoading,    setTxLoading]    = useState(true);
   const [billLoading,  setBillLoading]  = useState(true);
+  const [walletBal,    setWalletBal]    = useState(0);
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   const [payFilter,    setPayFilter]    = useState<PayFilter>('all');
   const [expandedTx,   setExpandedTx]  = useState<number | null>(null);
   const [expandedBill, setExpandedBill] = useState<number | null>(null);
+  const [showClearDues, setShowClearDues] = useState(false);
 
   // ── Report ──────────────────────────────────────────────────────────────────
   const [reportMode,   setReportMode]  = useState<ReportMode>('monthly');
@@ -79,7 +301,6 @@ export const CustomerBills = () => {
     setTxLoading(true);
     try {
       const { data } = await billingApi.myTransactions();
-      // Only show credit transactions (money received from customer) — exclude internal debits
       setTransactions(data.transactions.filter(t => t.type === 'credit'));
     } catch { toast('Failed to load payment records', 'error'); }
     finally { setTxLoading(false); }
@@ -94,6 +315,13 @@ export const CustomerBills = () => {
     finally { setBillLoading(false); }
   };
 
+  const loadWallet = async () => {
+    try {
+      const { data } = await walletApi.get();
+      setWalletBal(Number(data.balance ?? 0));
+    } catch { /* non-critical */ }
+  };
+
   const loadReport = async (start: string, end: string) => {
     setReportLoading(true); setReport(null);
     try {
@@ -103,13 +331,28 @@ export const CustomerBills = () => {
     finally { setReportLoading(false); }
   };
 
-  useEffect(() => { loadTransactions(); loadBills(); }, []);
+  const loadAll = () => { loadTransactions(); loadBills(); loadWallet(); };
+
+  useEffect(() => { loadAll(); }, []);
 
   useEffect(() => {
     if (reportMode === 'day') loadReport(dayDate, dayDate);
     else if (reportMode === 'range' && rangeStart <= rangeEnd) loadReport(rangeStart, rangeEnd);
     else setReport(null);
   }, [reportMode, dayDate, rangeStart, rangeEnd]);
+
+  // ── Due bills (for Clear All Dues button) ────────────────────────────────────
+  const dueBills = useMemo(() =>
+    bills
+      .filter(b => b.status !== 'paid')
+      .sort((a, b) => a.month.localeCompare(b.month)), // oldest first
+    [bills]
+  );
+  const totalDue = useMemo(() =>
+    dueBills.reduce((s, b) => s + Math.max(0, Number(b.total_amount) - Number(b.paid_amount)), 0),
+    [dueBills]
+  );
+  const showClearButton = dueBills.length >= 2;
 
   // ── Derived summary ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
@@ -145,13 +388,44 @@ export const CustomerBills = () => {
   return (
     <div className="max-w-2xl space-y-5">
 
+      {/* ── Clear All Dues banner (shown when ≥2 unpaid/partial bills) ── */}
+      <AnimatePresence>
+        {showClearButton && (
+          <motion.button
+            initial={{ opacity: 0, y: -10, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.97 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            onClick={() => setShowClearDues(true)}
+            className="w-full flex items-center justify-between gap-3 bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white rounded-2xl px-5 py-4 transition-all shadow-lg shadow-red-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+                <ReceiptText className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-extrabold leading-tight">Clear All Dues</p>
+                <p className="text-[11px] text-red-100 mt-0.5">
+                  {dueBills.length} bills · ₹{totalDue.toFixed(0)} outstanding
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="bg-white/20 rounded-xl px-3 py-1.5">
+                <p className="text-sm font-extrabold">₹{totalDue.toFixed(0)}</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-red-200" />
+            </div>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* ── Summary strip ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         className="bg-slate-900 rounded-2xl p-5">
 
         <div className="flex items-center justify-between mb-4">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest">Payment Summary</p>
-          <button onClick={() => { loadTransactions(); loadBills(); }}
+          <button onClick={loadAll}
             className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -600,6 +874,19 @@ export const CustomerBills = () => {
           </>
         )}
       </div>
+
+      {/* ── Clear All Dues modal ── */}
+      <AnimatePresence>
+        {showClearDues && (
+          <ClearDuesModal
+            dueBills={dueBills}
+            totalDue={totalDue}
+            walletBalance={walletBal}
+            onClose={() => setShowClearDues(false)}
+            onSuccess={() => { setShowClearDues(false); loadAll(); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

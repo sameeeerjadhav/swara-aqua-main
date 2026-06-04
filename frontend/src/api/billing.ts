@@ -151,8 +151,8 @@ export const billingApi = {
   clearDuesVerify: (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
     api.post<{ message: string; totalPaid: number; billsCleared: number }>('/billing/clear-dues/verify', data),
 
-  clearDuesWallet: () =>
-    api.post<{ message: string; totalPaid: number; billsCleared: number }>('/billing/clear-dues/wallet'),
+  clearDuesAdvance: () =>
+    api.post<{ message: string; totalPaid: number; billsCleared: number }>('/billing/clear-dues/advance'),
 
   // Reports
   revenue: (params?: Record<string, string>) =>

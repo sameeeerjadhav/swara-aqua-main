@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { authenticate, allowAdmin } from '../middleware/auth.middleware';
 import {
-  generateBills, getBills, getBillById, downloadBillPDF, recordPayment, payBillWithWallet,
+  generateBills, getBills, getBillById, downloadBillPDF, recordPayment, payBillWithAdvance,
   getDeliveryReport, getDeliveryReportPDF, getBillingSummary,
-  clearDuesWallet, clearDuesOrder, clearDuesVerify,
+  clearDuesAdvance, clearDuesOrder, clearDuesVerify,
 } from '../controllers/billing.controller';
 import {
   getRevenue, getPendingPayments, getStaffPerformance, getCustomerGrowth,
@@ -20,7 +20,7 @@ router.get('/reports/customer-growth',   ...allowAdmin, getCustomerGrowth);
 router.get('/summary',                   ...allowAdmin, getBillingSummary);
 
 // ── Clear All Dues (customer) ─────────────────────────────────────────────────
-router.post('/clear-dues/wallet',        authenticate, clearDuesWallet);
+router.post('/clear-dues/advance',       authenticate, clearDuesAdvance);
 router.post('/clear-dues/order',         authenticate, clearDuesOrder);
 router.post('/clear-dues/verify',        authenticate, clearDuesVerify);
 
@@ -33,6 +33,6 @@ router.get('/',              authenticate, getBills);
 router.get('/:id/pdf',       authenticate, downloadBillPDF);
 router.get('/:id',           authenticate, getBillById);
 router.patch('/:id/pay',    ...allowAdmin, recordPayment);
-router.patch('/:id/pay-wallet', authenticate, payBillWithWallet);
+router.patch('/:id/pay-advance', authenticate, payBillWithAdvance);
 
 export default router;

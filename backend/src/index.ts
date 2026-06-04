@@ -22,7 +22,7 @@ import billingRoutes from './routes/billing.routes';
 import addressRoutes from './routes/address.routes';
 import bannerRoutes from './routes/banner.routes';
 import eventsRoutes from './routes/events.routes';
-import walletRoutes from './routes/wallet.routes';
+import advanceRoutes from './routes/advance.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import casualDeliveryRoutes from './routes/casualDelivery.routes';
 import { startCronJobs } from './services/cron.service';
@@ -103,7 +103,7 @@ app.use('/api/billing',       billingRoutes);
 app.use('/api/addresses',     addressRoutes);
 app.use('/api/banners',       bannerRoutes);
 app.use('/api/events',        eventsRoutes);
-app.use('/api/wallet',             walletRoutes);
+app.use('/api/advance',            advanceRoutes);
 app.use('/api/subscriptions',      subscriptionRoutes);
 app.use('/api/casual-deliveries',  casualDeliveryRoutes);
 

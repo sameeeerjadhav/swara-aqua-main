@@ -15,6 +15,7 @@ import { AdminStaffProfile } from './admin/AdminStaffProfile';
 import { AdminProfile } from './admin/AdminProfile';
 import { AdminBanners } from './admin/AdminBanners';
 import { AdminCasualDeliveries } from './admin/AdminCasualDeliveries';
+import { AdminAdvanceRequests } from './admin/AdminAdvanceRequests';
 
 const NAV = [
   { label: 'Dashboard',    icon: LayoutDashboard, to: '/admin' },
@@ -41,6 +42,7 @@ const TITLES: Record<string, string> = {
   '/admin/reports':       'Reports',
   '/admin/notifications': 'Notifications',
   '/admin/casual-deliveries':   'Casual Deliveries',
+  '/admin/advance-requests':  'Advance Payment Requests',
   '/admin/banners':       'Banner Management',
   '/admin/profile':       'My Profile',
 };
@@ -64,7 +66,8 @@ export default function AdminDashboard() {
         <Route path="reports"       element={<AdminReports />} />
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="banners"           element={<AdminBanners />} />
-        <Route path="wallet-requests"    element={<Navigate to="/admin" replace />} />
+        <Route path="wallet-requests"    element={<Navigate to="/admin/advance-requests" replace />} />
+        <Route path="advance-requests"   element={<AdminAdvanceRequests />} />
         <Route path="casual-deliveries"  element={<AdminCasualDeliveries />} />
         <Route path="profile"       element={<AdminProfile />} />
         {/* Legacy redirect */}

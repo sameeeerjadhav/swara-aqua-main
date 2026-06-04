@@ -124,8 +124,8 @@ export const recordPayment = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
-// PATCH /api/billing/:id/pay-wallet  (customer — pay own bill via wallet)
-export const payBillWithWallet = async (req: AuthRequest, res: Response): Promise<void> => {
+// PATCH /api/billing/:id/pay-advance  (customer — pay own bill via advance balance)
+export const payBillWithAdvance = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const bill = await BillingModel.getBillById(Number(req.params.id));
     if (!bill) { res.status(404).json({ message: 'Bill not found' }); return; }
@@ -145,25 +145,25 @@ export const payBillWithWallet = async (req: AuthRequest, res: Response): Promis
     try {
       await conn.beginTransaction();
 
-      // Check wallet balance
+      // Check advance balance
       const [userRows] = await conn.query<RowDataPacket[]>(
-        'SELECT wallet_balance FROM users WHERE id = ? FOR UPDATE',
+        'SELECT prepaid_balance FROM users WHERE id = ? FOR UPDATE',
         [bill.customer_id]
       );
-      const walletBalance = Number(userRows[0]?.wallet_balance ?? 0);
-      if (walletBalance < due) {
+      const advanceBalance = Number(userRows[0]?.prepaid_balance ?? 0);
+      if (advanceBalance < due) {
         await conn.rollback();
-        res.status(400).json({ message: `Insufficient wallet balance. Need ₹${due}, have ₹${walletBalance}` });
+        res.status(400).json({ message: `Insufficient advance balance. Need ₹${due}, have ₹${advanceBalance}` });
         return;
       }
 
-      // Debit wallet
-      await conn.query('UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ?', [due, bill.customer_id]);
+      // Debit advance balance
+      await conn.query('UPDATE users SET prepaid_balance = prepaid_balance - ? WHERE id = ?', [due, bill.customer_id]);
 
-      // Record wallet transaction
+      // Record advance transaction
       await conn.query(
-        `INSERT INTO wallet_transactions (user_id, type, amount, mode, status, reference_id, note)
-         VALUES (?, 'debit', ?, 'wallet', 'completed', ?, ?)`,
+        `INSERT INTO advance_transactions (user_id, type, amount, mode, status, reference_id, note)
+         VALUES (?, 'debit', ?, 'advance', 'completed', ?, ?)`,
         [bill.customer_id, due, `bill-${bill.id}`, `Bill payment for ${bill.month}`]
       );
 
@@ -182,21 +182,21 @@ export const payBillWithWallet = async (req: AuthRequest, res: Response): Promis
       NotifService.sendToUser({
         userId: bill.customer_id,
         title:  '✅ Bill Paid',
-        body:   `Your ${bill.month} bill of ₹${due} has been paid via wallet.`,
+        body:   `Your ${bill.month} bill of ₹${due} has been paid via advance balance.`,
         type:   'payment',
       })
     );
 
-    res.json({ message: 'Bill paid via wallet' });
+    res.json({ message: 'Bill paid via advance balance' });
   } catch (err) {
-    console.error('payBillWithWallet error:', err);
+    console.error('payBillWithAdvance error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };
 
-// ── POST /api/billing/clear-dues/wallet  (customer) ──────────────────────────
-// Pay all unpaid/partial bills via wallet, oldest first.
-export const clearDuesWallet = async (req: AuthRequest, res: Response): Promise<void> => {
+// ── POST /api/billing/clear-dues/advance  (customer) ─────────────────────────
+// Pay all unpaid/partial bills via advance balance, oldest first.
+export const clearDuesAdvance = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
 
@@ -218,25 +218,25 @@ export const clearDuesWallet = async (req: AuthRequest, res: Response): Promise<
     try {
       await conn.beginTransaction();
 
-      // Check wallet balance
+      // Check advance balance
       const [userRows] = await conn.query<RowDataPacket[]>(
-        'SELECT wallet_balance FROM users WHERE id = ? FOR UPDATE',
+        'SELECT prepaid_balance FROM users WHERE id = ? FOR UPDATE',
         [userId]
       );
-      const walletBalance = Number(userRows[0]?.wallet_balance ?? 0);
-      if (walletBalance < totalDue) {
+      const advanceBalance = Number(userRows[0]?.prepaid_balance ?? 0);
+      if (advanceBalance < totalDue) {
         await conn.rollback();
         res.status(400).json({
-          message: `Insufficient wallet balance. Need ₹${totalDue.toFixed(2)}, have ₹${walletBalance.toFixed(2)}`,
+          message: `Insufficient advance balance. Need ₹${totalDue.toFixed(2)}, have ₹${advanceBalance.toFixed(2)}`,
         }); return;
       }
 
-      // Debit wallet once
-      await conn.query('UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ?', [totalDue, userId]);
+      // Debit advance balance once
+      await conn.query('UPDATE users SET prepaid_balance = prepaid_balance - ? WHERE id = ?', [totalDue, userId]);
       await conn.query(
-        `INSERT INTO wallet_transactions (user_id, type, amount, mode, status, reference_id, note)
-         VALUES (?, 'debit', ?, 'wallet', 'completed', ?, ?)`,
-        [userId, totalDue, `clear-dues-${Date.now()}`, `Cleared ${dueBills.length} bills via wallet`]
+        `INSERT INTO advance_transactions (user_id, type, amount, mode, status, reference_id, note)
+         VALUES (?, 'debit', ?, 'advance', 'completed', ?, ?)`,
+        [userId, totalDue, `clear-dues-${Date.now()}`, `Cleared ${dueBills.length} bills via advance balance`]
       );
 
       await conn.commit();
@@ -257,14 +257,14 @@ export const clearDuesWallet = async (req: AuthRequest, res: Response): Promise<
       NotifService.sendToUser({
         userId,
         title: '✅ All Dues Cleared',
-        body:  `₹${totalDue.toFixed(2)} paid via wallet — ${dueBills.length} bills cleared.`,
+        body:  `₹${totalDue.toFixed(2)} paid via advance balance — ${dueBills.length} bills cleared.`,
         type:  'payment',
       })
     );
 
-    res.json({ message: 'All dues cleared via wallet', totalPaid: totalDue, billsCleared: dueBills.length });
+    res.json({ message: 'All dues cleared via advance balance', totalPaid: totalDue, billsCleared: dueBills.length });
   } catch (err) {
-    console.error('clearDuesWallet error:', err);
+    console.error('clearDuesAdvance error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };

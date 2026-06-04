@@ -10,6 +10,7 @@ import { RowDataPacket } from 'mysql2';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { withPlatformFee } from '../utils/platformFee';
+import { refundAdvanceOnCancel } from './advance.controller';
 
 const DEFAULT_PRICE = 50;
 
@@ -227,7 +228,14 @@ export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void
 
     // Admin can always cancel directly
     if (req.user!.role === 'admin') {
-      await OrderModel.cancelOrder(order.id, req.user!.id);
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await OrderModel.cancelOrder(order.id, req.user!.id);
+        await refundAdvanceOnCancel(conn, order.id, order.customer_id);
+        await conn.commit();
+      } catch (e) { await conn.rollback(); throw e; }
+      finally { conn.release(); }
       res.json({ message: 'Order cancelled' });
       return;
     }
@@ -237,8 +245,15 @@ export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void
     const ONE_HOUR = 60 * 60 * 1000;
 
     if (orderAge < ONE_HOUR) {
-      // Within 1 hour — cancel directly
-      await OrderModel.cancelOrder(order.id, req.user!.id);
+      // Within 1 hour — cancel directly + refund advance if applicable
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await OrderModel.cancelOrder(order.id, req.user!.id);
+        await refundAdvanceOnCancel(conn, order.id, order.customer_id);
+        await conn.commit();
+      } catch (e) { await conn.rollback(); throw e; }
+      finally { conn.release(); }
       res.json({ message: 'Order cancelled' });
     } else {
       // After 1 hour — need reason, create cancel request

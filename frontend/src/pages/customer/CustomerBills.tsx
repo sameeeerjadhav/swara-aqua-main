@@ -10,7 +10,7 @@ import {
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { billingApi, Bill, Transaction, ClearDuesBill, ClearDuesOrderResponse } from '../../api/billing';
-import { walletApi } from '../../api/wallet';
+import { advanceApi } from '../../api/advance';
 import { eachDateInRange } from '../../utils/date';
 import { loadRazorpay } from '../../utils/razorpay';
 
@@ -58,15 +58,15 @@ const BILL_STATUS = {
 interface ClearDuesModalProps {
   dueBills: Bill[];
   totalDue: number;
-  walletBalance: number;
+  advanceBalance: number;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const ClearDuesModal = ({ dueBills, totalDue, walletBalance, onClose, onSuccess }: ClearDuesModalProps) => {
+const ClearDuesModal = ({ dueBills, totalDue, advanceBalance, onClose, onSuccess }: ClearDuesModalProps) => {
   const { toast } = useToast();
-  const [mode, setMode] = useState<'wallet' | 'razorpay'>(
-    walletBalance >= totalDue ? 'wallet' : 'razorpay'
+  const [mode, setMode] = useState<'advance' | 'razorpay'>(
+    advanceBalance >= totalDue ? 'advance' : 'razorpay'
   );
   const [paying, setPaying] = useState(false);
 
@@ -83,9 +83,9 @@ const ClearDuesModal = ({ dueBills, totalDue, walletBalance, onClose, onSuccess 
   const handlePay = async () => {
     setPaying(true);
     try {
-      if (mode === 'wallet') {
-        await billingApi.clearDuesWallet();
-        toast(`✅ All dues cleared via wallet!`, 'success');
+      if (mode === 'advance') {
+        await billingApi.clearDuesAdvance();
+        toast(`✅ All dues cleared via advance balance!`, 'success');
         onSuccess();
       } else {
         // Load Razorpay SDK
@@ -129,7 +129,7 @@ const ClearDuesModal = ({ dueBills, totalDue, walletBalance, onClose, onSuccess 
     }
   };
 
-  const canUseWallet = walletBalance >= totalDue;
+  const canUseAdvance = advanceBalance >= totalDue;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -202,19 +202,19 @@ const ClearDuesModal = ({ dueBills, totalDue, walletBalance, onClose, onSuccess 
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pay via</p>
 
           <div className="grid grid-cols-2 gap-2">
-            {/* Wallet */}
-            <button disabled={!canUseWallet} onClick={() => setMode('wallet')}
+            {/* Advance Balance */}
+            <button disabled={!canUseAdvance} onClick={() => setMode('advance')}
               className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border transition-all text-left relative
-                ${!canUseWallet ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200' :
-                  mode === 'wallet' ? 'bg-green-50 border-green-400 ring-2 ring-green-400/20' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-              <Wallet className={`w-5 h-5 ${mode === 'wallet' && canUseWallet ? 'text-green-600' : 'text-slate-400'}`} />
+                ${!canUseAdvance ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200' :
+                  mode === 'advance' ? 'bg-green-50 border-green-400 ring-2 ring-green-400/20' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+              <Wallet className={`w-5 h-5 ${mode === 'advance' && canUseAdvance ? 'text-green-600' : 'text-slate-400'}`} />
               <div>
-                <p className={`text-xs font-bold ${mode === 'wallet' && canUseWallet ? 'text-green-700' : 'text-slate-700'}`}>Wallet</p>
+                <p className={`text-xs font-bold ${mode === 'advance' && canUseAdvance ? 'text-green-700' : 'text-slate-700'}`}>Advance</p>
                 <p className="text-[10px] text-slate-400">
-                  Balance: ₹{walletBalance.toFixed(0)}
+                  Balance: ₹{advanceBalance.toFixed(0)}
                 </p>
               </div>
-              {!canUseWallet && (
+              {!canUseAdvance && (
                 <span className="text-[9px] text-red-500 font-bold">Insufficient</span>
               )}
             </button>
@@ -251,7 +251,7 @@ const ClearDuesModal = ({ dueBills, totalDue, walletBalance, onClose, onSuccess 
             className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]
               ${paying
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : mode === 'wallet'
+                : mode === 'advance'
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-brand-600 text-white hover:bg-brand-700'}`}>
             {paying ? (
@@ -259,8 +259,8 @@ const ClearDuesModal = ({ dueBills, totalDue, walletBalance, onClose, onSuccess 
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                {mode === 'wallet'
-                  ? `Pay ₹${totalDue.toFixed(0)} via Wallet`
+                {mode === 'advance'
+                  ? `Pay ₹${totalDue.toFixed(0)} via Advance Balance`
                   : `Pay ₹${totalCharged.toFixed(0)} via Razorpay`}
               </>
             )}
@@ -280,7 +280,7 @@ export const CustomerBills = () => {
   const [bills,        setBills]        = useState<Bill[]>([]);
   const [txLoading,    setTxLoading]    = useState(true);
   const [billLoading,  setBillLoading]  = useState(true);
-  const [walletBal,    setWalletBal]    = useState(0);
+  const [advanceBal,   setAdvanceBal]   = useState(0);
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   const [payFilter,    setPayFilter]    = useState<PayFilter>('all');
@@ -314,12 +314,14 @@ export const CustomerBills = () => {
     finally { setBillLoading(false); }
   };
 
-  const loadWallet = async () => {
+  const loadAdvance = async () => {
     try {
-      const { data } = await walletApi.get();
-      setWalletBal(Number(data.balance ?? 0));
+      const { data } = await advanceApi.get();
+      setAdvanceBal(Number(data.balance ?? 0));
     } catch { /* non-critical */ }
   };
+
+  const loadAll = () => { loadTransactions(); loadBills(); loadAdvance(); };
 
   const loadReport = async (start: string, end: string) => {
     setReportLoading(true); setReport(null);
@@ -329,8 +331,6 @@ export const CustomerBills = () => {
     } catch { toast('Failed to load report', 'error'); }
     finally { setReportLoading(false); }
   };
-
-  const loadAll = () => { loadTransactions(); loadBills(); loadWallet(); };
 
   useEffect(() => { loadAll(); }, []);
 
@@ -880,7 +880,7 @@ export const CustomerBills = () => {
           <ClearDuesModal
             dueBills={dueBills}
             totalDue={totalDue}
-            walletBalance={walletBal}
+            advanceBalance={advanceBal}
             onClose={() => setShowClearDues(false)}
             onSuccess={() => { setShowClearDues(false); loadAll(); }}
           />

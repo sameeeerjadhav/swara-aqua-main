@@ -1,11 +1,12 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, FileText, CalendarDays, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, CalendarDays, CalendarClock, Wallet } from 'lucide-react';
 import { DashboardLayout } from '../components/layouts/DashboardLayout';
 import { CustomerHome } from './customer/CustomerHome';
 import { CustomerOrders } from './customer/CustomerOrders';
 import { CustomerBills } from './customer/CustomerBills';
 import { CustomerCalendar } from './customer/CustomerCalendar';
 import { CustomerSubscription } from './customer/CustomerSubscription';
+import { CustomerAdvance } from './customer/CustomerAdvance';
 import { ProfilePage } from './shared/ProfilePage';
 
 const NAV = [
@@ -13,6 +14,7 @@ const NAV = [
   { label: 'My Plan',  icon: CalendarClock,   to: '/customer/subscription' },
   { label: 'Calendar', icon: CalendarDays,     to: '/customer/calendar' },
   { label: 'Bills',    icon: FileText,         to: '/customer/bills' },
+  { label: 'Advance',  icon: Wallet,           to: '/customer/advance' },
 ];
 
 const TITLES: Record<string, string> = {
@@ -21,6 +23,7 @@ const TITLES: Record<string, string> = {
   '/customer/orders':       'My Orders',
   '/customer/calendar':     'Delivery Calendar',
   '/customer/bills':        'My Bills',
+  '/customer/advance':      'Advance Balance',
   '/customer/profile':      'My Profile',
 };
 
@@ -41,8 +44,9 @@ export default function CustomerDashboard() {
         <Route path="orders"   element={<CustomerOrders />} />
         <Route path="calendar" element={<CustomerCalendar />} />
         <Route path="bills"    element={<CustomerBills />} />
+        <Route path="advance"  element={<CustomerAdvance />} />
         <Route path="profile"  element={<ProfilePage />} />
-        <Route path="wallet"   element={<Navigate to="/customer" replace />} />
+        <Route path="wallet"   element={<Navigate to="/customer/advance" replace />} />
         <Route path="*"        element={<Navigate to="/customer" replace />} />
       </Routes>
     </DashboardLayout>

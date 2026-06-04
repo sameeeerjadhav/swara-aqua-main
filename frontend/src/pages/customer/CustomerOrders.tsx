@@ -14,6 +14,7 @@ import { useNotificationCenter } from '../../context/NotificationContext';
 import { addressApi, UserAddress } from '../../api/address';
 import { MapPicker } from '../../components/ui/MapPicker';
 import { loadRazorpay } from '../../utils/razorpay';
+import { advanceApi, AdvanceAccess } from '../../api/advance';
 
 
 
@@ -54,7 +55,9 @@ export const CustomerOrders = () => {
     notes:        '',
     address:      '',
   });
-  const [paymentMode, setPaymentMode] = useState<'cod' | 'online'>('cod');
+  const [paymentMode, setPaymentMode] = useState<'cod' | 'online' | 'advance'>('cod');
+  const [advanceBalance, setAdvanceBalance] = useState(0);
+  const [advanceAccess,  setAdvanceAccess]  = useState<AdvanceAccess>('none');
 
   // Show error toast if load failed
   useEffect(() => {
@@ -74,6 +77,14 @@ export const CustomerOrders = () => {
       setForm(f => ({ ...f, address: def?.address ?? '' }));
     } catch {
       // silently ignore — form opens without pre-fill
+    }
+    // Load advance balance so payment option shows correctly
+    try {
+      const { data: adv } = await advanceApi.get();
+      setAdvanceBalance(Number(adv.balance ?? 0));
+      setAdvanceAccess(adv.advanceAccess);
+    } catch {
+      // non-critical — option simply won't show
     }
     setShowForm(true);
   };
@@ -113,8 +124,23 @@ export const CustomerOrders = () => {
 
       await enablePush();
 
-      // Step 2: if online payment selected — open Razorpay immediately
-      if (paymentMode === 'online') {
+      // Step 2: handle payment based on selected mode
+      if (paymentMode === 'advance') {
+        // ── Advance Balance flow ──
+        try {
+          await advanceApi.payOrder(orderId);
+          setPaidOrderIds(prev => new Set(prev).add(orderId!));
+          setOrderSuccess({ orderId: orderId!, quantity: form.quantity, total: totalAmount, mode: 'Advance Balance', scheduledForTomorrow });
+          setShowForm(false);
+          resetForm();
+          await refresh();
+        } catch (advErr: any) {
+          try { await ordersApi.cancel(orderId!, { reason: 'Advance balance payment failed' }); } catch {}
+          await refresh();
+          toast(advErr?.response?.data?.message || 'Advance payment failed. Order cancelled.', 'error');
+        }
+      } else if (paymentMode === 'online') {
+        // ── Razorpay online flow ──
         const rzpLoaded = await loadRazorpay();
         if (!rzpLoaded) {
           // Cancel the order we just created
@@ -280,6 +306,7 @@ export const CustomerOrders = () => {
   };
 
   const totalAmount = form.quantity * PRICE_PER_JAR;
+  const canUseAdvance = advanceAccess === 'approved' && advanceBalance >= totalAmount;
 
   // Platform fee helper (mirrors backend slab table)
   const getPlatformFee = (base: number) => {
@@ -510,43 +537,76 @@ export const CustomerOrders = () => {
                   {/* Payment method selector */}
                   <div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Payment Method</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className={`grid gap-2 ${canUseAdvance ? 'grid-cols-3' : 'grid-cols-2'}`}>
+
                       {/* COD option */}
                       <button type="button" onClick={() => setPaymentMode('cod')}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left ${
+                        className={`flex flex-col items-start gap-1.5 px-3 py-3 rounded-2xl border transition-all text-left ${
                           paymentMode === 'cod'
                             ? 'bg-green-50 border-green-400 ring-2 ring-green-400/20'
                             : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                         }`}>
-                        <span className="text-xl">💵</span>
-                        <div>
-                          <p className={`text-xs font-bold ${paymentMode === 'cod' ? 'text-green-700' : 'text-slate-700'}`}>Cash on Delivery</p>
-                          <p className="text-[10px] text-slate-400 leading-tight">Pay on arrival</p>
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-lg">💵</span>
+                          {paymentMode === 'cod' && <Check className="w-3.5 h-3.5 text-green-600" />}
                         </div>
-                        {paymentMode === 'cod' && <Check className="w-4 h-4 text-green-600 ml-auto shrink-0" />}
+                        <div>
+                          <p className={`text-[11px] font-bold ${paymentMode === 'cod' ? 'text-green-700' : 'text-slate-700'}`}>Cash</p>
+                          <p className="text-[10px] text-slate-400 leading-tight">On delivery</p>
+                        </div>
                       </button>
 
                       {/* Online option */}
                       <button type="button" onClick={() => setPaymentMode('online')}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left ${
+                        className={`flex flex-col items-start gap-1.5 px-3 py-3 rounded-2xl border transition-all text-left ${
                           paymentMode === 'online'
                             ? 'bg-brand-50 border-brand-400 ring-2 ring-brand-400/20'
                             : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                         }`}>
-                        <CreditCard className={`w-5 h-5 shrink-0 ${paymentMode === 'online' ? 'text-brand-600' : 'text-slate-400'}`} />
-                        <div>
-                          <p className={`text-xs font-bold ${paymentMode === 'online' ? 'text-brand-700' : 'text-slate-700'}`}>Online Payment</p>
-                          <p className="text-[10px] text-slate-400 leading-tight">Pay via Razorpay</p>
+                        <div className="flex items-center justify-between w-full">
+                          <CreditCard className={`w-4 h-4 ${paymentMode === 'online' ? 'text-brand-600' : 'text-slate-400'}`} />
+                          {paymentMode === 'online' && <Check className="w-3.5 h-3.5 text-brand-600" />}
                         </div>
-                        {paymentMode === 'online' && <Check className="w-4 h-4 text-brand-600 ml-auto shrink-0" />}
+                        <div>
+                          <p className={`text-[11px] font-bold ${paymentMode === 'online' ? 'text-brand-700' : 'text-slate-700'}`}>Online</p>
+                          <p className="text-[10px] text-slate-400 leading-tight">Razorpay</p>
+                        </div>
                       </button>
+
+                      {/* Advance Balance — only when approved + sufficient balance */}
+                      {canUseAdvance && (
+                        <button type="button" onClick={() => setPaymentMode('advance')}
+                          className={`flex flex-col items-start gap-1.5 px-3 py-3 rounded-2xl border transition-all text-left ${
+                            paymentMode === 'advance'
+                              ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-400/20'
+                              : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                          }`}>
+                          <div className="flex items-center justify-between w-full">
+                            <span className="text-lg">💰</span>
+                            {paymentMode === 'advance' && <Check className="w-3.5 h-3.5 text-purple-600" />}
+                          </div>
+                          <div>
+                            <p className={`text-[11px] font-bold ${paymentMode === 'advance' ? 'text-purple-700' : 'text-slate-700'}`}>Advance</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">₹{advanceBalance.toFixed(0)} bal.</p>
+                          </div>
+                        </button>
+                      )}
                     </div>
 
+                    {/* Context notices */}
                     {paymentMode === 'online' && (
                       <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                         <CreditCard className="w-3 h-3 text-amber-600 shrink-0" />
                         <p className="text-[11px] text-amber-700 font-medium">
                           Includes ₹{platformFee} platform fee · You pay ₹{totalCharged} total
+                        </p>
+                      </div>
+                    )}
+                    {paymentMode === 'advance' && (
+                      <div className="mt-2 flex items-center gap-1.5 bg-purple-50 border border-purple-200 rounded-xl px-3 py-2">
+                        <span className="text-[11px]">✨</span>
+                        <p className="text-[11px] text-purple-700 font-medium">
+                          No platform fee · ₹{totalAmount} deducted from advance balance
                         </p>
                       </div>
                     )}
@@ -558,7 +618,9 @@ export const CustomerOrders = () => {
                       icon={paymentMode === 'online' ? <CreditCard className="w-4 h-4" /> : <Droplets className="w-4 h-4" />}>
                       {paymentMode === 'online'
                         ? `Place & Pay · ₹${totalCharged} (incl. ₹${platformFee} fee)`
-                        : `Place Order · ₹${totalAmount}`}
+                        : paymentMode === 'advance'
+                          ? `Place & Pay ₹${totalAmount} via Advance`
+                          : `Place Order · ₹${totalAmount}`}
                     </Button>
                   </div>
                 </form>

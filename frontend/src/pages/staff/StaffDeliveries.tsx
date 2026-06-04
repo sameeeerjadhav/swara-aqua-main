@@ -62,8 +62,8 @@ export const StaffDeliveries = () => {
     setSelectedTimeline([]);
     setDeliveryForm({
       deliveredQuantity: order.quantity,
-      collectedAmount:   order.paid_online ? 0 : order.total_amount,
-      paymentMode:       order.paid_online ? 'online' : 'cash',
+      collectedAmount:   Boolean(order.paid_online) ? 0 : order.total_amount,
+      paymentMode:       Boolean(order.paid_online) ? 'online' : 'cash',
       notes: '',
     });
     setStep('deliver');
@@ -437,7 +437,7 @@ export const StaffDeliveries = () => {
                     </div>
 
                     {/* Payment mode — hidden for pre-paid online orders */}
-                    {selected.paid_online ? (
+                    {Boolean(selected.paid_online) ? (
                       <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
                         <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
                         <div>

@@ -125,7 +125,9 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 6, scale: 0.96 }}
           transition={{ duration: 0.15 }}
-          className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden z-50"
+          // fixed on mobile — escapes the header's stacking context so buttons are clickable
+          // sm:absolute — reverts to standard dropdown behaviour on desktop
+          className="fixed top-[4.5rem] right-4 sm:absolute sm:top-full sm:right-0 sm:mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[9999]"
         >
           <div className="px-4 py-3 border-b border-slate-100">
             <p className="text-sm font-semibold text-slate-800">{user?.name}</p>

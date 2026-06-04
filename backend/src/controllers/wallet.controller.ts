@@ -6,6 +6,7 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import * as NotifService from '../services/notification.service';
 import * as SSE from '../services/sse.service';
+import { withPlatformFee } from '../utils/platformFee';
 
 // Lazy init — only created when first request comes in so missing keys don't crash startup
 let _razorpay: Razorpay | null = null;
@@ -149,23 +150,27 @@ export const createTopupOrder = async (req: AuthRequest, res: Response): Promise
     if (!(await checkWalletApproved(req.user!.id))) {
       res.status(403).json({ message: 'Wallet access not approved. Please request access first.' }); return;
     }
-    const amount = Number(req.body.amount);
-    if (!amount || amount < 1) {
+    const baseAmount = Number(req.body.amount);
+    if (!baseAmount || baseAmount < 1) {
       res.status(400).json({ message: 'amount must be >= 1' }); return;
     }
 
+    const { fee: platformFee, total: chargeAmount } = withPlatformFee(baseAmount);
+
     const order = await getRazorpay().orders.create({
-      amount:   Math.round(amount * 100), // paise
+      amount:   Math.round(chargeAmount * 100), // paise — base + platform fee
       currency: 'INR',
       receipt:  `wallet_${req.user!.id}_${Date.now()}`,
-      notes:    { userId: String(req.user!.id), purpose: 'wallet_topup' },
+      notes:    { userId: String(req.user!.id), purpose: 'wallet_topup', baseAmount: String(baseAmount), platformFee: String(platformFee) },
     });
 
     res.json({
-      orderId:  order.id,
-      amount:   order.amount,
-      currency: order.currency,
-      keyId:    process.env.RAZORPAY_KEY_ID,
+      orderId:      order.id,
+      amount:       order.amount,      // total in paise (base + fee)
+      currency:     order.currency,
+      keyId:        process.env.RAZORPAY_KEY_ID,
+      baseAmount,                      // what will be credited to wallet
+      platformFee,                     // fee in rupees (non-refundable)
     });
   } catch (err) {
     console.error('createTopupOrder error:', err);
@@ -195,7 +200,19 @@ export const verifyTopup = async (req: AuthRequest, res: Response): Promise<void
       res.status(400).json({ message: 'Payment verification failed' }); return;
     }
 
-    const creditAmount = Number(amount) / 100; // convert paise → rupees
+    const totalPaisePaid = Number(amount);          // Razorpay amount = base + fee (in paise)
+    const totalRupeesPaid = totalPaisePaid / 100;    // convert paise → rupees
+
+    // Derive the base (wallet credit) = totalRupeesPaid - platformFee
+    // We re-derive the fee from the base so we don't rely on client-sent fee value.
+    // Binary-search the base: find b where b + fee(b) = totalRupeesPaid
+    // Since slabs are simple, we can just reverse-compute:
+    let creditAmount: number;
+    if (totalRupeesPaid <= 104)       creditAmount = totalRupeesPaid - 5;   // 1-99 + 5
+    else if (totalRupeesPaid <= 309)  creditAmount = totalRupeesPaid - 10;  // 100-299 + 10
+    else if (totalRupeesPaid <= 519)  creditAmount = totalRupeesPaid - 15;  // 300-499 + 15
+    else                              creditAmount = totalRupeesPaid - 20;  // 500+ + 20
+    creditAmount = parseFloat(creditAmount.toFixed(2));
     const userId = req.user!.id;
 
     const conn = await pool.getConnection();

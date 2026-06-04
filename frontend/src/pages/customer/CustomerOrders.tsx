@@ -124,6 +124,7 @@ export const CustomerOrders = () => {
         }
 
         const { data: payData } = await ordersApi.createOrderPayment(orderId);
+        const fee = payData.platformFee ?? 0;
 
         try {
           await new Promise<void>((resolve, reject) => {
@@ -132,7 +133,7 @@ export const CustomerOrders = () => {
               amount:      payData.amount,
               currency:    payData.currency,
               name:        'Swara Aqua',
-              description: `Payment for Order #${orderId} (${form.quantity} jar${form.quantity > 1 ? 's' : ''})`,
+              description: `Order #${orderId} · ₹${payData.orderAmount} + ₹${fee} platform fee`,
               order_id:    payData.rzpOrderId,
               prefill: {
                 name:    user?.name  || '',
@@ -236,6 +237,7 @@ export const CustomerOrders = () => {
       if (!rzpLoaded) { toast('Razorpay failed to load. Please try again.', 'error'); return; }
 
       const { data } = await ordersApi.createOrderPayment(order.id);
+      const fee = data.platformFee ?? 0;
 
       await new Promise<void>((resolve, reject) => {
         const options = {
@@ -243,7 +245,7 @@ export const CustomerOrders = () => {
           amount:      data.amount,
           currency:    data.currency,
           name:        'Swara Aqua',
-          description: `Payment for Order #${order.id} (${order.quantity} jars)`,
+          description: `Order #${order.id} (${order.quantity} jars) · ₹${data.orderAmount} + ₹${fee} platform fee`,
           order_id:    data.rzpOrderId,
           prefill: {
             name:  user?.name  || '',
@@ -278,6 +280,16 @@ export const CustomerOrders = () => {
   };
 
   const totalAmount = form.quantity * PRICE_PER_JAR;
+
+  // Platform fee helper (mirrors backend slab table)
+  const getPlatformFee = (base: number) => {
+    if (base < 100)  return 5;
+    if (base < 300)  return 10;
+    if (base < 500)  return 15;
+    return 20;
+  };
+  const platformFee  = getPlatformFee(totalAmount);
+  const totalCharged = totalAmount + platformFee;
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -531,10 +543,12 @@ export const CustomerOrders = () => {
                     </div>
 
                     {paymentMode === 'online' && (
-                      <p className="text-[11px] text-brand-500 font-medium mt-2 flex items-center gap-1.5">
-                        <CreditCard className="w-3 h-3" />
-                        Razorpay checkout will open after placing order
-                      </p>
+                      <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                        <CreditCard className="w-3 h-3 text-amber-600 shrink-0" />
+                        <p className="text-[11px] text-amber-700 font-medium">
+                          Includes ₹{platformFee} platform fee · You pay ₹{totalCharged} total
+                        </p>
+                      </div>
                     )}
                   </div>
 
@@ -542,7 +556,9 @@ export const CustomerOrders = () => {
                   <div className="sticky bottom-0 pt-2 pb-1 bg-white -mx-5 px-5 md:relative md:mx-0 md:px-0 md:pt-0 md:pb-0">
                     <Button type="submit" loading={submitting} size="lg" className="w-full !py-4 md:!py-3.5 text-sm"
                       icon={paymentMode === 'online' ? <CreditCard className="w-4 h-4" /> : <Droplets className="w-4 h-4" />}>
-                      {paymentMode === 'online' ? `Place & Pay · ₹${totalAmount}` : `Place Order · ₹${totalAmount}`}
+                      {paymentMode === 'online'
+                        ? `Place & Pay · ₹${totalCharged} (incl. ₹${platformFee} fee)`
+                        : `Place Order · ₹${totalAmount}`}
                     </Button>
                   </div>
                 </form>

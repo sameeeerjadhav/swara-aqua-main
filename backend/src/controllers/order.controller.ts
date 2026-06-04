@@ -9,6 +9,7 @@ import pool from '../config/db';
 import { RowDataPacket } from 'mysql2';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
+import { withPlatformFee } from '../utils/platformFee';
 
 const DEFAULT_PRICE = 50;
 
@@ -608,22 +609,25 @@ export const createOrderPayment = async (req: AuthRequest, res: Response): Promi
     if (order.customer_id !== req.user!.id) { res.status(403).json({ message: 'Access denied' }); return; }
     if (order.status === 'cancelled') { res.status(400).json({ message: 'Cannot pay for a cancelled order' }); return; }
 
-    const amount = Number(order.total_amount);
-    if (!amount || amount < 1) { res.status(400).json({ message: 'Invalid order amount' }); return; }
+    const baseAmount = Number(order.total_amount);
+    if (!baseAmount || baseAmount < 1) { res.status(400).json({ message: 'Invalid order amount' }); return; }
+
+    const { fee: platformFee, total: chargeAmount } = withPlatformFee(baseAmount);
 
     const rzpOrder = await getRazorpay().orders.create({
-      amount:   Math.round(amount * 100), // paise
+      amount:   Math.round(chargeAmount * 100), // paise — base + platform fee
       currency: 'INR',
       receipt:  `order_${orderId}_${Date.now()}`,
-      notes:    { userId: String(req.user!.id), orderId: String(orderId), purpose: 'order_payment' },
+      notes:    { userId: String(req.user!.id), orderId: String(orderId), purpose: 'order_payment', platformFee: String(platformFee) },
     });
 
     res.json({
-      rzpOrderId: rzpOrder.id,
-      amount:     rzpOrder.amount,
-      currency:   rzpOrder.currency,
-      keyId:      process.env.RAZORPAY_KEY_ID,
-      orderAmount: amount,
+      rzpOrderId:   rzpOrder.id,
+      amount:       rzpOrder.amount,          // total in paise (base + fee)
+      currency:     rzpOrder.currency,
+      keyId:        process.env.RAZORPAY_KEY_ID,
+      orderAmount:  baseAmount,               // base order amount (what gets credited)
+      platformFee,                            // fee amount in rupees
     });
   } catch (err) {
     console.error('createOrderPayment error:', err);

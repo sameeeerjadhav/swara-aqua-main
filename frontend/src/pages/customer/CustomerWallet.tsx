@@ -132,6 +132,8 @@ export const CustomerWallet = () => {
       if (!rzpLoaded) { toast('Razorpay failed to load', 'error'); setPaying(false); return; }
 
       const { data } = await walletApi.createTopupOrder(amt);
+      const fee        = data.platformFee ?? 0;
+      const baseAmt    = data.baseAmount  ?? amt;
 
       await new Promise<void>((resolve, reject) => {
         const options = {
@@ -139,7 +141,7 @@ export const CustomerWallet = () => {
           amount:      data.amount,
           currency:    data.currency,
           name:        'Swara Aqua',
-          description: 'Wallet Top-up',
+          description: `Wallet Top-up ₹${baseAmt} + ₹${fee} platform fee`,
           order_id:    data.orderId,
           handler: async (response: any) => {
             try {
@@ -150,7 +152,7 @@ export const CustomerWallet = () => {
                 amount:              data.amount,
               });
               setBalance(verify.data.balance);
-              toast(`₹${amt} added to wallet!`, 'success');
+              toast(`₹${baseAmt} added to wallet! (₹${fee} platform fee charged)`, 'success');
               setShowTopup(false);
               setAmount('');
               await load();
@@ -280,9 +282,30 @@ export const CustomerWallet = () => {
                 className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-8 pr-4 py-3 text-sm font-semibold outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
             </div>
 
+            {/* Platform fee notice */}
+            {Number(amount) >= 1 && (() => {
+              const base = Number(amount);
+              const fee  = base < 100 ? 5 : base < 300 ? 10 : base < 500 ? 15 : 20;
+              const total = base + fee;
+              return (
+                <div className="mb-3 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  <span className="text-amber-600 text-xs">💳</span>
+                  <p className="text-[11px] text-amber-700 font-medium">
+                    ₹{fee} platform fee · Total charged: ₹{total}
+                  </p>
+                </div>
+              );
+            })()}
+
             <Button className="w-full" loading={paying}
               icon={<Check className="w-4 h-4" />} onClick={handleTopup}>
-              Pay ₹{amount || '0'} via Razorpay
+              {Number(amount) >= 1
+                ? (() => {
+                    const base  = Number(amount);
+                    const fee   = base < 100 ? 5 : base < 300 ? 10 : base < 500 ? 15 : 20;
+                    return `Pay ₹${base + fee} (credits ₹${base})`;
+                  })()
+                : 'Pay via Razorpay'}
             </Button>
           </motion.div>
         )}

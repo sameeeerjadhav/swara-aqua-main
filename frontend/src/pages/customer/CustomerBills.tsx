@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FileText, Download, ChevronDown, IndianRupee,
+  FileText, Download, ChevronDown,
   CheckCircle2, AlertCircle, Clock, Banknote,
   CalendarDays, CalendarRange, Calendar as CalendarIcon,
   CreditCard, Filter, RefreshCw, Package, Wifi, WifiOff,
@@ -40,10 +40,9 @@ type PayFilter = 'all' | 'online' | 'cash' | 'pending';
 type ReportMode = 'monthly' | 'day' | 'range';
 
 // ── Mode / status config ──────────────────────────────────────────────────────
-const MODE_CFG = {
-  online:  { label: 'Online',  icon: CreditCard, bg: 'bg-blue-50', border: 'border-blue-200',  text: 'text-blue-700',   dot: 'bg-blue-400'  },
-  cash:    { label: 'Cash',    icon: Banknote,   bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700',  dot: 'bg-green-400' },
-  advance: { label: 'Advance', icon: IndianRupee, bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', dot: 'bg-purple-400' },
+const MODE_CFG: Record<string, { label: string; icon: typeof CreditCard; bg: string; border: string; text: string; dot: string }> = {
+  online:  { label: 'Online', icon: CreditCard, bg: 'bg-blue-50',   border: 'border-blue-200',  text: 'text-blue-700',  dot: 'bg-blue-400'  },
+  cash:    { label: 'Cash',   icon: Banknote,   bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700', dot: 'bg-green-400' },
 };
 const STATUS_CFG = {
   completed: { label: 'Paid',    bg: 'bg-green-50 border-green-200', text: 'text-green-700', icon: CheckCircle2 },

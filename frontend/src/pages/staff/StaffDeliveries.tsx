@@ -9,7 +9,7 @@ import { ordersApi, Order, Delivery, TimelineEntry } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
 import { useSSE } from '../../hooks/useSSE';
 
-type PaymentMode = 'cash' | 'online' | 'advance';
+type PaymentMode = 'cash' | 'online';
 type FilterTab = 'pending' | 'completed' | 'daily' | 'preorder';
 
 const TABS: { id: FilterTab; label: string; icon: React.ReactNode }[] = [
@@ -60,7 +60,12 @@ export const StaffDeliveries = () => {
     setSelected(order);
     setSelectedDelivery(null);
     setSelectedTimeline([]);
-    setDeliveryForm({ deliveredQuantity: order.quantity, collectedAmount: order.total_amount, paymentMode: 'cash', notes: '' });
+    setDeliveryForm({
+      deliveredQuantity: order.quantity,
+      collectedAmount:   order.paid_online ? 0 : order.total_amount,
+      paymentMode:       order.paid_online ? 'online' : 'cash',
+      notes: '',
+    });
     setStep('deliver');
   };
 
@@ -431,21 +436,32 @@ export const StaffDeliveries = () => {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Payment Mode</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['cash','online','advance'] as PaymentMode[]).map(m => (
-                          <button key={m} type="button"
-                            onClick={() => setDeliveryForm(f => ({ ...f, paymentMode: m }))}
-                            className={`py-2.5 rounded-xl text-sm font-semibold border transition-all capitalize
-                              ${deliveryForm.paymentMode === m
-                                ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                                : 'bg-white text-slate-600 border-slate-200 active:bg-slate-50'}`}>
-                            {m}
-                          </button>
-                        ))}
+                    {/* Payment mode — hidden for pre-paid online orders */}
+                    {selected.paid_online ? (
+                      <div className="flex items-center gap-2.5 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                        <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold text-green-700">Paid Online</p>
+                          <p className="text-[11px] text-green-500">Customer already paid via Razorpay</p>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Payment Mode</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['cash', 'online'] as PaymentMode[]).map(m => (
+                            <button key={m} type="button"
+                              onClick={() => setDeliveryForm(f => ({ ...f, paymentMode: m }))}
+                              className={`py-2.5 rounded-xl text-sm font-semibold border transition-all capitalize
+                                ${deliveryForm.paymentMode === m
+                                  ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                                  : 'bg-white text-slate-600 border-slate-200 active:bg-slate-50'}`}>
+                              {m === 'cash' ? '💵 Cash' : '💳 Online'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Notes (optional)</label>

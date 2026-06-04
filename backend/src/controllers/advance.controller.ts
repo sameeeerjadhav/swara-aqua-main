@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import pool from '../config/db';
-import { RowDataPacket } from 'mysql2/promise';
+import { RowDataPacket, PoolConnection } from 'mysql2/promise';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import * as NotifService from '../services/notification.service';
@@ -359,7 +359,7 @@ export const payOrderWithAdvance = async (req: AuthRequest, res: Response): Prom
 
 // Helper: refund advance balance when an advance-paid order is cancelled
 export const refundAdvanceOnCancel = async (
-  conn: any,
+  conn: PoolConnection,
   orderId: number,
   customerId: number
 ): Promise<void> => {

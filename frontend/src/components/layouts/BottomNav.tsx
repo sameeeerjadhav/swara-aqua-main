@@ -224,15 +224,17 @@ const AdminBottomNav = ({ items }: { items: NavItem[] }) => {
           {primary.map(({ label, icon: Icon, to }) => (
             <NavTab key={to} to={to} label={label} Icon={Icon} />
           ))}
-          <button onClick={() => setDrawerOpen(true)}
-            className={`flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`}>
-            <span className={`flex items-center justify-center w-10 h-6 rounded-full transition-all duration-200 ${overflowActive ? 'bg-brand-100' : ''}`}>
-              <MoreHorizontal className={`w-5 h-5 ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`} />
-            </span>
-            <span className={`text-[10px] font-semibold leading-none ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`}>
-              More
-            </span>
-          </button>
+          {overflow.length > 0 && (
+            <button onClick={() => setDrawerOpen(true)}
+              className={`flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`}>
+              <span className={`flex items-center justify-center w-10 h-6 rounded-full transition-all duration-200 ${overflowActive ? 'bg-brand-100' : ''}`}>
+                <MoreHorizontal className={`w-5 h-5 ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`} />
+              </span>
+              <span className={`text-[10px] font-semibold leading-none ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`}>
+                More
+              </span>
+            </button>
+          )}
         </div>
       </nav>
     </>

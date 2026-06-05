@@ -13,6 +13,8 @@ import { useOrders } from '../../hooks/useOrders';
 import { useSSE } from '../../hooks/useSSE';
 import { useToast } from '../../components/ui/Toast';
 import { subscriptionApi, Subscription } from '../../api/subscription';
+import { pendingApi } from '../../api/pending';
+import { loadRazorpay } from '../../utils/razorpay';
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } } };
@@ -256,8 +258,80 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
     if (onOrderPress) onOrderPress(); else navigate('/customer/orders?new=1');
   };
 
+  // Pending balance
+  const [pendingBalance, setPendingBalance] = useState(0);
+  const [payingPending, setPayingPending] = useState(false);
+
+  useEffect(() => {
+    pendingApi.getMy()
+      .then(({ data }) => setPendingBalance(data.pending_balance))
+      .catch(() => {});
+  }, []);
+
+  const handlePayPending = async () => {
+    setPayingPending(true);
+    try {
+      const loaded = await loadRazorpay();
+      if (!loaded) { toast('Razorpay failed to load', 'error'); return; }
+      const { data } = await pendingApi.createPayOrder();
+      await new Promise<void>((resolve, reject) => {
+        const options = {
+          key:         data.keyId,
+          amount:      data.amount,
+          currency:    'INR',
+          name:        'Swara Aqua',
+          description: `Clear pending balance ₹${data.baseAmount}`,
+          order_id:    data.orderId,
+          handler: async (response: any) => {
+            try {
+              await pendingApi.verify({
+                razorpay_order_id:   response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature:  response.razorpay_signature,
+              });
+              setPendingBalance(0);
+              toast('✅ Pending balance cleared!', 'success');
+              resolve();
+            } catch { reject(new Error('Verification failed')); }
+          },
+          modal: { ondismiss: () => reject(new Error('dismissed')) },
+          theme: { color: '#ef4444' },
+        };
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+      });
+    } catch (err: any) {
+      if (err?.message !== 'dismissed') toast(err?.response?.data?.message || 'Payment failed', 'error');
+    } finally { setPayingPending(false); }
+  };
+
   return (
     <div className="space-y-5 max-w-2xl">
+
+      {/* ―― Outstanding Balance Alert ―― */}
+      {pendingBalance > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-red-50 border border-red-200 rounded-2xl px-4 py-4 flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+              <span className="text-lg">💳</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-red-700">Outstanding Balance</p>
+              <p className="text-xs text-red-500">₹{pendingBalance.toLocaleString('en-IN')} due — tap to clear</p>
+            </div>
+          </div>
+          <button
+            onClick={handlePayPending}
+            disabled={payingPending}
+            className="shrink-0 bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-red-700 active:scale-95 transition-all disabled:opacity-60"
+          >
+            {payingPending ? 'Processing…' : 'Pay Now'}
+          </button>
+        </motion.div>
+      )}
 
       {/* ── Section: We Serve At ── */}
       <div className="flex items-center gap-3">

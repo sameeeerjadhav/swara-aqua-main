@@ -23,6 +23,7 @@ import addressRoutes from './routes/address.routes';
 import bannerRoutes from './routes/banner.routes';
 import eventsRoutes from './routes/events.routes';
 import advanceRoutes from './routes/advance.routes';
+import pendingRoutes from './routes/pending.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import casualDeliveryRoutes from './routes/casualDelivery.routes';
 import { startCronJobs } from './services/cron.service';
@@ -104,6 +105,7 @@ app.use('/api/addresses',     addressRoutes);
 app.use('/api/banners',       bannerRoutes);
 app.use('/api/events',        eventsRoutes);
 app.use('/api/advance',            advanceRoutes);
+app.use('/api/pending',            pendingRoutes);
 app.use('/api/subscriptions',      subscriptionRoutes);
 app.use('/api/casual-deliveries',  casualDeliveryRoutes);
 

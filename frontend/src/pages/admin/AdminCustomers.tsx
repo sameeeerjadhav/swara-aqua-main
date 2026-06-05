@@ -8,6 +8,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import api from '../../api/axios';
 import { subscriptionApi } from '../../api/subscription';
+import { pendingApi } from '../../api/pending';
 
 interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; created_at: string; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
@@ -43,8 +44,11 @@ export const AdminCustomers = () => {
   // Mobile modal
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
 
-  // Pending balances
+  // Billing pending balances
   const [balances, setBalances] = useState<Record<number, BalanceInfo>>({});
+  // Pay-later pending balances
+  const [payLaterMap, setPayLaterMap] = useState<Record<number, number>>({});
+  const [totalPayLater, setTotalPayLater] = useState(0);
 
   // Add Customer modal
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -66,12 +70,20 @@ export const AdminCustomers = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const [usersRes, balRes] = await Promise.all([
+      const [usersRes, balRes, payLaterRes] = await Promise.all([
         api.get('/admin/users'),
         api.get('/admin/customer-balances'),
+        pendingApi.adminSummary(),
       ]);
       setCustomers(usersRes.data.users.filter((u: CustomerRow) => u.role === 'customer'));
       setBalances(balRes.data.balances || {});
+      // Build a map: customer_id -> pending_balance
+      const map: Record<number, number> = {};
+      for (const row of payLaterRes.data.customers) {
+        map[row.id] = row.pending_balance;
+      }
+      setPayLaterMap(map);
+      setTotalPayLater(payLaterRes.data.total_pending || 0);
     } catch { toast('Failed to load customers', 'error'); }
     finally { setLoading(false); }
   };
@@ -211,6 +223,20 @@ export const AdminCustomers = () => {
         </div>
       </div>
 
+      {/* Pay Later outstanding total */}
+      {totalPayLater > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⏳</span>
+            <div>
+              <p className="text-sm font-bold text-amber-800">Total Pay-Later Outstanding</p>
+              <p className="text-xs text-amber-600">Across all customers — not yet collected</p>
+            </div>
+          </div>
+          <span className="text-lg font-extrabold text-amber-700">₹{totalPayLater.toLocaleString('en-IN')}</span>
+        </div>
+      )}
+
       {/* Status filter tabs */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
         {STATUS_FILTERS.map(s => (
@@ -242,7 +268,7 @@ export const AdminCustomers = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                {['Customer', 'Phone', 'Jar Rate', 'Pending', 'Actions'].map(h => (
+                {['Customer', 'Phone', 'Jar Rate', 'Bill Pending', 'Pay Later', 'Actions'].map(h => (
                   <th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -255,9 +281,10 @@ export const AdminCustomers = () => {
                   ))}</tr>
                 ))
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-12 text-slate-400 text-sm">No customers found</td></tr>
+                <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">No customers found</td></tr>
               ) : filtered.map((u, i) => {
                 const bal = balances[u.id];
+                const payLater = payLaterMap[u.id] || 0;
                 return (
                   <motion.tr key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
                     className="hover:bg-slate-50/50 transition-colors">
@@ -283,6 +310,15 @@ export const AdminCustomers = () => {
                         <span className="text-sm font-bold text-red-500">₹{bal.total.toLocaleString('en-IN')}</span>
                       ) : (
                         <span className="text-sm text-green-500 font-medium">Clear</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      {payLater > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                          ⏳ ₹{payLater.toLocaleString('en-IN')}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-400">—</span>
                       )}
                     </td>
 

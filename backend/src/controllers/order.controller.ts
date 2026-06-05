@@ -404,7 +404,7 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
       res.status(400).json({ message: 'orderId, deliveredQuantity, collectedAmount and paymentMode are required' });
       return;
     }
-    if (!['cash','online','advance'].includes(paymentMode)) {
+    if (!['cash','online','advance','pay_later'].includes(paymentMode)) {
       res.status(400).json({ message: 'Invalid paymentMode' }); return;
     }
 
@@ -436,22 +436,39 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
     // Update inventory: reduce staff assigned, increase empty_collected
     await Inv.recordDeliveryInventory(req.user!.id, Number(deliveredQuantity), order.id);
 
-    // Record financial transaction
-    await Inv.createTransaction({
-      customerId:  order.customer_id,
-      orderId:     order.id,
-      amount:      Number(collectedAmount),
-      mode:        paymentMode,
-      type:        'credit',
-      collectedBy: req.user!.id,
-    });
+    // Record financial transaction (skip for pay_later — balance not collected yet)
+    if (paymentMode !== 'pay_later') {
+      await Inv.createTransaction({
+        customerId:  order.customer_id,
+        orderId:     order.id,
+        amount:      Number(collectedAmount),
+        mode:        paymentMode,
+        type:        'credit',
+        collectedBy: req.user!.id,
+      });
+    } else {
+      // pay_later: record in pending_payments and increment user balance
+      await pool.query(
+        `INSERT INTO pending_payments (customer_id, order_id, amount)
+         VALUES (?, ?, ?)`,
+        [order.customer_id, order.id, order.total_amount]
+      );
+      await pool.query(
+        'UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?',
+        [order.total_amount, order.customer_id]
+      );
+    }
 
     // Notify customer
+    const notifBody = paymentMode === 'pay_later'
+      ? `Your order of ${deliveredQuantity} jars has been delivered. Payment of ₹${order.total_amount} is pending.`
+      : `Your order of ${deliveredQuantity} jars has been delivered. Amount collected: ₹${collectedAmount}.`;
+
     notify(() =>
       NotifService.sendToUser({
         userId: order.customer_id,
-        title:  'Order Delivered! 🎉',
-        body:   `Your order of ${deliveredQuantity} jars has been delivered. Amount collected: ₹${collectedAmount}.`,
+        title:  paymentMode === 'pay_later' ? 'Order Delivered — Payment Pending 💳' : 'Order Delivered! 🎉',
+        body:   notifBody,
         type:   'order',
         data:   { orderId: String(order.id) },
       })

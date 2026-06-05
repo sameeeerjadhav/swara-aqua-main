@@ -9,7 +9,7 @@ import { ordersApi, Order, Delivery, TimelineEntry } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
 import { useSSE } from '../../hooks/useSSE';
 
-type PaymentMode = 'cash' | 'online';
+type PaymentMode = 'cash' | 'online' | 'pay_later';
 type FilterTab = 'pending' | 'completed' | 'daily' | 'preorder';
 
 const TABS: { id: FilterTab; label: string; icon: React.ReactNode }[] = [
@@ -431,8 +431,12 @@ export const StaffDeliveries = () => {
                         <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Amount (₹)</label>
                         <input type="number" inputMode="decimal" min={0}
                           value={deliveryForm.collectedAmount}
+                          disabled={deliveryForm.paymentMode === 'pay_later'}
                           onChange={e => setDeliveryForm(f => ({ ...f, collectedAmount: Number(e.target.value) }))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-base font-semibold text-center outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                          className={`w-full border rounded-xl px-3 py-3 text-base font-semibold text-center outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all
+                            ${deliveryForm.paymentMode === 'pay_later'
+                              ? 'bg-amber-50 border-amber-200 text-amber-500 cursor-not-allowed'
+                              : 'bg-slate-50 border-slate-200'}`} />
                       </div>
                     </div>
 
@@ -448,18 +452,29 @@ export const StaffDeliveries = () => {
                     ) : (
                       <div>
                         <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Payment Mode</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(['cash', 'online'] as PaymentMode[]).map(m => (
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['cash', 'online', 'pay_later'] as PaymentMode[]).map(m => (
                             <button key={m} type="button"
-                              onClick={() => setDeliveryForm(f => ({ ...f, paymentMode: m }))}
-                              className={`py-2.5 rounded-xl text-sm font-semibold border transition-all capitalize
+                              onClick={() => setDeliveryForm(f => ({
+                                ...f,
+                                paymentMode: m,
+                                collectedAmount: m === 'pay_later' ? 0 : f.collectedAmount,
+                              }))}
+                              className={`py-2.5 rounded-xl text-xs font-semibold border transition-all
                                 ${deliveryForm.paymentMode === m
-                                  ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                                  ? m === 'pay_later'
+                                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                                    : 'bg-brand-600 text-white border-brand-600 shadow-sm'
                                   : 'bg-white text-slate-600 border-slate-200 active:bg-slate-50'}`}>
-                              {m === 'cash' ? '💵 Cash' : '💳 Online'}
+                              {m === 'cash' ? '💵 Cash' : m === 'online' ? '💳 Online' : '⏳ Pay Later'}
                             </button>
                           ))}
                         </div>
+                        {deliveryForm.paymentMode === 'pay_later' && (
+                          <p className="text-[11px] text-amber-600 mt-1.5 flex items-center gap-1">
+                            ⚠️ Amount will be added to customer's pending balance
+                          </p>
+                        )}
                       </div>
                     )}
 

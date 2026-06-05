@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireRole } from '../middleware/auth';
+import { authenticate, allowAdmin, allowCustomer } from '../middleware/auth.middleware';
 import {
   getMyPending,
   createPendingPayOrder,
@@ -10,11 +10,11 @@ import {
 const router = Router();
 
 // Customer routes
-router.get('/my',        authenticate, requireRole('customer'), getMyPending);
-router.post('/pay-order', authenticate, requireRole('customer'), createPendingPayOrder);
-router.post('/verify',    authenticate, requireRole('customer'), verifyPendingPayment);
+router.get('/my',         ...allowCustomer, getMyPending);
+router.post('/pay-order', ...allowCustomer, createPendingPayOrder);
+router.post('/verify',    ...allowCustomer, verifyPendingPayment);
 
 // Admin route
-router.get('/admin',     authenticate, requireRole('admin'), getAdminPendingSummary);
+router.get('/admin',      ...allowAdmin, getAdminPendingSummary);
 
 export default router;

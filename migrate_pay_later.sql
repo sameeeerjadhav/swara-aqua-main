@@ -1,6 +1,9 @@
 -- ============================================================
 -- Pay Later Feature Migration
--- Run this on Hostinger DB before deploying the new build
+-- IMPORTANT: In phpMyAdmin, click your database name in the
+-- left sidebar FIRST before running this SQL.
+-- Or uncomment and set the line below:
+-- USE your_database_name;
 -- ============================================================
 
 -- 1. Add pending_balance to users table

@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import pool from '../config/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest } from '../middleware/auth.middleware';
 import { getPlatformFee } from '../utils/platformFee';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -126,9 +126,9 @@ export const verifyPendingPayment = async (req: AuthRequest, res: Response): Pro
 
     // Record a transaction for audit
     await pool.query<ResultSetHeader>(
-      `INSERT INTO transactions (customer_id, amount, mode, type, status, reference_id, note)
-       VALUES (?, ?, 'online', 'debit', 'completed', ?, ?)`,
-      [customerId, pendingBalance, razorpay_payment_id, 'Pending balance cleared via Razorpay']
+      `INSERT INTO transactions (customer_id, order_id, amount, mode, type, collected_by, status, note)
+       VALUES (?, NULL, ?, 'online', 'credit', NULL, 'completed', ?)`,
+      [customerId, pendingBalance, `Pending balance cleared via Razorpay: ${razorpay_payment_id}`]
     );
 
     notify(() =>

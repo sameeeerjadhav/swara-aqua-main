@@ -76,11 +76,15 @@ const BannerCarousel = () => {
             <a href={b.link_url} target="_blank" rel="noopener noreferrer" className="block w-full">
               <img src={getUploadUrl(b.image_url)} alt={b.title || 'Banner'}
                 className="w-full h-44 sm:h-52 object-cover block"
+                fetchPriority="high"
+                decoding="async"
                 onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/800x300/e2e8f0/94a3b8?text=Banner'; }} />
             </a>
           ) : (
             <img src={getUploadUrl(b.image_url)} alt={b.title || 'Banner'}
               className="w-full h-44 sm:h-52 object-cover block"
+              fetchPriority="high"
+              decoding="async"
               onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/800x300/e2e8f0/94a3b8?text=Banner'; }} />
           )}
           {b.title && (
@@ -208,6 +212,8 @@ const PromoCarousel = () => {
               src={src}
               alt={`Promo ${i + 1}`}
               className="promo-carousel-card-img"
+              loading="lazy"
+              decoding="async"
               draggable={false}
             />
           </div>

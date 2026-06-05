@@ -14,7 +14,7 @@ import { withPlatformFee } from '../../utils/platformFee';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getPlatformFee = (base: number) => {
-  if (base < 100)  return 5;
+  if (base < 100)  return 0; // TEMP: ₹0 for testing
   if (base < 300)  return 10;
   if (base < 500)  return 15;
   return 20;

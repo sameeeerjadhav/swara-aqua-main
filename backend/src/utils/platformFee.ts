@@ -9,7 +9,7 @@
  *  ₹500 +        → ₹20
  */
 export const getPlatformFee = (baseAmount: number): number => {
-  if (baseAmount < 100)  return 0; // TEMP: ₹0 for testing
+  if (baseAmount < 100)  return 2;
   if (baseAmount < 300)  return 10;
   if (baseAmount < 500)  return 15;
   return 20;

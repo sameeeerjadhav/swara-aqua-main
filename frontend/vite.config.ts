@@ -25,21 +25,25 @@ export default defineConfig(({ mode }) => {
         compress: { drop_console: true, drop_debugger: true },
       },
       chunkSizeWarningLimit: 600,
-
-      // Ensure CSS is inlined for critical above-fold content
-      cssCodeSplit: true,
-
       rollupOptions: {
         output: {
-          // Fine-grained code splitting for better caching & parallel loading
           manualChunks(id) {
-            if (id.includes('node_modules/react-dom')) return 'react-dom';
-            if (id.includes('node_modules/react') || id.includes('react-router-dom')) return 'react';
-            if (id.includes('recharts') || id.includes('d3-')) return 'charts';
-            if (id.includes('framer-motion')) return 'motion';
-            if (id.includes('firebase')) return 'firebase';
-            if (id.includes('lucide-react')) return 'icons';
-            if (id.includes('axios')) return 'http';
+            // react + react-dom MUST stay together
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('react-router-dom')) {
+              return 'vendor';
+            }
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'charts';
+            }
+            if (id.includes('framer-motion')) {
+              return 'motion';
+            }
+            if (id.includes('firebase')) {
+              return 'firebase';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
           },
         },
       },

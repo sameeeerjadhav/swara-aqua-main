@@ -10,6 +10,7 @@ import { RowDataPacket } from 'mysql2';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { withPlatformFee } from '../utils/platformFee';
+import * as BillingModel from '../models/billing.model';
 import { refundAdvanceOnCancel } from './advance.controller';
 
 const DEFAULT_PRICE = 50;
@@ -488,6 +489,16 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
     // SSE: notify customer + admin + staff of completed delivery
     SSE.sendToUser(order.customer_id, 'order_status_changed', { orderId: order.id, status: 'completed' });
     SSE.broadcastToRoles(['admin', 'staff'], 'delivery_completed', { orderId: order.id, staffId: req.user!.id });
+
+    // Sync delivery payment to bill (if bill exists for this month)
+    const deliveryMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const syncAmount    = paymentMode === 'pay_later' ? Number(order.total_amount) : Number(collectedAmount);
+    BillingModel.syncDeliveryToBill(
+      order.customer_id,
+      deliveryMonth,
+      paymentMode,
+      syncAmount
+    ).catch(err => console.warn('[Billing] syncDeliveryToBill failed (non-fatal):', err?.message));
 
     res.status(201).json({ message: 'Delivery completed successfully' });
   } catch (err) {

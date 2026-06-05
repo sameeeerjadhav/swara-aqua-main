@@ -17,21 +17,25 @@ export interface Transaction {
 }
 
 export interface Bill {
-  id: number;
-  customer_id: number;
-  month: string;
-  total_jars: number;
-  jar_rate: number;
-  subtotal: number;
+  id:               number;
+  customer_id:      number;
+  month:            string;
+  total_jars:       number;
+  jar_rate:         number;
+  subtotal:         number;
   previous_pending: number;
-  advance_used: number;
-  total_amount: number;
-  paid_amount: number;
-  status: 'paid' | 'partial' | 'unpaid';
-  due_date: string;
-  created_at: string;
-  customer_name?: string;
-  customer_phone?: string;
+  advance_used:     number;
+  total_amount:     number;
+  paid_amount:      number;
+  cash_paid:        number;
+  online_paid:      number;
+  advance_paid:     number;
+  pay_later_amount: number;
+  status:           'paid' | 'partial' | 'unpaid';
+  due_date:         string;
+  created_at:       string;
+  customer_name?:   string;
+  customer_phone?:  string;
 }
 
 export interface BillingSummary {
@@ -121,8 +125,8 @@ export interface CustomerGrowthPoint {
 }
 
 export const billingApi = {
-  generate: (month: string) =>
-    api.post('/billing/generate', { month }),
+  generate: (month: string, customerId?: number) =>
+    api.post('/billing/generate', { month, ...(customerId ? { customerId } : {}) }),
 
   list: (params?: Record<string, string>) =>
     api.get<{ bills: Bill[] }>('/billing', { params }),

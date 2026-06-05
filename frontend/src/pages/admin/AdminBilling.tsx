@@ -58,8 +58,9 @@ export const AdminBilling = () => {
   const [searchQ,      setSearchQ]      = useState('');
 
   // ── Generate ─────────────────────────────────────────────────────────────────
-  const [genMonth,   setGenMonth]   = useState(thisMonth);
-  const [generating, setGenerating] = useState(false);
+  const [genMonth,      setGenMonth]      = useState(thisMonth);
+  const [genCustomerId, setGenCustomerId] = useState('');  // '' = all customers
+  const [generating,    setGenerating]    = useState(false);
 
   // ── Pay modal ────────────────────────────────────────────────────────────────
   const [payBill,   setPayBill]   = useState<Bill | null>(null);
@@ -120,13 +121,15 @@ export const AdminBilling = () => {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const { data } = await billingApi.generate(genMonth);
+      const custId = genCustomerId ? Number(genCustomerId) : undefined;
+      const { data } = await billingApi.generate(genMonth, custId);
       const recalc = data.recalculated ?? 0;
+      const custName = custId
+        ? customers.find(c => c.id === custId)?.name || `#${custId}`
+        : 'All Customers';
       toast(
-        recalc > 0
-          ? `Generated: ${data.generated}, Updated: ${recalc}, Skipped: ${data.skipped}`
-          : `Generated: ${data.generated}, Skipped: ${data.skipped}`,
-        'success'
+        `${custName} — Generated: ${data.generated}, Updated: ${recalc}, Skipped: ${data.skipped}`,
+        data.errors > 0 ? 'warning' : 'success'
       );
       refresh();
     } catch (err: any) {
@@ -176,11 +179,25 @@ export const AdminBilling = () => {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={refresh}>Refresh</Button>
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-card">
-            <input type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)}
-              className="text-sm outline-none text-slate-700 bg-transparent" />
+          <div className="flex flex-col gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-3 shadow-card min-w-[240px]">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Generate Bill</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)}
+                className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[110px]" />
+              <select
+                value={genCustomerId}
+                onChange={e => setGenCustomerId(e.target.value)}
+                className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[130px] border-l border-slate-200 pl-2">
+                <option value="">All Customers</option>
+                {customers.map(c => (
+                  <option key={c.id} value={String(c.id)}>{c.name} ({c.phone})</option>
+                ))}
+              </select>
+            </div>
             <Button size="sm" loading={generating} icon={<Plus className="w-3.5 h-3.5" />} onClick={handleGenerate}>
-              Generate
+              {genCustomerId
+                ? `Generate for ${customers.find(c => String(c.id) === genCustomerId)?.name || 'Customer'}`
+                : 'Generate All'}
             </Button>
           </div>
         </div>
@@ -326,53 +343,79 @@ export const AdminBilling = () => {
                               const cfg = STATUS_CFG[b.status] || STATUS_CFG.unpaid;
                               const due = billDue(b);
                               return (
-                                <div key={b.id} className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-4">
-                                  {/* Month */}
-                                  <div className="w-10 h-10 rounded-lg bg-slate-800 flex flex-col items-center justify-center shrink-0">
-                                    <span className="text-white text-[9px] font-bold leading-none">
-                                      {['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][Number(b.month.split('-')[1]) - 1]}
-                                    </span>
-                                    <span className="text-slate-400 text-[9px] leading-none mt-0.5">{b.month.split('-')[0].slice(2)}</span>
-                                  </div>
-
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-xs font-bold text-slate-700">{b.month}</p>
-                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                                        {cfg.label}
+                                <div key={b.id} className="bg-white rounded-xl border border-slate-200 px-4 py-3 space-y-2">
+                                  <div className="flex items-center gap-4">
+                                    {/* Month */}
+                                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex flex-col items-center justify-center shrink-0">
+                                      <span className="text-white text-[9px] font-bold leading-none">
+                                        {['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][Number(b.month.split('-')[1]) - 1]}
                                       </span>
+                                      <span className="text-slate-400 text-[9px] leading-none mt-0.5">{b.month.split('-')[0].slice(2)}</span>
                                     </div>
-                                    <p className="text-[10px] text-slate-400">{b.total_jars} jars × ₹{b.jar_rate}</p>
-                                  </div>
 
-                                  <div className="hidden sm:flex items-center gap-4 text-right shrink-0">
-                                    <div>
-                                      <p className="text-[9px] text-slate-400">Total</p>
-                                      <p className="text-xs font-bold text-slate-800">{fmt(b.total_amount)}</p>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-xs font-bold text-slate-700">{b.month}</p>
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                                          {cfg.label}
+                                        </span>
+                                      </div>
+                                      <p className="text-[10px] text-slate-400">{b.total_jars} jars × ₹{b.jar_rate}</p>
                                     </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400">Paid</p>
-                                      <p className="text-xs font-bold text-green-600">{fmt(b.paid_amount)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400">Due</p>
-                                      <p className={`text-xs font-bold ${due > 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                                        {due > 0 ? fmt(due) : '—'}
-                                      </p>
-                                    </div>
-                                  </div>
 
-                                  {/* Actions */}
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
-                                      className="p-1.5 rounded-lg hover:bg-brand-50 text-brand-500 transition-colors" title="PDF">
-                                      <Download className="w-3.5 h-3.5" />
-                                    </button>
-                                    {b.status !== 'paid' && (
-                                      <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); }}
-                                        className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 transition-colors" title="Record payment">
-                                        <IndianRupee className="w-3.5 h-3.5" />
+                                    <div className="hidden sm:flex items-center gap-4 text-right shrink-0">
+                                      <div>
+                                        <p className="text-[9px] text-slate-400">Total</p>
+                                        <p className="text-xs font-bold text-slate-800">{fmt(b.total_amount)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400">Collected</p>
+                                        <p className="text-xs font-bold text-green-600">{fmt(b.paid_amount)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400">Due</p>
+                                        <p className={`text-xs font-bold ${due > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                          {due > 0 ? fmt(due) : '—'}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
+                                        className="p-1.5 rounded-lg hover:bg-brand-50 text-brand-500 transition-colors" title="PDF">
+                                        <Download className="w-3.5 h-3.5" />
                                       </button>
+                                      {b.status !== 'paid' && (
+                                        <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); }}
+                                          className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 transition-colors" title="Record payment">
+                                          <IndianRupee className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Payment breakdown pills */}
+                                  <div className="flex flex-wrap gap-1.5 pl-14">
+                                    {Number(b.cash_paid) > 0 && (
+                                      <span className="text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5">
+                                        💵 Cash {fmt(b.cash_paid)}
+                                      </span>
+                                    )}
+                                    {Number(b.online_paid) > 0 && (
+                                      <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">
+                                        💳 Online {fmt(b.online_paid)}
+                                      </span>
+                                    )}
+                                    {Number(b.advance_paid) > 0 && (
+                                      <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-2 py-0.5">
+                                        🏦 Advance {fmt(b.advance_paid)}
+                                      </span>
+                                    )}
+                                    {Number(b.pay_later_amount) > 0 && (
+                                      <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+                                        ⏳ Pay-Later {fmt(b.pay_later_amount)}
+                                      </span>
                                     )}
                                   </div>
                                 </div>

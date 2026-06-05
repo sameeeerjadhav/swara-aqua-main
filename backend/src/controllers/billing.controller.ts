@@ -14,24 +14,38 @@ const notify = (fn: () => Promise<void>) =>
 // POST /api/billing/generate  (admin)
 export const generateBills = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const schema = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM') });
-    const { month } = schema.parse(req.body);
+    const schema = z.object({
+      month:      z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
+      customerId: z.number().int().positive().optional(),   // omit for all customers
+    });
+    const { month, customerId } = schema.parse(req.body);
 
-    const result = await BillingModel.generateMonthlyBills(month);
+    const result = await BillingModel.generateMonthlyBills(month, customerId);
 
-    // Notify customers whose bills were generated
     if (result.generated > 0) {
       notify(async () => {
-        await NotifService.sendToRole('customer',
-          '📄 Monthly Bill Ready',
-          `Your bill for ${month} has been generated. Please check and pay before the due date.`,
-          'payment'
-        );
+        if (customerId) {
+          await NotifService.sendToUser({
+            userId: customerId,
+            title:  '📄 Monthly Bill Ready',
+            body:   `Your bill for ${month} has been generated. Please check and pay before the due date.`,
+            type:   'payment',
+            data:   {},
+          });
+        } else {
+          await NotifService.sendToRole('customer',
+            '📄 Monthly Bill Ready',
+            `Your bill for ${month} has been generated. Please check and pay before the due date.`,
+            'payment'
+          );
+        }
       });
     }
 
     res.json({
-      message: `Bills generated for ${month}`,
+      message: customerId
+        ? `Bill generated for customer #${customerId} for ${month}`
+        : `Bills generated for ${month}`,
       ...result,
     });
   } catch (err) {
@@ -103,7 +117,7 @@ export const recordPayment = async (req: AuthRequest, res: Response): Promise<vo
     if (!bill) { res.status(404).json({ message: 'Bill not found' }); return; }
     if (bill.status === 'paid') { res.status(400).json({ message: 'Bill already paid' }); return; }
 
-    await BillingModel.recordBillPayment(bill.id, amount);
+    await BillingModel.recordBillPayment(bill.id, amount, 'cash');
 
     notify(() =>
       NotifService.sendToUser({
@@ -176,7 +190,7 @@ export const payBillWithAdvance = async (req: AuthRequest, res: Response): Promi
     }
 
     // Record payment on bill
-    await BillingModel.recordBillPayment(bill.id, due);
+    await BillingModel.recordBillPayment(bill.id, due, 'advance');
 
     notify(() =>
       NotifService.sendToUser({
@@ -250,7 +264,7 @@ export const clearDuesAdvance = async (req: AuthRequest, res: Response): Promise
     // Record payment on each bill oldest → newest
     for (const bill of dueBills) {
       const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
-      if (due > 0) await BillingModel.recordBillPayment(bill.id, due);
+      if (due > 0) await BillingModel.recordBillPayment(bill.id, due, 'advance');
     }
 
     notify(() =>
@@ -369,12 +383,12 @@ export const clearDuesVerify = async (req: AuthRequest, res: Response): Promise<
     for (const bill of dueBills) {
       const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
       if (due > 0) {
-        await BillingModel.recordBillPayment(bill.id, due);
+        await BillingModel.recordBillPayment(bill.id, due, 'online');
         // Record transaction
         await pool.query(
           `INSERT INTO transactions
-             (customer_id, amount, mode, type, status, note)
-           VALUES (?, ?, 'online', 'credit', 'completed', ?)`,
+             (customer_id, order_id, amount, mode, type, collected_by, status, note)
+           VALUES (?, NULL, ?, 'online', 'credit', NULL, 'completed', ?)`,
           [userId, due, `Bill payment for ${bill.month} via Razorpay (${razorpay_payment_id}) — Clear All Dues`]
         );
       }

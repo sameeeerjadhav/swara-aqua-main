@@ -812,20 +812,73 @@ export const CustomerBills = () => {
                             className="overflow-hidden">
                             <div className="px-4 pb-4 border-t border-slate-100 pt-4 space-y-3">
 
-                              {/* Breakdown grid */}
-                              <div className="grid grid-cols-2 gap-2">
-                                {[
-                                  { label: 'Subtotal',      value: `₹${b.subtotal}`,          color: 'text-slate-700' },
-                                  { label: 'Prev. Pending', value: `₹${b.previous_pending}`,  color: 'text-red-600'   },
-                                  { label: 'Advance Used',  value: `-₹${b.advance_used}`,     color: 'text-green-600' },
-                                  { label: 'Amount Paid',   value: `₹${b.paid_amount}`,       color: 'text-green-700' },
-                                ].map(({ label, value, color }) => (
-                                  <div key={label} className="bg-slate-50 rounded-xl p-3">
-                                    <p className="text-[10px] text-slate-400 font-medium">{label}</p>
-                                    <p className={`text-sm font-bold mt-0.5 ${color}`}>{value}</p>
+                              {/* ── Bill Calculation ── */}
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bill Calculation</p>
+                              <div className="bg-slate-50 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+                                <div className="flex justify-between items-center px-4 py-2.5">
+                                  <span className="text-xs text-slate-500">{b.total_jars} jars × ₹{b.jar_rate}/jar</span>
+                                  <span className="text-sm font-bold text-slate-800">₹{Number(b.subtotal).toFixed(2)}</span>
+                                </div>
+                                {Number(b.previous_pending) > 0 && (
+                                  <div className="flex justify-between items-center px-4 py-2.5">
+                                    <span className="text-xs text-red-500">+ Carried forward</span>
+                                    <span className="text-sm font-bold text-red-600">+₹{Number(b.previous_pending).toFixed(2)}</span>
                                   </div>
-                                ))}
+                                )}
+                                {Number(b.advance_used) > 0 && (
+                                  <div className="flex justify-between items-center px-4 py-2.5">
+                                    <span className="text-xs text-green-600">− Advance auto-applied</span>
+                                    <span className="text-sm font-bold text-green-600">−₹{Number(b.advance_used).toFixed(2)}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center px-4 py-2.5 bg-slate-100">
+                                  <span className="text-xs font-bold text-slate-600">Net Bill Amount</span>
+                                  <span className="text-sm font-bold text-slate-900">₹{Number(b.total_amount).toFixed(2)}</span>
+                                </div>
                               </div>
+
+                              {/* ── Payment Breakdown ── */}
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pt-1">Payment Received</p>
+                              <div className="bg-slate-50 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+                                {Number(b.cash_paid) > 0 && (
+                                  <div className="flex justify-between items-center px-4 py-2.5">
+                                    <span className="flex items-center gap-1.5 text-xs text-green-700">💵 Cash (at door)</span>
+                                    <span className="text-sm font-bold text-green-700">₹{Number(b.cash_paid).toFixed(2)}</span>
+                                  </div>
+                                )}
+                                {Number(b.online_paid) > 0 && (
+                                  <div className="flex justify-between items-center px-4 py-2.5">
+                                    <span className="flex items-center gap-1.5 text-xs text-blue-700">💳 Online (Razorpay)</span>
+                                    <span className="text-sm font-bold text-blue-700">₹{Number(b.online_paid).toFixed(2)}</span>
+                                  </div>
+                                )}
+                                {Number(b.advance_paid) > 0 && (
+                                  <div className="flex justify-between items-center px-4 py-2.5">
+                                    <span className="flex items-center gap-1.5 text-xs text-purple-700">🏦 Advance Balance</span>
+                                    <span className="text-sm font-bold text-purple-700">₹{Number(b.advance_paid).toFixed(2)}</span>
+                                  </div>
+                                )}
+                                {Number(b.cash_paid) === 0 && Number(b.online_paid) === 0 && Number(b.advance_paid) === 0 && (
+                                  <div className="px-4 py-2.5">
+                                    <span className="text-xs text-slate-400">No payments recorded yet</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center px-4 py-2.5 bg-slate-100">
+                                  <span className="text-xs font-bold text-slate-600">Total Collected</span>
+                                  <span className="text-sm font-bold text-slate-900">₹{Number(b.paid_amount).toFixed(2)}</span>
+                                </div>
+                              </div>
+
+                              {/* Pay Later outstanding */}
+                              {Number(b.pay_later_amount) > 0 && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs font-bold text-amber-800">⏳ Pay-Later Pending</p>
+                                    <p className="text-[10px] text-amber-600">Delivery done — payment not collected at door</p>
+                                  </div>
+                                  <span className="text-sm font-bold text-amber-700">₹{Number(b.pay_later_amount).toFixed(2)}</span>
+                                </div>
+                              )}
 
                               {/* Balance due / cleared */}
                               <div className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${due > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
@@ -834,11 +887,11 @@ export const CustomerBills = () => {
                                     ? <AlertCircle className="w-4 h-4 text-red-500" />
                                     : <CheckCircle2 className="w-4 h-4 text-green-500" />}
                                   <p className={`text-sm font-bold ${due > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                                    {due > 0 ? 'Balance Due' : 'Fully Paid'}
+                                    {due > 0 ? 'Balance Due' : 'Fully Paid ✓'}
                                   </p>
                                 </div>
                                 <p className={`text-base font-bold ${due > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                                  {due > 0 ? `₹${due.toFixed(2)}` : '✓ Cleared'}
+                                  {due > 0 ? `₹${due.toFixed(2)}` : 'Cleared'}
                                 </p>
                               </div>
 
@@ -853,14 +906,6 @@ export const CustomerBills = () => {
                                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800 text-white text-xs font-bold hover:opacity-90 active:scale-[0.98] transition-all">
                                 <Download className="w-4 h-4" /> Download Bill PDF
                               </button>
-
-                              {due > 0 && (
-                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-                                  <p className="text-xs text-amber-700 font-semibold">
-                                    ₹{due.toFixed(2)} due — please pay cash to your delivery staff
-                                  </p>
-                                </div>
-                              )}
                             </div>
                           </motion.div>
                         )}

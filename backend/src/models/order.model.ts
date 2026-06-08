@@ -210,7 +210,7 @@ export const createDelivery = async (data: {
   staffId: number;
   deliveredQuantity: number;
   collectedAmount: number;
-  paymentMode: 'cash' | 'online' | 'advance';
+  paymentMode: 'cash' | 'online' | 'advance' | 'pay_later';
   notes?: string;
 }): Promise<number> => {
   const [result] = await pool.query<ResultSetHeader>(

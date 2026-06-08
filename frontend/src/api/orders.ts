@@ -73,7 +73,7 @@ export const ordersApi = {
     orderId: number;
     deliveredQuantity: number;
     collectedAmount: number;
-    paymentMode: 'cash' | 'online' | 'advance';
+    paymentMode: 'cash' | 'online' | 'advance' | 'pay_later';
     notes?: string;
   }) => api.post('/orders/deliveries', data),
 

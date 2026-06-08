@@ -151,7 +151,7 @@ export const StaffInventory = () => {
           <AlertTriangle className="w-5 h-5 text-red-500" />
           <span className="text-xs font-semibold text-slate-700">Report Damage</span>
         </button>
-        <button onClick={() => setShowCash(true)} disabled={hasPendingCash}
+        <button onClick={() => { setShowCash(true); setCashAmount(String(cashInHand)); }} disabled={hasPendingCash || cashInHand === 0}
           className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-100 shadow-card hover:border-amber-300 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
           <IndianRupee className="w-5 h-5 text-amber-600" />
           <span className="text-xs font-semibold text-slate-700">Submit Cash</span>
@@ -162,6 +162,9 @@ export const StaffInventory = () => {
         <p className="text-xs text-amber-600 text-center font-medium">
           ⏳ Cash submission pending admin verification
         </p>
+      )}
+      {!hasPendingCash && cashInHand === 0 && (
+        <p className="text-xs text-slate-400 text-center">No cash in hand to submit</p>
       )}
 
       {/* Cash submissions history */}
@@ -259,12 +262,23 @@ export const StaffInventory = () => {
         {showCash && (
           <StaffModal title="Submit Cash to Admin" onClose={() => setShowCash(false)}>
             <form onSubmit={handleCashSubmit} className="space-y-4">
+              {/* Cash in hand context */}
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-amber-600 font-semibold">Cash in hand</p>
+                  <p className="text-2xl font-extrabold text-amber-700">₹{cashInHand.toLocaleString('en-IN')}</p>
+                </div>
+                <IndianRupee className="w-7 h-7 text-amber-400" />
+              </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Total Cash (₹)</label>
-                <input type="number" min={0} step="0.01" value={cashAmount}
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Amount Submitting (₹)</label>
+                <input type="number" min={0} max={cashInHand} step="0.01" value={cashAmount}
                   onChange={e => setCashAmount(e.target.value)}
                   placeholder="0.00"
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all font-semibold" />
+                {Number(cashAmount) < cashInHand && Number(cashAmount) > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-1">Remaining after submit: ₹{(cashInHand - Number(cashAmount)).toFixed(2)}</p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Note (optional)</label>

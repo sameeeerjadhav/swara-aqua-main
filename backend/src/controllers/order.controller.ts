@@ -586,9 +586,9 @@ export const getDailySummary = async (req: AuthRequest, res: Response): Promise<
     // Today's deliveries
     const [deliveryRows] = await pool.query<RowDataPacket[]>(`
       SELECT
-        COUNT(*)                          AS deliveries_done,
-        COALESCE(SUM(delivered_quantity), 0) AS jars_delivered,
-        COALESCE(SUM(collected_amount),  0) AS cash_collected
+        COUNT(*)                                                                                AS deliveries_done,
+        COALESCE(SUM(delivered_quantity), 0)                                                    AS jars_delivered,
+        COALESCE(SUM(CASE WHEN payment_mode = 'cash' THEN collected_amount ELSE 0 END), 0)     AS cash_collected
       FROM deliveries
       WHERE staff_id = ? AND DATE(delivered_at) = ? AND status = 'delivered'
     `, [staffId, today]);

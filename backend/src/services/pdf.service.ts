@@ -429,6 +429,11 @@ interface ReportData {
   jarRate: number;
   totalAmount: number;
   days: { date: string; jars: number }[];
+  cashPaid:    number;
+  onlinePaid:  number;
+  advancePaid: number;
+  totalPaid:   number;
+  amountDue:   number;
 }
 
 export const generateReportPDF = async (data: ReportData, res: Response): Promise<void> => {
@@ -530,9 +535,38 @@ export const generateReportPDF = async (data: ReportData, res: Response): Promis
   doc.text(`₹ ${data.totalAmount.toFixed(2)}`, colX.amt, y + 7, { width: colW.amt, align: 'right' });
   y += 24;
 
+  // ═══ PAYMENT BREAKDOWN ══════════════════════════════════════════════════════
+
+  y += 10;
+  doc.fillColor(C.dark).fontSize(9).font('Helvetica-Bold')
+     .text('Payment Breakdown', M, y);
+  y += 14;
+
+  const pbRowH = 20;
+  const halfW  = IW / 2;
+  const pbRows: { label: string; value: string; bold?: boolean; dark?: boolean }[] = [
+    { label: 'Paid by Cash',    value: `₹ ${(data.cashPaid    || 0).toFixed(2)}` },
+    { label: 'Paid by Online',  value: `₹ ${(data.onlinePaid  || 0).toFixed(2)}` },
+    { label: 'Paid by Advance', value: `₹ ${(data.advancePaid || 0).toFixed(2)}` },
+    { label: 'Total Paid',      value: `₹ ${(data.totalPaid   || 0).toFixed(2)}`,   bold: true },
+    { label: 'Amount Due',      value: `₹ ${(data.amountDue   || 0).toFixed(2)}`,   bold: true, dark: (data.amountDue || 0) > 0 },
+  ];
+
+  pbRows.forEach(({ label, value, bold, dark }) => {
+    doc.rect(M, y, halfW, pbRowH).strokeColor(C.border).lineWidth(0.4).stroke();
+    doc.rect(M + halfW, y, halfW, pbRowH).strokeColor(C.border).lineWidth(0.4).stroke();
+    doc.fillColor(dark ? C.red : C.dark).fontSize(9).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+       .text(label, M + 6, y + 6, { width: halfW - 12 });
+    doc.fillColor(dark ? C.red : C.dark).fontSize(9).font('Helvetica-Bold')
+       .text(value, M + halfW + 6, y + 6, { width: halfW - 12, align: 'right' });
+    y += pbRowH;
+  });
+  y += 8;
+
   // ═══ AMOUNT IN WORDS + SUMMARY ══════════════════════════════════════════════
 
   y += 12;
+
   const leftColW   = IW * 0.48;
   const rightColW  = IW * 0.52;
   const rightStartX = M + leftColW;

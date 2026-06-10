@@ -508,9 +508,52 @@ const getReportData = async (customerId: number, startDate: string, endDate: str
     jars: Number(r.jars),
   }));
 
-  const totalJars = days.reduce((s, d) => s + d.jars, 0);
-  const jarRate = Number(customer.jar_rate);
+  const totalJars   = days.reduce((s, d) => s + d.jars, 0);
+  const jarRate     = Number(customer.jar_rate);
   const totalAmount = totalJars * jarRate;
+
+  // Payment breakdown for the date range
+  // Cash collected at door during deliveries
+  const [cashRows] = await pool.query<RowDataPacket[]>(
+    `SELECT COALESCE(SUM(d.collected_amount), 0) AS cash_paid
+     FROM deliveries d
+     JOIN orders o ON o.id = d.order_id
+     WHERE o.customer_id = ?
+       AND DATE(COALESCE(d.delivered_at, d.created_at)) BETWEEN ? AND ?
+       AND d.payment_mode = 'cash'
+       AND d.status = 'delivered'`,
+    [customerId, startDate, endDate]
+  );
+
+  // Online payments via transactions in the date range
+  const [onlineRows] = await pool.query<RowDataPacket[]>(
+    `SELECT COALESCE(SUM(t.amount), 0) AS online_paid
+     FROM transactions t
+     WHERE t.user_id = ?
+       AND DATE(t.created_at) BETWEEN ? AND ?
+       AND t.type = 'credit'
+       AND t.payment_mode = 'online'
+       AND t.status = 'completed'`,
+    [customerId, startDate, endDate]
+  );
+
+  // Advance payments applied in the date range
+  const [advRows] = await pool.query<RowDataPacket[]>(
+    `SELECT COALESCE(SUM(t.amount), 0) AS advance_paid
+     FROM transactions t
+     WHERE t.user_id = ?
+       AND DATE(t.created_at) BETWEEN ? AND ?
+       AND t.type = 'credit'
+       AND t.payment_mode = 'advance'
+       AND t.status = 'completed'`,
+    [customerId, startDate, endDate]
+  );
+
+  const cashPaid    = Number(cashRows[0]?.cash_paid)    || 0;
+  const onlinePaid  = Number(onlineRows[0]?.online_paid)  || 0;
+  const advancePaid = Number(advRows[0]?.advance_paid)  || 0;
+  const totalPaid   = cashPaid + onlinePaid + advancePaid;
+  const amountDue   = Math.max(0, totalAmount - totalPaid);
 
   return {
     customer: {
@@ -525,6 +568,11 @@ const getReportData = async (customerId: number, startDate: string, endDate: str
     jarRate,
     totalAmount,
     days,
+    cashPaid,
+    onlinePaid,
+    advancePaid,
+    totalPaid,
+    amountDue,
   };
 };
 

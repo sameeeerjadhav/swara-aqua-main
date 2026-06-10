@@ -1,11 +1,13 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Smartphone, Download, WifiOff, X, Share } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Smartphone, Download, WifiOff, X, Share, Info } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
+
+// ── Keep the deferred prompt in module-level storage so it's never lost ───────
+let _storedPrompt: BeforeInstallPromptEvent | null = null;
 
 const isStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches
@@ -14,9 +16,12 @@ const isStandalone = () =>
 const isIosDevice = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as Window & { MSStream?: unknown }).MSStream;
 
+const isAndroidChrome = () =>
+  /android/i.test(navigator.userAgent) && /chrome/i.test(navigator.userAgent);
+
 /** Hook for PWA install prompt (Chrome/Edge) and iOS detection. */
 export const usePwaInstall = () => {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(_storedPrompt);
   const [isInstalled, setInstalled] = useState(isStandalone);
   const [isIOS, setIsIOS] = useState(false);
 
@@ -29,13 +34,18 @@ export const usePwaInstall = () => {
 
     const onPrompt = (e: Event) => {
       e.preventDefault();
+      _storedPrompt = e as BeforeInstallPromptEvent;
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
     const onInstalled = () => {
       setInstalled(true);
       setDeferredPrompt(null);
+      _storedPrompt = null;
     };
+
+    // Also restore from module-level storage in case event already fired
+    if (_storedPrompt) setDeferredPrompt(_storedPrompt);
 
     window.addEventListener('beforeinstallprompt', onPrompt);
     window.addEventListener('appinstalled', onInstalled);
@@ -46,10 +56,14 @@ export const usePwaInstall = () => {
   }, []);
 
   const install = useCallback(async () => {
-    if (!deferredPrompt) return false;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setInstalled(true);
+    const prompt = deferredPrompt || _storedPrompt;
+    if (!prompt) return false;
+    await prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstalled(true);
+      _storedPrompt = null;
+    }
     setDeferredPrompt(null);
     return outcome === 'accepted';
   }, [deferredPrompt]);
@@ -57,7 +71,8 @@ export const usePwaInstall = () => {
   return {
     isInstalled,
     isIOS,
-    canNativeInstall: !!deferredPrompt && !isInstalled,
+    isAndroid: isAndroidChrome(),
+    canNativeInstall: !!(deferredPrompt || _storedPrompt) && !isInstalled,
     install,
   };
 };
@@ -65,10 +80,7 @@ export const usePwaInstall = () => {
 /** iOS install steps modal */
 const IosInstallHelp = ({ onClose }: { onClose: () => void }) => (
   <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
-    <div
-      className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl"
-      onClick={e => e.stopPropagation()}
-    >
+    <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-bold text-slate-900">Install on iPhone / iPad</p>
         <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
@@ -82,33 +94,56 @@ const IosInstallHelp = ({ onClose }: { onClose: () => void }) => (
         </li>
         <li className="flex gap-3">
           <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">2</span>
-          <span>Scroll and tap <strong>Add to Home Screen</strong></span>
+          <span>Scroll down and tap <strong>Add to Home Screen</strong></span>
         </li>
         <li className="flex gap-3">
           <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">3</span>
           <span>Tap <strong>Add</strong> — Swara Aqua appears on your home screen</span>
         </li>
       </ol>
-      <Link
-        to="/download"
-        onClick={onClose}
-        className="mt-4 block text-center text-xs text-brand-600 font-semibold hover:text-brand-700"
-      >
-        View full install guide →
-      </Link>
+    </div>
+  </div>
+);
+
+/** Android Chrome fallback guide (when beforeinstallprompt not yet ready) */
+const AndroidChromeHelp = ({ onClose }: { onClose: () => void }) => (
+  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onClose}>
+    <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-bold text-slate-900">Add to Home Screen</p>
+        <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      <ol className="space-y-3 text-sm text-slate-600">
+        <li className="flex gap-3">
+          <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">1</span>
+          <span>Tap the <strong>⋮ three-dot menu</strong> in Chrome (top right)</span>
+        </li>
+        <li className="flex gap-3">
+          <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">2</span>
+          <span>Tap <strong>"Add to Home screen"</strong></span>
+        </li>
+        <li className="flex gap-3">
+          <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">3</span>
+          <span>Tap <strong>Add</strong> to confirm — the app icon will appear on your home screen</span>
+        </li>
+      </ol>
+      <p className="mt-4 text-xs text-slate-400 text-center">💡 Tip: The install popup appears automatically after you browse the app for a moment</p>
     </div>
   </div>
 );
 
 /** Install button for login / signup pages */
 export const InstallAppButton = ({ className = '' }: { className?: string }) => {
-  const { isInstalled, isIOS, canNativeInstall, install } = usePwaInstall();
-  const [iosHelp, setIosHelp] = useState(false);
+  const { isInstalled, isIOS, isAndroid, canNativeInstall, install } = usePwaInstall();
+  const [showHelp, setShowHelp] = useState(false);
   const [installing, setInstalling] = useState(false);
 
   if (isInstalled) return null;
 
   const handleClick = async () => {
+    // Best case: Chrome/Edge has the native prompt ready → trigger it directly
     if (canNativeInstall) {
       setInstalling(true);
       try {
@@ -118,11 +153,18 @@ export const InstallAppButton = ({ className = '' }: { className?: string }) => 
       }
       return;
     }
+    // iOS Safari → show Share → Add to Home Screen instructions
     if (isIOS) {
-      setIosHelp(true);
+      setShowHelp(true);
       return;
     }
-    window.location.href = '/download';
+    // Android Chrome but prompt not ready yet → show manual steps
+    if (isAndroid) {
+      setShowHelp(true);
+      return;
+    }
+    // Desktop or unknown: show Android steps as generic fallback
+    setShowHelp(true);
   };
 
   return (
@@ -139,7 +181,11 @@ export const InstallAppButton = ({ className = '' }: { className?: string }) => 
       <p className="text-center text-[11px] text-slate-400 mt-2">
         Free · No app store · Works offline after install
       </p>
-      {iosHelp && <IosInstallHelp onClose={() => setIosHelp(false)} />}
+
+      {/* iOS guide */}
+      {showHelp && isIOS && <IosInstallHelp onClose={() => setShowHelp(false)} />}
+      {/* Android / other guide */}
+      {showHelp && !isIOS && <AndroidChromeHelp onClose={() => setShowHelp(false)} />}
     </>
   );
 };

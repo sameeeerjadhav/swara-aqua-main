@@ -243,6 +243,43 @@ export const generateBillPDF = async (bill: Bill, res: Response): Promise<void> 
   y += 24;
 
   // ═════════════════════════════════════════════════════════════════════════════
+  // PAYMENT BREAKDOWN
+  // ═════════════════════════════════════════════════════════════════════════════
+
+  y += 10;
+  const cashPaid    = Number(bill.cash_paid)    || 0;
+  const onlinePaid  = Number(bill.online_paid)  || 0;
+  const advancePaid = Number(bill.advance_paid) || 0;
+  const totalPaid   = Number(bill.paid_amount)  || 0;
+  const amtDue      = Math.max(0, Number(bill.total_amount) - totalPaid);
+
+  // Section heading
+  doc.fillColor(C.dark).fontSize(9).font('Helvetica-Bold')
+     .text('Payment Breakdown', M, y);
+  y += 14;
+
+  const pbRowH = 20;
+  const pbRows: { label: string; value: string; bold?: boolean; dark?: boolean }[] = [
+    { label: 'Paid by Cash',    value: `₹ ${cashPaid.toFixed(2)}`   },
+    { label: 'Paid by Online',  value: `₹ ${onlinePaid.toFixed(2)}` },
+    { label: 'Paid by Advance', value: `₹ ${advancePaid.toFixed(2)}` },
+    { label: 'Total Paid',      value: `₹ ${totalPaid.toFixed(2)}`,   bold: true },
+    { label: 'Amount Due',      value: `₹ ${amtDue.toFixed(2)}`,      bold: true, dark: amtDue > 0 },
+  ];
+
+  const halfW = IW / 2;
+  pbRows.forEach(({ label, value, bold, dark }) => {
+    doc.rect(M, y, halfW, pbRowH).strokeColor(C.border).lineWidth(0.4).stroke();
+    doc.rect(M + halfW, y, halfW, pbRowH).strokeColor(C.border).lineWidth(0.4).stroke();
+    doc.fillColor(dark ? C.red : C.dark).fontSize(9).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+       .text(label, M + 6, y + 6, { width: halfW - 12 });
+    doc.fillColor(dark ? C.red : C.dark).fontSize(9).font('Helvetica-Bold')
+       .text(value, M + halfW + 6, y + 6, { width: halfW - 12, align: 'right' });
+    y += pbRowH;
+  });
+  y += 8;
+
+  // ═════════════════════════════════════════════════════════════════════════════
   // AMOUNT IN WORDS + FINANCIAL SUMMARY (side by side)
   // ═════════════════════════════════════════════════════════════════════════════
 

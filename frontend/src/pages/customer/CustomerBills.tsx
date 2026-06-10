@@ -475,9 +475,9 @@ export const CustomerBills = () => {
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════════
-          SECTION 1 — Per-order payment transactions
+          SECTION 1 — Per-order payment transactions [HIDDEN]
       ══════════════════════════════════════════════════════════════════ */}
-      <div>
+      <div style={{ display: 'none' }}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <Package className="w-4 h-4 text-brand-600" />

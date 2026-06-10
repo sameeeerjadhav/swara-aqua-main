@@ -11,14 +11,14 @@ import { ProfilePage } from './shared/ProfilePage';
 
 const NAV = [
   { label: 'Home',     icon: LayoutDashboard, to: '/customer' },
-  { label: 'My Plan',  icon: CalendarClock,   to: '/customer/subscription' },
+  // { label: 'My Plan',  icon: CalendarClock,   to: '/customer/subscription' },  // HIDDEN: client doesn't need this
   { label: 'Calendar', icon: CalendarDays,     to: '/customer/calendar' },
   { label: 'Bills',    icon: FileText,         to: '/customer/bills' },
 ];
 
 const TITLES: Record<string, string> = {
   '/customer':              'Home',
-  '/customer/subscription': 'My Plan',
+  // '/customer/subscription': 'My Plan',  // HIDDEN
   '/customer/orders':       'My Orders',
   '/customer/calendar':     'Delivery Calendar',
   '/customer/bills':        'My Bills',

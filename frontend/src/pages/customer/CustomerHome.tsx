@@ -377,8 +377,8 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
         <PromoCarousel />
       </motion.div>
 
-      {/* ── Active Plan Card ── */}
-      {plan && plan.status === 'active' && (
+      {/* ── Active Plan Card ── HIDDEN: client doesn't need this feature */}
+      {false && plan && plan.status === 'active' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           onClick={() => navigate('/customer/subscription')}
           className="bg-white rounded-2xl border border-purple-100 shadow-card overflow-hidden cursor-pointer active:scale-[0.98] transition-transform">

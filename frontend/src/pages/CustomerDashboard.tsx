@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, FileText, CalendarDays, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, CalendarDays, CalendarClock, User } from 'lucide-react';
 import { DashboardLayout } from '../components/layouts/DashboardLayout';
 import { CustomerHome } from './customer/CustomerHome';
 import { CustomerOrders } from './customer/CustomerOrders';
@@ -14,6 +14,7 @@ const NAV = [
   // { label: 'My Plan',  icon: CalendarClock,   to: '/customer/subscription' },  // HIDDEN: client doesn't need this
   { label: 'Calendar', icon: CalendarDays,     to: '/customer/calendar' },
   { label: 'Bills',    icon: FileText,         to: '/customer/bills' },
+  { label: 'Profile',  icon: User,             to: '/customer/profile' },
 ];
 
 const TITLES: Record<string, string> = {

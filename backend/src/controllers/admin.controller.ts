@@ -146,6 +146,12 @@ export const getCustomerProfile = async (req: AuthRequest, res: Response): Promi
     }
     const customer = userRows[0];
 
+    // Get address: first try user_addresses (saved during signup), fallback to last order
+    const [savedAddrs] = await pool.query<RowDataPacket[]>(
+      `SELECT label, address, is_default FROM user_addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC LIMIT 5`,
+      [id]
+    );
+
     // Get last known address from most recent order
     const [addrRows] = await pool.query<RowDataPacket[]>(
       `SELECT address, latitude, longitude FROM orders
@@ -190,9 +196,10 @@ export const getCustomerProfile = async (req: AuthRequest, res: Response): Promi
     res.json({
       customer: {
         ...customer,
-        address: addrRows.length ? addrRows[0].address : null,
+        address: addrRows.length ? addrRows[0].address : (savedAddrs.length ? (savedAddrs as any[])[0].address : null),
         latitude: addrRows.length ? addrRows[0].latitude : null,
         longitude: addrRows.length ? addrRows[0].longitude : null,
+        savedAddresses: savedAddrs as any[],
       },
       stats: {
         ...statsRows[0],

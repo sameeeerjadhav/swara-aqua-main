@@ -13,6 +13,8 @@ import { pendingApi } from '../../api/pending';
 interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; created_at: string; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
 interface BalanceInfo { total: number; months: MonthBill[]; }
+interface SavedAddress { label: string; address: string; is_default: number; }
+interface PendingDetail { id: number; name: string; phone: string; status: string; created_at: string; address: string | null; savedAddresses: SavedAddress[]; }
 
 const STATUS_FILTERS = ['all', 'active', 'pending', 'rejected'];
 const MONTH_LABELS: Record<string, string> = {};
@@ -43,6 +45,29 @@ export const AdminCustomers = () => {
 
   // Mobile modal
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
+
+  // Pending customer registration detail modal
+  const [pendingDetail, setPendingDetail] = useState<PendingDetail | null>(null);
+  const [pendingDetailLoading, setPendingDetailLoading] = useState(false);
+
+  const fetchPendingDetail = async (customer: CustomerRow) => {
+    setPendingDetailLoading(true);
+    try {
+      const res = await api.get(`/admin/customers/${customer.id}`);
+      const c = res.data.customer;
+      setPendingDetail({
+        id: c.id, name: c.name, phone: c.phone, status: c.status,
+        created_at: c.created_at,
+        address: c.address,
+        savedAddresses: c.savedAddresses || [],
+      });
+    } catch {
+      // fallback: show basic info from list
+      setPendingDetail({ id: customer.id, name: customer.name, phone: customer.phone, status: customer.status, created_at: customer.created_at, address: null, savedAddresses: [] });
+    } finally {
+      setPendingDetailLoading(false);
+    }
+  };
 
   // Billing pending balances
   const [balances, setBalances] = useState<Record<number, BalanceInfo>>({});
@@ -324,12 +349,21 @@ export const AdminCustomers = () => {
 
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm"
-                          icon={<Eye className="w-3.5 h-3.5 text-brand-500" />}
-                          onClick={() => navigate(`/admin/customers/${u.id}`)}
-                          className="text-brand-600 hover:bg-brand-50">
-                          View
-                        </Button>
+                        {u.status === 'pending' ? (
+                          <Button variant="ghost" size="sm"
+                            icon={<Eye className="w-3.5 h-3.5 text-amber-500" />}
+                            onClick={() => fetchPendingDetail(u)}
+                            className="text-amber-600 hover:bg-amber-50">
+                            View Details
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm"
+                            icon={<Eye className="w-3.5 h-3.5 text-brand-500" />}
+                            onClick={() => navigate(`/admin/customers/${u.id}`)}
+                            className="text-brand-600 hover:bg-brand-50">
+                            View
+                          </Button>
+                        )}
                         {u.status !== 'active' && (
                           <Button variant="ghost" size="sm" loading={actionId === u.id}
                             icon={<CheckCircle className="w-3.5 h-3.5 text-green-500" />}
@@ -377,7 +411,7 @@ export const AdminCustomers = () => {
                 key={u.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                onClick={() => setSelectedCustomer(u)}
+                onClick={() => u.status === 'pending' ? fetchPendingDetail(u) : setSelectedCustomer(u)}
                 className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 transition-colors">
 
                 {/* Avatar */}
@@ -559,6 +593,118 @@ export const AdminCustomers = () => {
                   </div>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Pending Customer Registration Detail Modal ── */}
+      <AnimatePresence>
+        {(pendingDetail || pendingDetailLoading) && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setPendingDetail(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+
+              {/* Header */}
+              <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-white/70 uppercase tracking-widest">Registration Request</span>
+                  <button onClick={() => setPendingDetail(null)}
+                    className="w-7 h-7 flex items-center justify-center rounded-xl bg-white/20 text-white hover:bg-white/30 transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {pendingDetailLoading ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 animate-pulse" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-32 bg-white/20 rounded-lg animate-pulse" />
+                      <div className="h-3 w-24 bg-white/20 rounded-lg animate-pulse" />
+                    </div>
+                  </div>
+                ) : pendingDetail && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white font-extrabold text-xl">
+                      {pendingDetail.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-extrabold text-white">{pendingDetail.name}</h3>
+                      <p className="text-white/75 text-sm">+91 {pendingDetail.phone}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {pendingDetail && !pendingDetailLoading && (
+                <div className="px-6 py-5 space-y-4">
+
+                  {/* Details grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 rounded-2xl p-3">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Phone</p>
+                      <p className="text-sm font-bold text-slate-800">{pendingDetail.phone}</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl p-3">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Registered On</p>
+                      <p className="text-sm font-bold text-slate-800">
+                        {new Date(pendingDetail.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Delivery addresses */}
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2 font-semibold">Delivery Address</p>
+                    {pendingDetail.savedAddresses.length > 0 ? (
+                      <div className="space-y-2">
+                        {pendingDetail.savedAddresses.map((addr, i) => (
+                          <div key={i} className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
+                            <div className="w-6 h-6 rounded-lg bg-blue-200 flex items-center justify-center shrink-0 mt-0.5">
+                              <User className="w-3 h-3 text-blue-700" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-blue-500 uppercase mb-0.5">{addr.label}{addr.is_default ? ' · Default' : ''}</p>
+                              <p className="text-sm font-semibold text-slate-800 leading-snug">{addr.address}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : pendingDetail.address ? (
+                      <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
+                        <div className="w-6 h-6 rounded-lg bg-blue-200 flex items-center justify-center shrink-0 mt-0.5">
+                          <User className="w-3 h-3 text-blue-700" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800 leading-snug">{pendingDetail.address}</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
+                        <p className="text-sm text-slate-400 italic">No delivery address provided</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      onClick={async () => { await handleStatus(pendingDetail.id, 'active'); setPendingDetail(null); }}
+                      disabled={actionId === pendingDetail.id}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 text-white text-sm font-bold rounded-2xl hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50">
+                      <CheckCircle className="w-4 h-4" /> Approve
+                    </button>
+                    <button
+                      onClick={async () => { await handleStatus(pendingDetail.id, 'rejected'); setPendingDetail(null); }}
+                      disabled={actionId === pendingDetail.id}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-500 text-white text-sm font-bold rounded-2xl hover:bg-red-600 transition-colors shadow-sm disabled:opacity-50">
+                      <XCircle className="w-4 h-4" /> Reject
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}

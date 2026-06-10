@@ -3,6 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // Apply saved display mode before React loads (prevents layout flash in PWA)
+      (function() {
+        var mode = localStorage.getItem('swara_viewport_mode');
+        if (mode === 'desktop') {
+          document.querySelector('meta[name="viewport"]').content = 'width=1280';
+        }
+      })();
+    </script>
 
     <title>Swara Aqua — Water Jar Delivery</title>
     <meta name="description" content="Fresh water jar delivery at your doorstep. Order instantly, track your delivery, manage your account." />

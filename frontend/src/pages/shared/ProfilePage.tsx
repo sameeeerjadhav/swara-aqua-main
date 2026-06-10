@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Phone, LogOut, Edit3, Key, MapPin,
   Check, ChevronRight, Eye, EyeOff, Plus, Trash2,
-  Home, Briefcase, Star,
+  Home, Briefcase, Star, Monitor, Smartphone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
@@ -13,15 +13,44 @@ import api from '../../api/axios';
 
 const inputCls = 'w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all';
 
+const VIEWPORT_KEY = 'swara_viewport_mode';
+
+const applyViewport = (mode: 'mobile' | 'desktop') => {
+  let meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'viewport';
+    document.head.appendChild(meta);
+  }
+  if (mode === 'mobile') {
+    meta.content = 'width=device-width, initial-scale=1, maximum-scale=1';
+  } else {
+    meta.content = 'width=1280';
+  }
+};
+
 type Section = 'name' | 'password' | null;
 
 export const ProfilePage = () => {
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  // const navigate = useNavigate(); // kept for wallet restore
 
   const [openSection, setOpenSection] = useState<Section>(null);
   const toggle = (s: Section) => setOpenSection(prev => prev === s ? null : s);
+
+  // ── Viewport / Display mode ──
+  const [viewportMode, setViewportMode] = useState<'mobile' | 'desktop'>(
+    () => (localStorage.getItem(VIEWPORT_KEY) as 'mobile' | 'desktop') || 'mobile'
+  );
+  useEffect(() => { applyViewport(viewportMode); }, [viewportMode]);
+
+  const toggleViewport = () => {
+    const next = viewportMode === 'mobile' ? 'desktop' : 'mobile';
+    setViewportMode(next);
+    localStorage.setItem(VIEWPORT_KEY, next);
+    applyViewport(next);
+    toast(`Switched to ${next} view — reload if layout looks off`, 'success');
+  };
 
   // ── Name edit ──
   const [name,        setName]        = useState(user?.name || '');
@@ -229,6 +258,39 @@ export const ProfilePage = () => {
         </motion.div>
       )}
       ── */}
+
+      {/* ── App Settings ── */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">App Settings</p>
+        </div>
+        {/* Display Mode Toggle */}
+        <button onClick={toggleViewport}
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors text-left">
+          <div className="w-9 h-9 bg-slate-50 rounded-xl flex items-center justify-center shrink-0">
+            {viewportMode === 'mobile'
+              ? <Smartphone className="w-4 h-4 text-brand-500" />
+              : <Monitor className="w-4 h-4 text-slate-400" />}
+          </div>
+          <div className="flex-1">
+            <p className="text-[11px] text-slate-400 font-medium">Display Mode</p>
+            <p className="text-sm font-semibold text-slate-800 mt-0.5">
+              {viewportMode === 'mobile' ? '📱 Mobile View (current)' : '🖥️ Desktop View (current)'}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              {viewportMode === 'mobile' ? 'Tap to switch to desktop layout' : 'Tap to switch back to mobile layout'}
+            </p>
+          </div>
+          <div className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
+            viewportMode === 'mobile' ? 'bg-brand-500' : 'bg-slate-300'
+          }`}>
+            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
+              viewportMode === 'mobile' ? 'translate-x-0.5' : 'translate-x-5'
+            }`} />
+          </div>
+        </button>
+      </motion.div>
 
       {/* ── Sign out ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>

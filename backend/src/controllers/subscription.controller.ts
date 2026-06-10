@@ -260,7 +260,7 @@ export const reviewCancelRequest = async (req: AuthRequest, res: Response): Prom
       ? `Your cancellation request for Order #${cancelReq.order_id} has been approved. The order has been cancelled.`
       : `Your cancellation request for Order #${cancelReq.order_id} has been rejected by admin. The order will proceed as normal.`;
 
-    NotifService.default.sendToUser({
+    NotifService.sendToUser({
       userId: cancelReq.customer_id,
       title:  notifTitle,
       body:   notifBody,

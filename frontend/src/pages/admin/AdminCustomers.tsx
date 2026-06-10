@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -53,7 +53,7 @@ export const AdminCustomers = () => {
   const fetchPendingDetail = async (customer: CustomerRow) => {
     setPendingDetailLoading(true);
     try {
-      const res = await api.get(`/admin/customers/${customer.id}`);
+      const res = await api.get(`/admin/users/${customer.id}/profile`);
       const c = res.data.customer;
       setPendingDetail({
         id: c.id, name: c.name, phone: c.phone, status: c.status,
@@ -610,8 +610,8 @@ export const AdminCustomers = () => {
               onClick={e => e.stopPropagation()}
               className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
 
-              {/* Header */}
-              <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5">
+              {/* Header — Blue */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-bold text-white/70 uppercase tracking-widest">Registration Request</span>
                   <button onClick={() => setPendingDetail(null)}
@@ -645,9 +645,21 @@ export const AdminCustomers = () => {
 
                   {/* Details grid */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50 rounded-2xl p-3">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Phone</p>
-                      <p className="text-sm font-bold text-slate-800">{pendingDetail.phone}</p>
+                    {/* Phone with copy button */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3">
+                      <p className="text-[10px] text-blue-400 uppercase tracking-wider mb-1">Phone</p>
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-sm font-bold text-slate-800">{pendingDetail.phone}</p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(pendingDetail.phone);
+                            toast('Phone number copied!', 'success');
+                          }}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-blue-200 hover:bg-blue-300 transition-colors shrink-0"
+                          title="Copy phone number">
+                          <Copy className="w-3 h-3 text-blue-700" />
+                        </button>
+                      </div>
                     </div>
                     <div className="bg-slate-50 rounded-2xl p-3">
                       <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Registered On</p>
@@ -659,13 +671,16 @@ export const AdminCustomers = () => {
 
                   {/* Delivery addresses */}
                   <div>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2 font-semibold">Delivery Address</p>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Delivery Address</p>
+                    </div>
                     {pendingDetail.savedAddresses.length > 0 ? (
                       <div className="space-y-2">
                         {pendingDetail.savedAddresses.map((addr, i) => (
                           <div key={i} className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
                             <div className="w-6 h-6 rounded-lg bg-blue-200 flex items-center justify-center shrink-0 mt-0.5">
-                              <User className="w-3 h-3 text-blue-700" />
+                              <MapPin className="w-3 h-3 text-blue-700" />
                             </div>
                             <div>
                               <p className="text-[10px] font-bold text-blue-500 uppercase mb-0.5">{addr.label}{addr.is_default ? ' · Default' : ''}</p>
@@ -677,12 +692,13 @@ export const AdminCustomers = () => {
                     ) : pendingDetail.address ? (
                       <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
                         <div className="w-6 h-6 rounded-lg bg-blue-200 flex items-center justify-center shrink-0 mt-0.5">
-                          <User className="w-3 h-3 text-blue-700" />
+                          <MapPin className="w-3 h-3 text-blue-700" />
                         </div>
                         <p className="text-sm font-semibold text-slate-800 leading-snug">{pendingDetail.address}</p>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
+                        <MapPin className="w-3.5 h-3.5 text-slate-300" />
                         <p className="text-sm text-slate-400 italic">No delivery address provided</p>
                       </div>
                     )}

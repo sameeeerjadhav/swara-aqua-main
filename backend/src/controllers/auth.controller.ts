@@ -31,19 +31,28 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Normalise: strip spaces/dashes, then validate as Indian mobile number
+    const cleanPhone = String(phone).replace(/[\s\-]/g, '');
+    if (!/^[6-9][0-9]{9}$/.test(cleanPhone)) {
+      res.status(400).json({
+        message: 'Enter a valid 10-digit Indian mobile number (must start with 6, 7, 8 or 9)',
+      });
+      return;
+    }
+
     if (password.length < 6) {
       res.status(400).json({ message: 'Password must be at least 6 characters' });
       return;
     }
 
-    const existing = await UserModel.findByPhone(phone);
+    const existing = await UserModel.findByPhone(cleanPhone);
     if (existing) {
       res.status(409).json({ message: 'Phone number already registered' });
       return;
     }
 
     const hashed = await bcrypt.hash(password, 12);
-    const userId = await UserModel.createUser(name, phone, hashed);
+    const userId = await UserModel.createUser(name.trim(), cleanPhone, hashed);
 
     // Save address if provided
     if (address && address.trim()) {

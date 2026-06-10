@@ -10,12 +10,31 @@ export default function SignupPage() {
   const [form, setForm] = useState({ name: '', phone: '', password: '', address: '' });
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Indian mobile: exactly 10 digits, starts with 6-9
+  const validatePhone = (p: string) => {
+    if (!p) return 'Phone number is required';
+    if (!/^[0-9]+$/.test(p)) return 'Phone number must contain digits only';
+    if (p.length !== 10) return 'Phone number must be exactly 10 digits';
+    if (!/^[6-9]/.test(p)) return 'Enter a valid Indian mobile number (starts with 6-9)';
+    return '';
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Strip non-digits, max 10 chars
+    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setForm(f => ({ ...f, phone: val }));
+    setPhoneError(val ? validatePhone(val) : '');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const pErr = validatePhone(form.phone);
+    if (pErr) { setPhoneError(pErr); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters'); return; }
     setLoading(true);
     try {
@@ -122,9 +141,25 @@ export default function SignupPage() {
             <Input label="Full Name" type="text" placeholder="Enter your full name"
               value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
               icon={<User className="w-4 h-4" />} required />
-            <Input label="Phone Number" type="tel" placeholder="Enter your phone number"
-              value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
-              icon={<Phone className="w-4 h-4" />} required />
+            <div>
+              <Input label="Phone Number" type="tel" placeholder="10-digit mobile number"
+                value={form.phone} onChange={handlePhoneChange}
+                icon={<Phone className="w-4 h-4" />} required
+                inputMode="numeric"
+              />
+              {phoneError && (
+                <p className="mt-1.5 text-xs text-red-500 font-medium flex items-center gap-1">
+                  <span className="w-1 h-1 bg-red-500 rounded-full inline-block" />
+                  {phoneError}
+                </p>
+              )}
+              {!phoneError && form.phone.length === 10 && (
+                <p className="mt-1.5 text-xs text-emerald-600 font-medium flex items-center gap-1">
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full inline-block" />
+                  Valid mobile number
+                </p>
+              )}
+            </div>
             <Input label="Password" type="password" placeholder="Min. 6 characters"
               value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
               icon={<Lock className="w-4 h-4" />} required />

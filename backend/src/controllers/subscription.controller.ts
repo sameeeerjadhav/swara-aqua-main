@@ -232,19 +232,41 @@ export const reviewCancelRequest = async (req: AuthRequest, res: Response): Prom
       res.status(400).json({ message: 'action must be approved or rejected' }); return;
     }
 
-    // Get the cancel request to find the order
+    // Get the cancel request to find the order and customer
     const [rows] = await (await import('../config/db')).default.query<any[]>(
-      'SELECT * FROM cancel_requests WHERE id = ?', [id]
+      `SELECT cr.*, u.name AS customer_name
+       FROM cancel_requests cr
+       JOIN users u ON u.id = cr.customer_id
+       WHERE cr.id = ?`,
+      [id]
     );
     if (!rows.length) { res.status(404).json({ message: 'Cancel request not found' }); return; }
 
+    const cancelReq = rows[0];
     await SubModel.reviewCancelRequest(id, action, req.user!.id);
 
     // If approved, actually cancel the order
     if (action === 'approved') {
       const OrderModel = await import('../models/order.model');
-      await OrderModel.cancelOrder(rows[0].order_id, req.user!.id);
+      await OrderModel.cancelOrder(cancelReq.order_id, req.user!.id);
     }
+
+    // Notify customer of the decision
+    const NotifService = await import('../services/notification.service');
+    const notifTitle = action === 'approved'
+      ? '✅ Cancellation Approved'
+      : '❌ Cancellation Rejected';
+    const notifBody = action === 'approved'
+      ? `Your cancellation request for Order #${cancelReq.order_id} has been approved. The order has been cancelled.`
+      : `Your cancellation request for Order #${cancelReq.order_id} has been rejected by admin. The order will proceed as normal.`;
+
+    NotifService.default.sendToUser({
+      userId: cancelReq.customer_id,
+      title:  notifTitle,
+      body:   notifBody,
+      type:   'order',
+      data:   { orderId: String(cancelReq.order_id) },
+    }).catch((e: any) => console.warn('[Notif] cancel request notif failed:', e?.message));
 
     res.json({ message: `Cancel request ${action}` });
   } catch (err) {

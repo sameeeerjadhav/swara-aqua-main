@@ -368,7 +368,8 @@ export const createCancelRequest = async (
 };
 
 export const getCancelRequests = async (status?: string): Promise<RowDataPacket[]> => {
-  const condition = status ? `AND cr.status = '${status}'` : '';
+  const condition = status ? 'AND cr.status = ?' : '';
+  const params: unknown[] = status ? [status] : [];
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT cr.*, o.quantity, o.total_amount, o.type AS order_type,
             u.name AS customer_name, u.phone AS customer_phone
@@ -376,7 +377,8 @@ export const getCancelRequests = async (status?: string): Promise<RowDataPacket[
      JOIN orders o ON o.id = cr.order_id
      JOIN users u ON u.id = cr.customer_id
      WHERE 1=1 ${condition}
-     ORDER BY cr.created_at DESC`
+     ORDER BY cr.created_at DESC`,
+    params
   );
   return rows;
 };

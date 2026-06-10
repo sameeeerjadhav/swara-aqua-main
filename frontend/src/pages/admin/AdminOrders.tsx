@@ -41,7 +41,7 @@ export const AdminOrders = () => {
   // Cancel requests
   const [cancelRequests, setCancelRequests] = useState<CancelRequest[]>([]);
   const [crLoading, setCrLoading]           = useState(false);
-  const [showCancelRequests, setShowCancelRequests] = useState(false);
+  const [showCancelRequests, setShowCancelRequests] = useState(true);
 
   const load = async () => {
     setLoading(true);
@@ -138,6 +138,110 @@ export const AdminOrders = () => {
 
   return (
     <div className="max-w-5xl space-y-4">
+
+      {/* ── Cancel Requests Alert Banner ── */}
+      {cancelRequests.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+          {/* Header */}
+          <button
+            onClick={() => setShowCancelRequests(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-amber-100/60 transition-colors">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-amber-500 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold text-amber-900">Cancellation Requests</p>
+                <p className="text-[11px] text-amber-600 mt-0.5">Customers waiting for your decision</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">
+                {cancelRequests.filter(r => r.status === 'pending').length} pending
+              </span>
+            </div>
+          </button>
+
+          {/* Requests list */}
+          <AnimatePresence initial={false}>
+            {showCancelRequests && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                className="overflow-hidden">
+                <div className="divide-y divide-amber-100">
+                  {crLoading ? (
+                    <div className="px-5 py-4">
+                      <div className="animate-pulse space-y-3">
+                        {[0,1].map(i => <div key={i} className="h-16 bg-amber-100 rounded-xl" />)}
+                      </div>
+                    </div>
+                  ) : cancelRequests.map(cr => (
+                    <div key={cr.id} className={`px-5 py-4 ${
+                      cr.status !== 'pending' ? 'opacity-60' : ''
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        {/* Avatar */}
+                        <div className="w-9 h-9 rounded-xl bg-amber-200 flex items-center justify-center shrink-0 font-bold text-amber-700 text-sm">
+                          {cr.customer_name?.charAt(0).toUpperCase()}
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">{cr.customer_name}</p>
+                              <p className="text-[11px] text-slate-500">{cr.customer_phone}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-bold text-slate-700">Order #{cr.order_id}</p>
+                              <p className="text-[11px] text-slate-400 capitalize">{cr.order_type} &middot; {cr.quantity} jars &middot; &#8377;{cr.total_amount}</p>
+                            </div>
+                          </div>
+
+                          {/* Reason */}
+                          <div className="mt-2 bg-white/70 border border-amber-200 rounded-xl px-3 py-2">
+                            <p className="text-xs text-slate-500 font-semibold mb-0.5">Reason for cancellation</p>
+                            <p className="text-xs text-slate-700">{cr.reason}</p>
+                          </div>
+
+                          {/* Time + Actions */}
+                          <div className="flex items-center justify-between mt-2.5">
+                            <p className="text-[10px] text-slate-400">
+                              {new Date(cr.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+
+                            {cr.status === 'pending' ? (
+                              <div className="flex gap-2">
+                                <button onClick={() => handleReview(cr.id, 'rejected')}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-xs font-semibold transition-colors">
+                                  <XCircle className="w-3.5 h-3.5" /> Reject
+                                </button>
+                                <button onClick={() => handleReview(cr.id, 'approved')}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors shadow-sm">
+                                  <Check className="w-3.5 h-3.5" /> Approve
+                                </button>
+                              </div>
+                            ) : (
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-lg capitalize ${
+                                cr.status === 'approved'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-red-50 text-red-600 border border-red-200'
+                              }`}>
+                                {cr.status === 'approved' ? '\u2705' : '\u274c'} {cr.status}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -476,59 +580,6 @@ export const AdminOrders = () => {
         )}
       </AnimatePresence>
 
-      {/* ── Cancel Requests Section ── */}
-      {cancelRequests.length > 0 && (
-        <div className="mt-6">
-          <button onClick={() => setShowCancelRequests(!showCancelRequests)}
-            className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-3 hover:text-brand-600 transition-colors">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            Cancel Requests ({cancelRequests.length})
-          </button>
-
-          <AnimatePresence>
-            {showCancelRequests && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                className="space-y-2 overflow-hidden">
-                {cancelRequests.map(cr => (
-                  <div key={cr.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                      <AlertTriangle className="w-5 h-5 text-amber-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-sm font-bold text-slate-800">{cr.customer_name}</p>
-                        <span className="text-xs text-slate-400">Order #{cr.order_id}</span>
-                      </div>
-                      <p className="text-xs text-slate-500 mb-1">{cr.quantity} jars · ₹{cr.total_amount}</p>
-                      <p className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2">
-                        <span className="font-semibold">Reason:</span> {cr.reason}
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-1">{new Date(cr.created_at).toLocaleString('en-IN')}</p>
-                    </div>
-                    {cr.status === 'pending' && (
-                      <div className="flex gap-1.5 shrink-0">
-                        <button onClick={() => handleReview(cr.id, 'approved')}
-                          className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 flex items-center justify-center text-emerald-600 transition-colors">
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleReview(cr.id, 'rejected')}
-                          className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center text-red-500 transition-colors">
-                          <XCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                    {cr.status !== 'pending' && (
-                      <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
-                        cr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
-                      }`}>{cr.status}</span>
-                    )}
-                  </div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
     </div>
   );
 };

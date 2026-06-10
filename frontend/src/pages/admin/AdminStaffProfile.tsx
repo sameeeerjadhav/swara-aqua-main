@@ -18,6 +18,7 @@ interface StaffStats {
   total_jars_delivered: number;
   total_cash_collected: number;
   active_orders: number;
+  cash_in_hand: number;
 }
 interface StaffInventory { assigned_jars: number; empty_collected: number; }
 interface Delivery {
@@ -111,12 +112,12 @@ export const AdminStaffProfile = () => {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Deliveries',   value: stats?.total_deliveries    ?? 0,    icon: Truck,        color: 'from-brand-500 to-aqua-500' },
-          { label: 'Jars Delivered',value: stats?.total_jars_delivered ?? 0,  icon: Package,      color: 'from-blue-500 to-cyan-500' },
+          { label: 'Deliveries',    value: stats?.total_deliveries     ?? 0,   icon: Truck,        color: 'from-brand-500 to-aqua-500' },
+          { label: 'Jars Delivered',value: stats?.total_jars_delivered  ?? 0,   icon: Package,      color: 'from-blue-500 to-cyan-500' },
           { label: 'Cash Collected',value: `₹${Number(stats?.total_cash_collected ?? 0).toLocaleString('en-IN')}`, icon: IndianRupee, color: 'from-green-500 to-emerald-500' },
-          { label: 'Active Orders', value: stats?.active_orders       ?? 0,    icon: Clock,        color: 'from-amber-500 to-orange-500' },
+          { label: 'Active Orders', value: stats?.active_orders         ?? 0,   icon: Clock,        color: 'from-purple-500 to-indigo-500' },
         ].map(({ label, value, icon: Icon, color }) => (
           <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-2xl border border-slate-100 shadow-card p-4">
@@ -127,6 +128,32 @@ export const AdminStaffProfile = () => {
             <p className="text-xs text-slate-400 mt-0.5">{label}</p>
           </motion.div>
         ))}
+
+        {/* Cash in Hand — highlighted card */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          className={`rounded-2xl border shadow-card p-4 ${
+            (stats?.cash_in_hand ?? 0) > 0
+              ? 'bg-amber-50 border-amber-200'
+              : 'bg-white border-slate-100'
+          }`}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${
+            (stats?.cash_in_hand ?? 0) > 0
+              ? 'bg-gradient-to-br from-amber-500 to-orange-500'
+              : 'bg-gradient-to-br from-slate-400 to-slate-500'
+          }`}>
+            <IndianRupee className="w-4 h-4 text-white" />
+          </div>
+          <p className={`text-xl font-bold ${
+            (stats?.cash_in_hand ?? 0) > 0 ? 'text-amber-700' : 'text-slate-800'
+          }`}>
+            ₹{Number(stats?.cash_in_hand ?? 0).toLocaleString('en-IN')}
+          </p>
+          <p className={`text-xs mt-0.5 ${
+            (stats?.cash_in_hand ?? 0) > 0 ? 'text-amber-600 font-semibold' : 'text-slate-400'
+          }`}>
+            {(stats?.cash_in_hand ?? 0) > 0 ? '⚠️ Cash in Hand' : 'Cash in Hand'}
+          </p>
+        </motion.div>
       </div>
 
       {/* Inventory status */}

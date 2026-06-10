@@ -376,15 +376,6 @@ export const submitCash = async (
   totalCash: number,
   note?: string
 ): Promise<number> => {
-  // Prevent duplicate pending submission
-  const [existing] = await pool.query<RowDataPacket[]>(
-    "SELECT id FROM cash_submissions WHERE staff_id = ? AND status = 'pending'",
-    [staffId]
-  );
-  if ((existing as RowDataPacket[]).length) {
-    throw new Error('You already have a pending cash submission. Wait for admin verification.');
-  }
-
   const [result] = await pool.query<ResultSetHeader>(
     'INSERT INTO cash_submissions (staff_id, total_cash, note) VALUES (?, ?, ?)',
     [staffId, totalCash, note ?? null]

@@ -121,16 +121,22 @@ export const StaffInventory = () => {
         </div>
       )}
 
-      {/* Cash in Hand */}
-      {!loading && cashInHand > 0 && (
+      {/* Cash in Hand — always show */}
+      {!loading && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+          className={`rounded-2xl p-5 shadow-lg relative overflow-hidden ${
+            cashInHand > 0
+              ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+              : 'bg-gradient-to-r from-slate-400 to-slate-500'
+          }`}>
           <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-white/10" />
           <div className="relative z-10 flex items-center justify-between">
             <div>
               <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Cash in Hand</p>
               <p className="text-3xl font-bold text-white">₹{cashInHand.toLocaleString('en-IN')}</p>
-              <p className="text-white/60 text-xs mt-1">Submit to admin at end of day</p>
+              <p className="text-white/60 text-xs mt-1">
+                {cashInHand > 0 ? 'Submit to admin at end of day' : 'No cash collected yet'}
+              </p>
             </div>
             <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center">
               <IndianRupee className="w-6 h-6 text-white" />
@@ -151,7 +157,7 @@ export const StaffInventory = () => {
           <AlertTriangle className="w-5 h-5 text-red-500" />
           <span className="text-xs font-semibold text-slate-700">Report Damage</span>
         </button>
-        <button onClick={() => { setShowCash(true); setCashAmount(String(cashInHand)); }} disabled={hasPendingCash || cashInHand === 0}
+        <button onClick={() => { setShowCash(true); setCashAmount(String(cashInHand)); }} disabled={cashInHand === 0}
           className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-100 shadow-card hover:border-amber-300 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
           <IndianRupee className="w-5 h-5 text-amber-600" />
           <span className="text-xs font-semibold text-slate-700">Submit Cash</span>
@@ -160,11 +166,11 @@ export const StaffInventory = () => {
 
       {hasPendingCash && (
         <p className="text-xs text-amber-600 text-center font-medium">
-          ⏳ Cash submission pending admin verification
+          ⏳ Previous cash submission pending admin verification
         </p>
       )}
       {!hasPendingCash && cashInHand === 0 && (
-        <p className="text-xs text-slate-400 text-center">No cash in hand to submit</p>
+        <p className="text-xs text-slate-400 text-center">No cash collected yet</p>
       )}
 
       {/* Cash submissions history */}
@@ -272,12 +278,12 @@ export const StaffInventory = () => {
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Amount Submitting (₹)</label>
-                <input type="number" min={0} max={cashInHand} step="0.01" value={cashAmount}
+                <input type="number" min={0} step="0.01" value={cashAmount}
                   onChange={e => setCashAmount(e.target.value)}
                   placeholder="0.00"
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all font-semibold" />
                 {Number(cashAmount) < cashInHand && Number(cashAmount) > 0 && (
-                  <p className="text-[10px] text-slate-400 mt-1">Remaining after submit: ₹{(cashInHand - Number(cashAmount)).toFixed(2)}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Remaining tracked: ₹{(cashInHand - Number(cashAmount)).toFixed(2)}</p>
                 )}
               </div>
               <div>

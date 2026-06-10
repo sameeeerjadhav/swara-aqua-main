@@ -470,11 +470,20 @@ export const getStaffProfile = async (req: AuthRequest, res: Response): Promise<
       LIMIT 15
     `, [id]);
 
+    // Cash currently in hand (pending cash transactions not yet submitted/verified)
+    const [cashInHandRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COALESCE(SUM(amount), 0) AS cash_in_hand
+       FROM transactions
+       WHERE collected_by = ? AND mode = 'cash' AND status = 'pending' AND type = 'credit'`,
+      [id]
+    );
+
     res.json({
       staff: userRows[0],
       stats: {
         ...statsRows[0],
-        active_orders: Number((activeRows[0] as any).active_orders),
+        active_orders:  Number((activeRows[0] as any).active_orders),
+        cash_in_hand:   Number(cashInHandRows[0]?.cash_in_hand ?? 0),
       },
       inventory: invRows.length ? invRows[0] : { assigned_jars: 0, empty_collected: 0 },
       recentDeliveries,

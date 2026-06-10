@@ -57,3 +57,52 @@ export const getCustomerGrowth = async (req: AuthRequest, res: Response): Promis
   }
 };
 
+// GET /api/reports/jars-trend?period=daily|monthly
+export const getJarsTrend = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { period = 'daily', days, months } = req.query as Record<string, string>;
+    const data = period === 'monthly'
+      ? await Reports.getMonthlyJarsTrend(Number(months) || 12)
+      : await Reports.getDailyJarsTrend(Number(days) || 30);
+    res.json({ data, period });
+  } catch (err) {
+    console.error('getJarsTrend error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// GET /api/reports/orders-by-type
+export const getOrdersByType = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const data = await Reports.getOrdersByType();
+    res.json({ data });
+  } catch (err) {
+    console.error('getOrdersByType error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// GET /api/reports/top-customers
+export const getTopCustomers = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const data = await Reports.getTopCustomers(8);
+    res.json({ data });
+  } catch (err) {
+    console.error('getTopCustomers error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// GET /api/reports/order-volume?period=daily|monthly
+export const getOrderVolume = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { period = 'daily', days, months } = req.query as Record<string, string>;
+    const data = period === 'monthly'
+      ? await Reports.getMonthlyOrderVolume(Number(months) || 12)
+      : await Reports.getDailyOrderVolume(Number(days) || 30);
+    res.json({ data, period });
+  } catch (err) {
+    console.error('getOrderVolume error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};

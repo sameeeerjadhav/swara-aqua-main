@@ -88,6 +88,7 @@ export interface RevenuePoint {
   total: number;
   cash: number;
   online: number;
+  advance: number;
   count: number;
 }
 
@@ -97,7 +98,12 @@ export interface RevenueSummary {
   all_time: number;
   cash_total: number;
   online_total: number;
+  advance_total: number;
   total_pending: number;
+  deliveries_today: number;
+  jars_today: number;
+  total_customers: number;
+  pending_approvals: number;
 }
 
 export interface PendingCustomer {
@@ -112,16 +118,44 @@ export interface PendingCustomer {
 export interface StaffPerf {
   id: number;
   name: string;
-  phone: string;
   deliveries: number;
   jars_delivered: number;
   cash_collected: number;
+  online_collected: number;
 }
 
 export interface CustomerGrowthPoint {
   date?: string;
   month?: string;
   new_customers: number;
+}
+
+export interface JarsTrendPoint {
+  date?: string;
+  month?: string;
+  jars: number;
+  deliveries: number;
+}
+
+export interface OrderTypePoint {
+  type: string;
+  count: number;
+  revenue: number;
+}
+
+export interface TopCustomer {
+  id: number;
+  name: string;
+  total_orders: number;
+  total_paid: number;
+  total_jars: number;
+}
+
+export interface OrderVolumePoint {
+  date?: string;
+  month?: string;
+  orders: number;
+  jars_ordered: number;
 }
 
 export const billingApi = {
@@ -175,6 +209,22 @@ export const billingApi = {
   customerGrowth: (params?: Record<string, string>) =>
     api.get<{ data: CustomerGrowthPoint[]; period: string }>(
       '/billing/reports/customer-growth', { params }
+    ),
+
+  jarsTrend: (params?: Record<string, string>) =>
+    api.get<{ data: JarsTrendPoint[]; period: string }>(
+      '/billing/reports/jars-trend', { params }
+    ),
+
+  ordersByType: () =>
+    api.get<{ data: OrderTypePoint[] }>('/billing/reports/orders-by-type'),
+
+  topCustomers: () =>
+    api.get<{ data: TopCustomer[] }>('/billing/reports/top-customers'),
+
+  orderVolume: (params?: Record<string, string>) =>
+    api.get<{ data: OrderVolumePoint[]; period: string }>(
+      '/billing/reports/order-volume', { params }
     ),
 
   // Delivery report (flexible date range)

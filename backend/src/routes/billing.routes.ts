@@ -7,6 +7,7 @@ import {
 } from '../controllers/billing.controller';
 import {
   getRevenue, getPendingPayments, getStaffPerformance, getCustomerGrowth,
+  getJarsTrend, getOrdersByType, getTopCustomers, getOrderVolume,
 } from '../controllers/reports.controller';
 
 const router = Router();
@@ -17,6 +18,10 @@ router.get('/reports/revenue',           ...allowAdmin, getRevenue);
 router.get('/reports/pending',           ...allowAdmin, getPendingPayments);
 router.get('/reports/staff-performance', ...allowAdmin, getStaffPerformance);
 router.get('/reports/customer-growth',   ...allowAdmin, getCustomerGrowth);
+router.get('/reports/jars-trend',        ...allowAdmin, getJarsTrend);
+router.get('/reports/orders-by-type',    ...allowAdmin, getOrdersByType);
+router.get('/reports/top-customers',     ...allowAdmin, getTopCustomers);
+router.get('/reports/order-volume',      ...allowAdmin, getOrderVolume);
 router.get('/summary',                   ...allowAdmin, getBillingSummary);
 
 // ── Clear All Dues (customer) ─────────────────────────────────────────────────

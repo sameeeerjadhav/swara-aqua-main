@@ -14,13 +14,51 @@ const StaffDashboard  = lazy(() => import('./pages/StaffDashboard'));
 const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
 const DownloadAppPage = lazy(() => import('./pages/DownloadAppPage').then(m => ({ default: m.DownloadAppPage })));
 
-// Minimal full-screen loader shown while chunks download
+// Animated splash screen shown while JS chunks download
 const PageLoader = () => (
-  <div className="fixed inset-0 flex items-center justify-center bg-slate-50">
-    <div className="flex flex-col items-center gap-3">
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-500 to-aqua-400 animate-pulse" />
-      <p className="text-xs text-slate-400 font-medium">Loading…</p>
+  <div className="fixed inset-0 flex flex-col items-center justify-center bg-white gap-4">
+
+    {/* Rotating logo */}
+    <div
+      style={{
+        animation: 'splashSpin 0.7s cubic-bezier(0.34,1.56,0.64,1) both',
+        width: 120,
+        height: 120,
+      }}
+    >
+      <img
+        src="/icons/justlogo.png"
+        alt="Sarvam Logo"
+        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+      />
     </div>
+
+    {/* Name fades + slides up after logo */}
+    <div
+      style={{
+        animation: 'splashFadeUp 0.5s ease 0.5s both',
+        opacity: 0,
+        width: 180,
+      }}
+    >
+      <img
+        src="/icons/justname.png"
+        alt="Sarvam Enterprises"
+        style={{ width: '100%', objectFit: 'contain' }}
+      />
+    </div>
+
+    {/* Keyframes injected inline */}
+    <style>{`
+      @keyframes splashSpin {
+        0%   { opacity: 0; transform: rotate(-180deg) scale(0.4); }
+        100% { opacity: 1; transform: rotate(0deg)    scale(1);   }
+      }
+      @keyframes splashFadeUp {
+        0%   { opacity: 0; transform: translateY(16px); }
+        100% { opacity: 1; transform: translateY(0);    }
+      }
+    `}</style>
   </div>
 );
 

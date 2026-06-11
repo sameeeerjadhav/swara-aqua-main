@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Users, Package, TrendingUp, Clock, ArrowRight,
-  Droplets, IndianRupee, UserCheck, AlertCircle,
-  ChevronRight, BarChart3, Bell, Warehouse, UserRound,
+  Users, Package, TrendingUp, Clock,
+  Droplets, IndianRupee, AlertCircle,
+  BarChart3, Bell, Warehouse, UserRound,
 } from 'lucide-react';
 import { StatCardSkeleton } from '../../components/ui/Skeleton';
 import { useNavigate } from 'react-router-dom';
@@ -26,37 +26,35 @@ const getGreeting = () => {
   return 'Good evening';
 };
 
-// ── Metric card (clickable) ──
+// ── Metric card (clickable, vertical layout) ──
 const MetricCard = ({
-  label, value, sub, icon, gradient, loading, to,
+  label, value, icon, gradient, loading, to,
 }: {
-  label: string; value: string | number; sub?: string;
+  label: string; value: string | number;
   icon: React.ReactNode; gradient: string; loading?: boolean; to?: string;
 }) => {
   const navigate = useNavigate();
   return (
     <motion.div variants={fadeUp}
       onClick={() => to && navigate(to)}
-      className={`bg-white rounded-2xl border border-slate-100 shadow-card p-4 flex items-start gap-3 hover:shadow-md transition-all
-        ${to ? 'cursor-pointer hover:border-brand-200 active:scale-[0.97]' : ''}`}>
-      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm`}>
+      className={`bg-white rounded-2xl border border-slate-100 shadow-card p-4 flex flex-col gap-3 transition-all
+        ${to ? 'cursor-pointer hover:shadow-md hover:border-brand-200 active:scale-[0.97]' : 'hover:shadow-md'}`}>
+      {/* Icon */}
+      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-sm`}>
         {icon}
       </div>
-      <div className="flex-1 min-w-0">
-        {loading ? (
-          <div className="space-y-1.5">
-            <div className="h-5 w-14 bg-slate-100 rounded animate-pulse" />
-            <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
-          </div>
-        ) : (
-          <>
-            <p className="text-lg font-extrabold text-slate-900 leading-none">{value}</p>
-            <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">{label}</p>
-            {sub && <p className="text-[10px] text-slate-300 mt-0.5 truncate">{sub}</p>}
-          </>
-        )}
-      </div>
-      {to && !loading && <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-1" />}
+      {/* Value + label */}
+      {loading ? (
+        <div className="space-y-1.5">
+          <div className="h-6 w-12 bg-slate-100 rounded animate-pulse" />
+          <div className="h-3 w-16 bg-slate-100 rounded animate-pulse" />
+        </div>
+      ) : (
+        <div>
+          <p className="text-2xl font-extrabold text-slate-900 leading-none">{value}</p>
+          <p className="text-xs text-slate-400 font-semibold mt-1 leading-tight">{label}</p>
+        </div>
+      )}
     </motion.div>
   );
 };
@@ -132,28 +130,28 @@ export const AdminHome = () => {
         </motion.div>
       )}
 
-      {/* ── User metrics ── */}
+      {/* ── People metrics ── */}
       <div>
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">People</p>
         <motion.div variants={stagger} initial="hidden" animate="show"
           className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MetricCard loading={loading} label="Total Customers" value={userStats?.customers ?? '—'}
-            sub="Active customers"
+          <MetricCard loading={loading} label="Customers"
+            value={userStats?.customers ?? '—'}
             gradient="from-brand-500 to-brand-400"
             to="/admin/customers"
             icon={<Users className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Total Staff"     value={userStats?.staff ?? '—'}
-            sub="Active staff members"
+          <MetricCard loading={loading} label="Staff"
+            value={userStats?.staff ?? '—'}
             gradient="from-green-500 to-emerald-400"
             to="/admin/staff"
             icon={<UserRound className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Pending Approval" value={userStats?.pending ?? '—'}
-            sub="Awaiting review"
+          <MetricCard loading={loading} label="Pending Approval"
+            value={userStats?.pending ?? '—'}
             gradient="from-amber-500 to-orange-400"
             to="/admin/customers"
             icon={<Clock className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Total Revenue"   value={orderStats ? `₹${Number(orderStats.total_revenue).toLocaleString('en-IN')}` : '—'}
-            sub="All time earnings"
+          <MetricCard loading={loading} label="Revenue"
+            value={orderStats ? `₹${Number(orderStats.total_revenue).toLocaleString('en-IN')}` : '—'}
             gradient="from-purple-500 to-indigo-400"
             to="/admin/transactions"
             icon={<IndianRupee className="w-5 h-5 text-white" />} />
@@ -165,20 +163,23 @@ export const AdminHome = () => {
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Orders</p>
         <motion.div variants={stagger} initial="hidden" animate="show"
           className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MetricCard loading={loading} label="Total Orders" value={orderStats?.total ?? '—'}
+          <MetricCard loading={loading} label="Total Orders"
+            value={orderStats?.total ?? '—'}
             gradient="from-brand-600 to-blue-500"
             to="/admin/orders"
             icon={<Package className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Pending"      value={orderStats?.pending ?? '—'}
-            sub="Need assignment"
+          <MetricCard loading={loading} label="Pending"
+            value={orderStats?.pending ?? '—'}
             gradient="from-amber-500 to-yellow-400"
             to="/admin/orders"
             icon={<AlertCircle className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Completed"    value={orderStats?.completed ?? '—'}
+          <MetricCard loading={loading} label="Completed"
+            value={orderStats?.completed ?? '—'}
             gradient="from-green-500 to-teal-400"
             to="/admin/orders"
             icon={<TrendingUp className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="In Transit"   value={orderStats?.assigned ?? '—'}
+          <MetricCard loading={loading} label="In Transit"
+            value={orderStats?.assigned ?? '—'}
             gradient="from-purple-500 to-indigo-400"
             to="/admin/orders"
             icon={<Droplets className="w-5 h-5 text-white" />} />

@@ -18,18 +18,20 @@ import { AdminCasualDeliveries } from './admin/AdminCasualDeliveries';
 import { AdminAdvanceRequests } from './admin/AdminAdvanceRequests';
 
 const NAV = [
-  { label: 'Dashboard',    icon: LayoutDashboard, to: '/admin' },
-  { label: 'Orders',       icon: Package,         to: '/admin/orders' },
-  { label: 'Customers',    icon: UsersRound,      to: '/admin/customers' },
-  { label: 'Billing',      icon: FileText,        to: '/admin/billing' },
-  { label: 'Staff',        icon: Users,           to: '/admin/staff' },
-  { label: 'Inventory',    icon: Warehouse,       to: '/admin/inventory' },
-  { label: 'Transactions', icon: CreditCard,      to: '/admin/transactions' },
-  { label: 'Reports',      icon: BarChart2,       to: '/admin/reports' },
-  { label: 'Banners',      icon: Image,           to: '/admin/banners' },
-  { label: 'Casual Deliveries',   icon: UserRound, to: '/admin/casual-deliveries' },
-  { label: 'Notifications', icon: Bell, to: '/admin/notifications' },
-  { label: 'Advance Requests', icon: Wallet, to: '/admin/advance-requests' },
+  // ── Bottom nav primary (index 0-3, center is index 2) ──
+  { label: 'Advance',    icon: Wallet,          to: '/admin/advance-requests' },
+  { label: 'Reports',    icon: BarChart2,        to: '/admin/reports' },
+  { label: 'Dashboard',  icon: LayoutDashboard,  to: '/admin' },
+  { label: 'Billing',    icon: FileText,         to: '/admin/billing' },
+  // ── Overflow (More drawer) ──
+  { label: 'Orders',     icon: Package,          to: '/admin/orders' },
+  { label: 'Customers',  icon: UsersRound,       to: '/admin/customers' },
+  { label: 'Staff',      icon: Users,            to: '/admin/staff' },
+  { label: 'Inventory',  icon: Warehouse,        to: '/admin/inventory' },
+  { label: 'Transactions', icon: CreditCard,     to: '/admin/transactions' },
+  { label: 'Notifications', icon: Bell,          to: '/admin/notifications' },
+  { label: 'Banners',    icon: Image,            to: '/admin/banners' },
+  { label: 'Casual Deliveries', icon: UserRound, to: '/admin/casual-deliveries' },
 ];
 
 const TITLES: Record<string, string> = {

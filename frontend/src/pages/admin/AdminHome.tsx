@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Users, Package, TrendingUp, Clock,
+  Users, Package, TrendingUp, Clock, ChevronRight,
   Droplets, IndianRupee, AlertCircle,
-  BarChart3, Bell, Warehouse, UserRound,
+  BarChart3, Bell, UserRound,
 } from 'lucide-react';
+
 import { StatCardSkeleton } from '../../components/ui/Skeleton';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';

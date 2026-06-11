@@ -155,17 +155,23 @@ const NavTab = ({ to, label, Icon }: { to: string; label: string; Icon: LucideIc
   </NavLink>
 );
 
-// ── Admin bottom nav with "More" overflow drawer (>5 items) ─────────────────
+// ── Admin bottom nav — Dashboard centered as FAB ──────────────────────────────
 const AdminBottomNav = ({ items }: { items: NavItem[] }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { pathname } = useLocation();
 
-  const primary = items.slice(0, 4);
-  const overflow = items.slice(4);
+  // Find Dashboard item and split rest into left/right
+  const dashItem  = items.find(i => i.to === '/admin') ?? items[0];
+  const rest      = items.filter(i => i.to !== '/admin');
+  const leftItems  = rest.slice(0, 2);
+  const rightItems = rest.slice(2, 4);
+  const overflow   = rest.slice(4);
   const overflowActive = overflow.some(item => pathname === item.to || pathname.startsWith(item.to + '/'));
+  const dashActive = pathname === '/admin';
 
   return (
     <>
+      {/* Backdrop */}
       <AnimatePresence>
         {drawerOpen && (
           <motion.div
@@ -176,8 +182,9 @@ const AdminBottomNav = ({ items }: { items: NavItem[] }) => {
         )}
       </AnimatePresence>
 
+      {/* Overflow drawer */}
       <AnimatePresence>
-        {drawerOpen && (
+        {drawerOpen && overflow.length > 0 && (
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 340, damping: 32 }}
@@ -216,14 +223,43 @@ const AdminBottomNav = ({ items }: { items: NavItem[] }) => {
         )}
       </AnimatePresence>
 
+      {/* Bottom nav bar */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-[0_-1px_12px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="flex justify-around items-end px-1 pt-2 pb-2">
-          {primary.map(({ label, icon: Icon, to }) => (
+        <div className="flex items-end px-1 pt-2 pb-2 h-16">
+          {/* Left 2 */}
+          {leftItems.map(({ label, icon: Icon, to }) => (
             <NavTab key={to} to={to} label={label} Icon={Icon} />
           ))}
+
+          {/* ── Center Dashboard FAB ── */}
+          <div className="flex-1 flex flex-col items-center justify-center relative -mt-5">
+            <NavLink to={dashItem.to} end>
+              {({ isActive }) => (
+                <div className={`relative flex flex-col items-center gap-0.5`}>
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-all
+                    ${isActive
+                      ? 'bg-gradient-to-br from-brand-600 to-aqua-500 shadow-[0_4px_14px_rgba(37,99,235,0.45)]'
+                      : 'bg-gradient-to-br from-slate-700 to-slate-600 shadow-[0_4px_10px_rgba(0,0,0,0.2)]'
+                    }`}>
+                    <dashItem.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <span className={`text-[10px] font-semibold leading-none mt-0.5 ${isActive ? 'text-brand-600' : 'text-slate-400'}`}>
+                    {dashItem.label}
+                  </span>
+                </div>
+              )}
+            </NavLink>
+          </div>
+
+          {/* Right 2 */}
+          {rightItems.map(({ label, icon: Icon, to }) => (
+            <NavTab key={to} to={to} label={label} Icon={Icon} />
+          ))}
+
+          {/* More */}
           {overflow.length > 0 && (
             <button onClick={() => setDrawerOpen(true)}
               className={`flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`}>

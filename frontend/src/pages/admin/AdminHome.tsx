@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Users, Package, TrendingUp, Clock, ArrowRight,
   Droplets, IndianRupee, UserCheck, AlertCircle,
-  ChevronRight, BarChart3, Bell, Warehouse,
+  ChevronRight, BarChart3, Bell, Warehouse, UserRound,
 } from 'lucide-react';
 import { StatCardSkeleton } from '../../components/ui/Skeleton';
 import { useNavigate } from 'react-router-dom';
@@ -26,34 +26,40 @@ const getGreeting = () => {
   return 'Good evening';
 };
 
-// ── Metric card ──
+// ── Metric card (clickable) ──
 const MetricCard = ({
-  label, value, sub, icon, gradient, loading,
+  label, value, sub, icon, gradient, loading, to,
 }: {
   label: string; value: string | number; sub?: string;
-  icon: React.ReactNode; gradient: string; loading?: boolean;
-}) => (
-  <motion.div variants={fadeUp}
-    className="bg-white rounded-2xl border border-slate-100 shadow-card p-4 flex items-start gap-3 hover:shadow-md transition-shadow">
-    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm`}>
-      {icon}
-    </div>
-    <div className="flex-1 min-w-0">
-      {loading ? (
-        <div className="space-y-1.5">
-          <div className="h-5 w-14 bg-slate-100 rounded animate-pulse" />
-          <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
-        </div>
-      ) : (
-        <>
-          <p className="text-lg font-extrabold text-slate-900 leading-none">{value}</p>
-          <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">{label}</p>
-          {sub && <p className="text-[10px] text-slate-300 mt-0.5 truncate">{sub}</p>}
-        </>
-      )}
-    </div>
-  </motion.div>
-);
+  icon: React.ReactNode; gradient: string; loading?: boolean; to?: string;
+}) => {
+  const navigate = useNavigate();
+  return (
+    <motion.div variants={fadeUp}
+      onClick={() => to && navigate(to)}
+      className={`bg-white rounded-2xl border border-slate-100 shadow-card p-4 flex items-start gap-3 hover:shadow-md transition-all
+        ${to ? 'cursor-pointer hover:border-brand-200 active:scale-[0.97]' : ''}`}>
+      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm`}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        {loading ? (
+          <div className="space-y-1.5">
+            <div className="h-5 w-14 bg-slate-100 rounded animate-pulse" />
+            <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
+          </div>
+        ) : (
+          <>
+            <p className="text-lg font-extrabold text-slate-900 leading-none">{value}</p>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">{label}</p>
+            {sub && <p className="text-[10px] text-slate-300 mt-0.5 truncate">{sub}</p>}
+          </>
+        )}
+      </div>
+      {to && !loading && <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-1" />}
+    </motion.div>
+  );
+};
 
 export const AdminHome = () => {
   const { user } = useAuth();
@@ -128,23 +134,29 @@ export const AdminHome = () => {
 
       {/* ── User metrics ── */}
       <div>
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Users</p>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">People</p>
         <motion.div variants={stagger} initial="hidden" animate="show"
           className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MetricCard loading={loading} label="Total Users"  value={userStats?.total ?? '—'}
+          <MetricCard loading={loading} label="Total Customers" value={userStats?.customers ?? '—'}
+            sub="Active customers"
             gradient="from-brand-500 to-brand-400"
+            to="/admin/customers"
             icon={<Users className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Active"       value={userStats?.active ?? '—'}
-            sub="Verified accounts"
+          <MetricCard loading={loading} label="Total Staff"     value={userStats?.staff ?? '—'}
+            sub="Active staff members"
             gradient="from-green-500 to-emerald-400"
-            icon={<UserCheck className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Pending"      value={userStats?.pending ?? '—'}
-            sub="Awaiting approval"
+            to="/admin/staff"
+            icon={<UserRound className="w-5 h-5 text-white" />} />
+          <MetricCard loading={loading} label="Pending Approval" value={userStats?.pending ?? '—'}
+            sub="Awaiting review"
             gradient="from-amber-500 to-orange-400"
+            to="/admin/customers"
             icon={<Clock className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Customers"    value={userStats?.customers ?? '—'}
-            gradient="from-aqua-500 to-teal-400"
-            icon={<Package className="w-5 h-5 text-white" />} />
+          <MetricCard loading={loading} label="Total Revenue"   value={orderStats ? `₹${Number(orderStats.total_revenue).toLocaleString('en-IN')}` : '—'}
+            sub="All time earnings"
+            gradient="from-purple-500 to-indigo-400"
+            to="/admin/transactions"
+            icon={<IndianRupee className="w-5 h-5 text-white" />} />
         </motion.div>
       </div>
 
@@ -155,16 +167,20 @@ export const AdminHome = () => {
           className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MetricCard loading={loading} label="Total Orders" value={orderStats?.total ?? '—'}
             gradient="from-brand-600 to-blue-500"
+            to="/admin/orders"
             icon={<Package className="w-5 h-5 text-white" />} />
           <MetricCard loading={loading} label="Pending"      value={orderStats?.pending ?? '—'}
             sub="Need assignment"
             gradient="from-amber-500 to-yellow-400"
+            to="/admin/orders"
             icon={<AlertCircle className="w-5 h-5 text-white" />} />
           <MetricCard loading={loading} label="Completed"    value={orderStats?.completed ?? '—'}
             gradient="from-green-500 to-teal-400"
+            to="/admin/orders"
             icon={<TrendingUp className="w-5 h-5 text-white" />} />
           <MetricCard loading={loading} label="In Transit"   value={orderStats?.assigned ?? '—'}
             gradient="from-purple-500 to-indigo-400"
+            to="/admin/orders"
             icon={<Droplets className="w-5 h-5 text-white" />} />
         </motion.div>
       </div>

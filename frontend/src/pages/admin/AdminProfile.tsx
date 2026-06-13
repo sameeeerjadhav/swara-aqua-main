@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, Shield, Activity, LogOut, Lock, KeyRound, Eye, EyeOff, CalendarDays, Bell, Upload, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Phone, Shield, Activity, LogOut, Lock, KeyRound, Eye, EyeOff, CalendarDays, Bell, Upload, RefreshCw, CheckCircle2, AlertCircle, Percent, Coins } from 'lucide-react';
+
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
@@ -22,13 +23,44 @@ export const AdminProfile = () => {
   const [fbUploading, setFbUploading] = useState(false);
   const fileInputRef                  = useRef<HTMLInputElement>(null);
 
+  // Platform fee mode
+  const [feeMode, setFeeMode]         = useState<'fixed' | 'percent'>('fixed');
+  const [feeLoading, setFeeLoading]   = useState(false);
+  const [feeSaving, setFeeSaving]     = useState(false);
+
   const loadFirebaseStatus = () => {
     api.get('/admin/firebase/status')
       .then(({ data }) => setFbReady(data.ready))
       .catch(() => setFbReady(false));
   };
 
-  useEffect(() => { loadFirebaseStatus(); }, []);
+  const loadFeeMode = () => {
+    setFeeLoading(true);
+    api.get('/admin/settings')
+      .then(({ data }) => {
+        const mode = data.settings?.platform_fee_mode;
+        setFeeMode(mode === 'percent' ? 'percent' : 'fixed');
+      })
+      .catch(() => {})
+      .finally(() => setFeeLoading(false));
+  };
+
+  const toggleFeeMode = async () => {
+    const next = feeMode === 'fixed' ? 'percent' : 'fixed';
+    setFeeSaving(true);
+    try {
+      await api.put('/admin/settings/platform_fee_mode', { value: next });
+      setFeeMode(next);
+      toast(`Platform fee: ${next === 'percent' ? '2% of transaction' : 'Fixed slab'}`, 'success');
+    } catch {
+      toast('Failed to update fee mode', 'error');
+    } finally {
+      setFeeSaving(false);
+    }
+  };
+
+  useEffect(() => { loadFirebaseStatus(); loadFeeMode(); }, []);
+
 
   const handleFirebaseFile = async (file: File) => {
     setFbUploading(true);
@@ -112,7 +144,67 @@ export const AdminProfile = () => {
         ))}
       </motion.div>
 
-      {/* Push notifications (Firebase) */}
+      {/* Platform Fee Mode */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-50">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <Percent className="w-4 h-4 text-brand-500" />
+            Platform Fee Mode
+          </h3>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {feeLoading ? (
+            <div className="h-8 w-40 bg-slate-100 rounded-xl animate-pulse" />
+          ) : (
+            <>
+              {/* Toggle row */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors
+                    ${feeMode === 'percent' ? 'bg-brand-100' : 'bg-slate-100'}`}>
+                    {feeMode === 'percent'
+                      ? <Percent className="w-4 h-4 text-brand-600" />
+                      : <Coins className="w-4 h-4 text-slate-400" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {feeMode === 'percent' ? '2% Percentage' : 'Fixed Slab'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {feeMode === 'percent'
+                        ? '2% of transaction amount'
+                        : '₹2 / ₹10 / ₹15 / ₹20 by amount'}
+                    </p>
+                  </div>
+                </div>
+                {/* Toggle switch */}
+                <button
+                  onClick={toggleFeeMode}
+                  disabled={feeSaving}
+                  className={`relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
+                    ${feeMode === 'percent' ? 'bg-brand-500' : 'bg-slate-200'}
+                    ${feeSaving ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300
+                    ${feeMode === 'percent' ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {/* Description */}
+              <div className={`rounded-xl p-3 text-xs leading-relaxed
+                ${feeMode === 'percent' ? 'bg-brand-50 text-brand-700' : 'bg-slate-50 text-slate-500'}`}>
+                {feeMode === 'percent' ? (
+                  <><strong>Percentage mode ON:</strong> Customer pays 2% extra on every online transaction (e.g. ₹500 order → ₹10 fee).</>
+                ) : (
+                  <><strong>Fixed slab mode:</strong> ₹2 fee for orders &lt;₹100 · ₹10 for ₹100–₹299 · ₹15 for ₹300–₹499 · ₹20 for ₹500+<br/>Toggle ON to switch to 2% percentage fee.</>  
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </motion.div>
+
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4 }}
         className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-50">

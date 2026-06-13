@@ -306,7 +306,7 @@ export const clearDuesOrder = async (req: AuthRequest, res: Response): Promise<v
       ).toFixed(2)
     );
 
-    const { fee: platformFee, total: chargeAmount } = withPlatformFee(totalDue);
+    const { fee: platformFee, total: chargeAmount } = await withPlatformFee(totalDue);
 
     const key_id     = process.env.RAZORPAY_KEY_ID     || '';
     const key_secret = process.env.RAZORPAY_KEY_SECRET || '';

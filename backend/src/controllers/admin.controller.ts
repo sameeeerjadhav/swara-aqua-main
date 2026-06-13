@@ -493,3 +493,41 @@ export const getStaffProfile = async (req: AuthRequest, res: Response): Promise<
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };
+
+// ── GET  /api/admin/settings ──────────────────────────────────────────────────
+export const getSettings = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT setting_key, setting_value FROM app_settings'
+    );
+    // Convert to a key→value map for convenience
+    const settings: Record<string, string> = {};
+    for (const row of rows as any[]) {
+      settings[row.setting_key] = row.setting_value;
+    }
+    res.json({ settings });
+  } catch (err) {
+    console.error('getSettings error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// ── PUT /api/admin/settings/:key ──────────────────────────────────────────────
+export const updateSetting = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { key } = req.params;
+    const { value } = req.body;
+    if (value === undefined || value === null) {
+      res.status(400).json({ message: 'value is required' }); return;
+    }
+    await pool.query(
+      `INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+      [key, String(value)]
+    );
+    res.json({ message: 'Setting updated', key, value });
+  } catch (err) {
+    console.error('updateSetting error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

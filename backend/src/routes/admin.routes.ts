@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer } from '../controllers/admin.controller';
+import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer, getSettings, updateSetting } from '../controllers/admin.controller';
+
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
 import { allowAdmin } from '../middleware/auth.middleware';
 
@@ -15,6 +16,9 @@ router.post('/customer',          ...allowAdmin, createCustomer);
 router.post('/orders',            ...allowAdmin, createOrderForCustomer);
 router.get('/staff/:id/profile',  ...allowAdmin, getStaffProfile);
 router.get('/customer-balances',  ...allowAdmin, getCustomerBalances);
+router.get('/settings',           ...allowAdmin, getSettings);
+router.put('/settings/:key',      ...allowAdmin, updateSetting);
+
 
 router.get('/firebase/status',    ...allowAdmin, getFirebaseStatus);
 router.post('/firebase/upload',   ...allowAdmin, uploadCredentials);

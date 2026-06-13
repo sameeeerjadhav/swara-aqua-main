@@ -2,7 +2,8 @@ import { Response } from 'express';
 import pool from '../config/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AuthRequest } from '../middleware/auth.middleware';
-import { getPlatformFee } from '../utils/platformFee';
+import { withPlatformFee } from '../utils/platformFee';
+
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import * as NotifService from '../services/notification.service';
@@ -60,8 +61,8 @@ export const createPendingPayOrder = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const fee      = getPlatformFee(pendingBalance);
-    const totalPaise = Math.round((pendingBalance + fee) * 100);
+    const { fee, total } = await withPlatformFee(pendingBalance);
+    const totalPaise = Math.round(total * 100);
 
     const order = await razorpay.orders.create({
       amount:   totalPaise,

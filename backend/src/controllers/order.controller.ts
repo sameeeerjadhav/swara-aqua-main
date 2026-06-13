@@ -655,7 +655,7 @@ export const createOrderPayment = async (req: AuthRequest, res: Response): Promi
     const baseAmount = Number(order.total_amount);
     if (!baseAmount || baseAmount < 1) { res.status(400).json({ message: 'Invalid order amount' }); return; }
 
-    const { fee: platformFee, total: chargeAmount } = withPlatformFee(baseAmount);
+    const { fee: platformFee, total: chargeAmount } = await withPlatformFee(baseAmount);
 
     const rzpOrder = await getRazorpay().orders.create({
       amount:   Math.round(chargeAmount * 100), // paise — base + platform fee

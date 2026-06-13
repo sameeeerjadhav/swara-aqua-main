@@ -349,6 +349,7 @@ export const runMigrations = async (): Promise<void> => {
     `);
     await conn.query(`INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES ('booking_start_time', '08:00')`);
     await conn.query(`INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES ('booking_end_time', '18:00')`);
+    await conn.query(`INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES ('platform_fee_mode', 'fixed')`);
 
     // ── Add subscription_id to orders if missing ─────────────────────────────
     const [orderCols] = await conn.query<any[]>(

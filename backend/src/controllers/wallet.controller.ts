@@ -155,7 +155,7 @@ export const createTopupOrder = async (req: AuthRequest, res: Response): Promise
       res.status(400).json({ message: 'amount must be >= 1' }); return;
     }
 
-    const { fee: platformFee, total: chargeAmount } = withPlatformFee(baseAmount);
+    const { fee: platformFee, total: chargeAmount } = await withPlatformFee(baseAmount);
 
     const order = await getRazorpay().orders.create({
       amount:   Math.round(chargeAmount * 100), // paise — base + platform fee

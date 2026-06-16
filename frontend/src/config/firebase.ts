@@ -2,13 +2,13 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY             || 'AIzaSyBuM5DkMqfW-STRiEyi3OCIVWk8E3aHz7g',
-  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN         || 'waterdelivery-a2126.firebaseapp.com',
-  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID          || 'waterdelivery-a2126',
-  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET      || 'waterdelivery-a2126.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '86432708341',
-  appId:             import.meta.env.VITE_FIREBASE_APP_ID              || '1:86432708341:web:d89c23e595ca4df023b7bc',
-  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID      || 'G-DPGK2X7N59',
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);

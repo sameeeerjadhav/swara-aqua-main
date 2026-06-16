@@ -264,8 +264,15 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
       )}
 
       {/* ── Default Header (desktop, or non-customer roles) ── */}
-      <header className={`h-16 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 z-20 ${isCustomer ? 'hidden md:flex' : ''}`}>
-        <h1 className="text-lg font-bold text-slate-900">{title}</h1>
+      <header className={`min-h-[64px] py-3 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 z-20 ${isCustomer ? 'hidden md:flex' : ''}`}>
+        <div>
+          <h1 className="text-lg font-bold text-slate-900 leading-tight">{title}</h1>
+          {title === 'Dashboard' && (
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+              {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          )}
+        </div>
 
         <div className="flex items-center gap-3">
           {/* Search */}

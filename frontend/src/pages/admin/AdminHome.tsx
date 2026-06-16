@@ -22,12 +22,7 @@ interface OrderStats { total: number; pending: number; assigned: number; complet
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: 'easeOut' as const } } };
 
-const getGreeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-};
+
 
 // ── Metric card (clickable, vertical layout) ──
 const MetricCard = ({
@@ -84,25 +79,10 @@ export const AdminHome = () => {
     delivery_completed: () => loadStats(),
   });
 
-  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <div className="space-y-6 max-w-4xl">
 
-      {/* ── Header ── */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-slate-400 font-medium">{today}</p>
-          <h1 className="text-2xl font-extrabold text-slate-900 mt-0.5 leading-tight">
-            {getGreeting()}, {user?.name?.split(' ')[0]} 👋
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">Here's your business at a glance.</p>
-        </div>
-        <div className="hidden sm:flex w-14 h-14 bg-gradient-to-br from-brand-500 to-aqua-400 rounded-2xl items-center justify-center shadow-[0_4px_14px_rgba(37,99,235,0.3)] shrink-0">
-          <Droplets className="w-7 h-7 text-white" />
-        </div>
-      </motion.div>
 
       {/* ── Revenue hero ── */}
       {orderStats && (

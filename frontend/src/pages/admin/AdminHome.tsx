@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import {
   Users, Package, TrendingUp, Clock, ChevronRight,
   Droplets, IndianRupee, AlertCircle,
-  BarChart3, Bell, UserRound,
+  BarChart3, Bell, UserRound, Wallet,
+
 } from 'lucide-react';
 
 import { StatCardSkeleton } from '../../components/ui/Skeleton';
@@ -14,7 +15,8 @@ import api from '../../api/axios';
 import { ordersApi } from '../../api/orders';
 import { useSSE } from '../../hooks/useSSE';
 
-interface UserStats  { total: number; pending: number; active: number; customers: number; staff: number; }
+interface UserStats  { total: number; pending: number; active: number; customers: number; staff: number; advance_requests: number; }
+
 interface OrderStats { total: number; pending: number; assigned: number; completed: number; total_revenue: number; }
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
@@ -151,11 +153,12 @@ export const AdminHome = () => {
             gradient="from-amber-500 to-orange-400"
             to="/admin/customers"
             icon={<Clock className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="Revenue"
-            value={orderStats ? `₹${Number(orderStats.total_revenue).toLocaleString('en-IN')}` : '—'}
-            gradient="from-purple-500 to-indigo-400"
-            to="/admin/transactions"
-            icon={<IndianRupee className="w-5 h-5 text-white" />} />
+          <MetricCard loading={loading} label="Advance Requests"
+            value={userStats?.advance_requests ?? '—'}
+            gradient="from-violet-500 to-purple-400"
+            to="/admin/advance-requests"
+            icon={<Wallet className="w-5 h-5 text-white" />} />
+
         </motion.div>
       </div>
 

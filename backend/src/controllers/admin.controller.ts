@@ -19,7 +19,8 @@ export const getStats = async (_req: AuthRequest, res: Response): Promise<void> 
         SUM(status = 'pending') as pending,
         SUM(status = 'active') as active,
         SUM(role = 'customer') as customers,
-        SUM(role = 'staff') as staff
+        SUM(role = 'staff') as staff,
+        SUM(advance_access = 'pending') as advance_requests
       FROM users`
     );
     res.json({ stats: rows[0] });

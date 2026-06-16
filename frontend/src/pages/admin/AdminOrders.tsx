@@ -243,20 +243,13 @@ export const AdminOrders = () => {
         </motion.div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">All Orders</h2>
-          <p className="text-xs text-slate-400 mt-0.5">{orders.length} orders</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNewOrder(true)}>
-            New Order
-          </Button>
-          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
-            Refresh
-          </Button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNewOrder(true)}>
+          New Order
+        </Button>
+        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
+          Refresh
+        </Button>
       </div>
 
       {/* Filters */}

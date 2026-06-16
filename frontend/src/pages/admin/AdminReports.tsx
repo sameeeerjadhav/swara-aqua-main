@@ -212,12 +212,7 @@ export const AdminReports = () => {
   return (
     <div className="max-w-5xl space-y-5">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Analytics</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Full business overview</p>
-        </div>
+      <div className="flex justify-end">
         <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
           <span className="hidden sm:inline">Refresh</span>
         </Button>

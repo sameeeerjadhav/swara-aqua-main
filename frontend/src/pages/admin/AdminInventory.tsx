@@ -78,17 +78,10 @@ export const AdminInventory = () => {
 
   return (
     <div className="max-w-4xl space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Inventory</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Jar stock management</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>Refresh</Button>
-          <Button variant="secondary" size="sm" icon={<UserCheck className="w-3.5 h-3.5" />} onClick={() => setShowAssign(true)}>Assign</Button>
-          <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowAdd(true)}>Add Stock</Button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>Refresh</Button>
+        <Button variant="secondary" size="sm" icon={<UserCheck className="w-3.5 h-3.5" />} onClick={() => setShowAssign(true)}>Assign</Button>
+        <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowAdd(true)}>Add Stock</Button>
       </div>
 
       {/* Low stock alert */}

@@ -135,10 +135,6 @@ export const AdminNotifications = () => {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-slate-900">Send Notifications</h2>
-        <p className="text-xs text-slate-400 mt-0.5">Push real-time notifications via FCM</p>
-      </div>
 
       {/* Presets */}
       <div>

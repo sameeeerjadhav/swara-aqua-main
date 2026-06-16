@@ -169,37 +169,28 @@ export const AdminBilling = () => {
   return (
     <div className="max-w-6xl space-y-5">
 
-      {/* ══════════════════════════════════════════════════════════════
-          HEADER
-      ══════════════════════════════════════════════════════════════ */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Billing</h2>
-          <p className="text-xs text-slate-400 mt-0.5">{bills.length} bills loaded</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={refresh}>Refresh</Button>
-          <div className="flex flex-col gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-3 shadow-card min-w-[240px]">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Generate Bill</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <input type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)}
-                className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[110px]" />
-              <select
-                value={genCustomerId}
-                onChange={e => setGenCustomerId(e.target.value)}
-                className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[130px] border-l border-slate-200 pl-2">
-                <option value="">All Customers</option>
-                {customers.map(c => (
-                  <option key={c.id} value={String(c.id)}>{c.name} ({c.phone})</option>
-                ))}
-              </select>
-            </div>
-            <Button size="sm" loading={generating} icon={<Plus className="w-3.5 h-3.5" />} onClick={handleGenerate}>
-              {genCustomerId
-                ? `Generate for ${customers.find(c => String(c.id) === genCustomerId)?.name || 'Customer'}`
-                : 'Generate All'}
-            </Button>
+      <div className="flex items-center gap-2 flex-wrap justify-end">
+        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={refresh}>Refresh</Button>
+        <div className="flex flex-col gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-3 shadow-card min-w-[240px]">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Generate Bill</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)}
+              className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[110px]" />
+            <select
+              value={genCustomerId}
+              onChange={e => setGenCustomerId(e.target.value)}
+              className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[130px] border-l border-slate-200 pl-2">
+              <option value="">All Customers</option>
+              {customers.map(c => (
+                <option key={c.id} value={String(c.id)}>{c.name} ({c.phone})</option>
+              ))}
+            </select>
           </div>
+          <Button size="sm" loading={generating} icon={<Plus className="w-3.5 h-3.5" />} onClick={handleGenerate}>
+            {genCustomerId
+              ? `Generate for ${customers.find(c => String(c.id) === genCustomerId)?.name || 'Customer'}`
+              : 'Generate All'}
+          </Button>
         </div>
       </div>
 

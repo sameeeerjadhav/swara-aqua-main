@@ -56,12 +56,7 @@ export const AdminAdvanceRequests = () => {
   return (
     <div className="max-w-2xl space-y-5">
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Advance Payment Requests</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Manage customer advance payment activation requests</p>
-        </div>
+      <div className="flex justify-end">
         <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
           Refresh
         </Button>

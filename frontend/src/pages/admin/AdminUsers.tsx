@@ -66,20 +66,13 @@ export const AdminUsers = () => {
   return (
     <div className="max-w-4xl space-y-5">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Staff</h2>
-          <p className="text-xs text-slate-400 mt-0.5">{users.length} staff members</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
-            Refresh
-          </Button>
-          <Button size="sm" icon={<UserPlus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
-            Add Staff
-          </Button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
+          Refresh
+        </Button>
+        <Button size="sm" icon={<UserPlus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
+          Add Staff
+        </Button>
       </div>
 
       {/* Search */}

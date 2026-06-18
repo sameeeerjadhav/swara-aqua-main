@@ -246,52 +246,31 @@ const AdminBottomNav = ({ items }: { items: NavItem[] }) => {
   );
 };
 
-// ── Staff bottom nav — all 5 items flat, center (Dashboard) is elevated ──────
+// ── Staff bottom nav — all 5 items identical flat tabs ───────────────────────
 const StaffBottomNav = ({ items }: { items: NavItem[] }) => (
   <nav
     className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-[0_-1px_12px_rgba(0,0,0,0.06)]"
     style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
   >
-    <div className="flex justify-around items-end px-1 pt-1 pb-2">
-      {items.map(({ label, icon: Icon, to }, idx) => {
-        const isCenter = idx === 2;
-        return isCenter ? (
-          /* Center elevated Dashboard button */
-          <NavLink key={to} to={to} end className="flex-1 flex flex-col items-center -mt-4">
-            {({ isActive }) => (
-              <>
-                <span className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg
-                  bg-gradient-to-br ${isActive ? 'from-brand-600 to-aqua-500' : 'from-slate-600 to-slate-500'}
-                  transition-all duration-200`}
-                  style={{ boxShadow: isActive ? '0 4px 18px rgba(37,99,235,0.45)' : '0 4px 12px rgba(0,0,0,0.18)' }}>
-                  <Icon className="w-5 h-5 text-white" />
-                </span>
-                <span className={`text-[9px] font-semibold leading-none mt-1 ${isActive ? 'text-brand-600' : 'text-slate-400'}`}>
-                  {label}
-                </span>
-              </>
-            )}
-          </NavLink>
-        ) : (
-          /* Regular flat tab */
-          <NavLink key={to} to={to} end
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${isActive ? 'text-brand-600' : 'text-slate-400'}`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className={`flex items-center justify-center w-10 h-6 rounded-full transition-all duration-200 ${isActive ? 'bg-brand-100' : ''}`}>
-                  <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-brand-600 scale-110' : 'text-slate-400'}`} />
-                </span>
-                <span className={`text-[9px] font-semibold leading-none ${isActive ? 'text-brand-600' : 'text-slate-400'}`}>
-                  {label}
-                </span>
-              </>
-            )}
-          </NavLink>
-        );
-      })}
+    <div className="flex justify-around items-end px-1 pt-2 pb-2">
+      {items.map(({ label, icon: Icon, to }) => (
+        <NavLink key={to} to={to} end
+          className={({ isActive }) =>
+            `flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${isActive ? 'text-brand-600' : 'text-slate-400'}`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <span className={`flex items-center justify-center w-10 h-6 rounded-full transition-all duration-200 ${isActive ? 'bg-brand-100' : ''}`}>
+                <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-brand-600 scale-110' : 'text-slate-400'}`} />
+              </span>
+              <span className={`text-[9px] font-semibold leading-none ${isActive ? 'text-brand-600' : 'text-slate-400'}`}>
+                {label}
+              </span>
+            </>
+          )}
+        </NavLink>
+      ))}
     </div>
   </nav>
 );

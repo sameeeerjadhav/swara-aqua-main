@@ -28,6 +28,24 @@ export const createCasualDelivery = async (req: AuthRequest, res: Response): Pro
       [staffId, person_name, phone, Number(quantity), Number(amount_collected), payment_mode, notes]
     );
 
+    // ── Cash tracking: add to staff cash-in-hand via transactions table ───────
+    // Only for cash payments with a non-zero amount.
+    // customer_id is NOT NULL in the schema; use staffId as placeholder since
+    // casual deliveries have no registered customer but the cash is held by staff.
+    if (payment_mode === 'cash' && Number(amount_collected) > 0) {
+      await pool.query(
+        `INSERT INTO transactions
+           (customer_id, order_id, amount, mode, type, status, note, collected_by)
+         VALUES (?, NULL, ?, 'cash', 'credit', 'pending', ?, ?)`,
+        [
+          staffId,  // placeholder — no registered customer
+          Number(amount_collected),
+          `Casual delivery — ${Number(quantity)} jar${Number(quantity) > 1 ? 's' : ''}${person_name ? ` to ${person_name}` : ''}`,
+          staffId,
+        ]
+      );
+    }
+
     res.status(201).json({
       message: 'Casual delivery recorded',
       id: result.insertId,

@@ -7,28 +7,38 @@ import { StaffInventory } from './staff/StaffInventory';
 import { StaffCasualDeliveries } from './staff/StaffCasualDeliveries';
 import { StaffCustomers } from './staff/StaffCustomers';
 import { ProfilePage } from './shared/ProfilePage';
+import { LanguageProvider, useLang } from '../context/LanguageContext';
+import { t } from '../i18n/staff';
 
-const NAV = [
-  { label: 'Deliveries', icon: ClipboardList,   to: '/staff/deliveries' },
-  { label: 'Customers',  icon: Users,           to: '/staff/customers' },
-  { label: 'Dashboard',  icon: LayoutDashboard, to: '/staff' },
-  { label: 'Casual',     icon: UserRound,       to: '/staff/casual' },
-  { label: 'Inventory',  icon: Warehouse,       to: '/staff/inventory' },
+const NAV_ITEMS = [
+  { key: 'nav_deliveries' as const, icon: ClipboardList,   to: '/staff/deliveries' },
+  { key: 'nav_customers'  as const, icon: Users,           to: '/staff/customers' },
+  { key: 'nav_dashboard'  as const, icon: LayoutDashboard, to: '/staff' },
+  { key: 'nav_casual'     as const, icon: UserRound,       to: '/staff/casual' },
+  { key: 'nav_inventory'  as const, icon: Warehouse,       to: '/staff/inventory' },
 ];
 
-const TITLES: Record<string, string> = {
-  '/staff':             'Dashboard',
-  '/staff/deliveries':  'Deliveries',
-  '/staff/customers':   'Customers',
-  '/staff/casual':      'Casual Deliveries',
-  '/staff/inventory':   'Inventory',
-  '/staff/profile':     'Profile',
+const TITLE_KEYS: Record<string, string> = {
+  '/staff':            'Dashboard',
+  '/staff/deliveries': 'Deliveries',
+  '/staff/customers':  'Customers',
+  '/staff/casual':     'Casual Deliveries',
+  '/staff/inventory':  'Inventory',
+  '/staff/profile':    'Profile',
 };
 
-export default function StaffDashboard() {
+function StaffDashboardInner() {
   const { pathname } = useLocation();
+  const { lang } = useLang();
+
+  const navItems = NAV_ITEMS.map(({ key, icon, to }) => ({
+    label: t(key, lang),
+    icon,
+    to,
+  }));
+
   return (
-    <DashboardLayout navItems={NAV} title={TITLES[pathname] || 'Dashboard'}>
+    <DashboardLayout navItems={navItems} title={TITLE_KEYS[pathname] || 'Dashboard'}>
       <Routes>
         <Route index element={<StaffHome />} />
         <Route path="deliveries" element={<StaffDeliveries />} />
@@ -39,5 +49,13 @@ export default function StaffDashboard() {
         <Route path="*"          element={<Navigate to="/staff" replace />} />
       </Routes>
     </DashboardLayout>
+  );
+}
+
+export default function StaffDashboard() {
+  return (
+    <LanguageProvider>
+      <StaffDashboardInner />
+    </LanguageProvider>
   );
 }

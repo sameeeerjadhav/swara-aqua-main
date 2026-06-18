@@ -10,6 +10,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ordersApi, Order } from '../../api/orders';
 import { useSSE } from '../../hooks/useSSE';
+import { useLang } from '../../context/LanguageContext';
+import { t } from '../../i18n/staff';
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 16 },
@@ -30,6 +32,7 @@ interface DailySummary {
 export const StaffHome = () => {
   const { user }  = useAuth();
   const navigate  = useNavigate();
+  const { lang }  = useLang();
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [pending, setPending] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,12 +60,16 @@ export const StaffHome = () => {
 
   const firstName = user?.name?.split(' ')[0] ?? 'Staff';
   const now = new Date();
-  const timeOfDay = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
-  const today = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  const timeOfDay = now.getHours() < 12
+    ? t('good_morning', lang)
+    : now.getHours() < 17
+      ? t('good_afternoon', lang)
+      : t('good_evening', lang);
+  const today = now.toLocaleDateString(lang === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const stats = [
     {
-      label: 'Delivered',
+      label: t('delivered', lang),
       value: summary?.deliveries_done ?? 0,
       icon: CheckCircle2,
       from: 'from-emerald-500', to: 'to-green-400',
@@ -70,7 +77,7 @@ export const StaffHome = () => {
       href: '/staff/deliveries',
     },
     {
-      label: 'Jars Out',
+      label: t('jars_out', lang),
       value: summary?.jars_delivered ?? 0,
       icon: Droplets,
       from: 'from-brand-500', to: 'to-aqua-400',
@@ -78,7 +85,7 @@ export const StaffHome = () => {
       href: '/staff/inventory',
     },
     {
-      label: 'Collected',
+      label: t('collected', lang),
       value: `₹${Number(summary?.cash_collected ?? 0).toLocaleString('en-IN')}`,
       icon: IndianRupee,
       from: 'from-amber-500', to: 'to-orange-400',
@@ -86,7 +93,7 @@ export const StaffHome = () => {
       href: '/staff/deliveries',
     },
     {
-      label: 'Pending',
+      label: t('pending', lang),
       value: summary?.pending_orders ?? 0,
       icon: Clock,
       from: 'from-purple-500', to: 'to-indigo-400',
@@ -117,7 +124,7 @@ export const StaffHome = () => {
             </h1>
             <p className="text-white/50 text-xs mt-2 flex items-center gap-1.5">
               <Zap className="w-3 h-3 text-amber-300" />
-              Ready for today's deliveries
+              {t('ready_today', lang)}
             </p>
           </div>
 
@@ -136,7 +143,7 @@ export const StaffHome = () => {
         {!loading && summary && (summary.deliveries_done + summary.pending_orders) > 0 && (
           <div className="relative z-10 px-6 pb-5">
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] text-white/50 font-semibold">Today's progress</p>
+              <p className="text-[10px] text-white/50 font-semibold">{t('todays_progress', lang)}</p>
               <p className="text-[10px] text-white/70 font-bold">
                 {summary.deliveries_done} / {summary.deliveries_done + summary.pending_orders}
               </p>
@@ -186,12 +193,12 @@ export const StaffHome = () => {
             <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
             <div className="flex items-center gap-2 mb-3">
               <Package className="w-4 h-4 text-white/70" />
-              <p className="text-[11px] font-bold text-white/70 uppercase tracking-wide">Jars with you</p>
+              <p className="text-[11px] font-bold text-white/70 uppercase tracking-wide">{t('jars_with_you', lang)}</p>
             </div>
             <p className="text-4xl font-extrabold text-white leading-none">{summary.assigned_jars}</p>
             <p className="text-white/50 text-[11px] mt-2 flex items-center gap-1">
               <Droplets className="w-3 h-3" />
-              {summary.empty_collected} empties back
+              {summary.empty_collected} {t('empties_back', lang)}
             </p>
           </div>
 
@@ -202,14 +209,14 @@ export const StaffHome = () => {
             <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
             <div className="flex items-center gap-2 mb-3">
               <IndianRupee className="w-4 h-4 text-white/70" />
-              <p className="text-[11px] font-bold text-white/70 uppercase tracking-wide">Cash in hand</p>
+              <p className="text-[11px] font-bold text-white/70 uppercase tracking-wide">{t('cash_in_hand', lang)}</p>
             </div>
             <p className="text-3xl font-extrabold text-white leading-none">
               ₹{Number(summary.cash_in_hand).toLocaleString('en-IN')}
             </p>
             <p className="text-white/50 text-[11px] mt-2 flex items-center gap-1">
               <Clock className="w-3 h-3" />
-              Pending submission
+              {t('pending_submission', lang)}
             </p>
           </div>
         </motion.div>
@@ -220,14 +227,14 @@ export const StaffHome = () => {
 
         <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-xs font-bold text-slate-700">Assigned Orders</p>
+            <p className="text-xs font-bold text-slate-700">{t('assigned_orders', lang)}</p>
             {!loading && (
-              <p className="text-[10px] text-slate-400 mt-0.5">{pending.length} awaiting delivery</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{pending.length} {t('awaiting_delivery', lang)}</p>
             )}
           </div>
           <button onClick={() => navigate('/staff/deliveries')}
             className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
-            View all <ArrowRight className="w-3.5 h-3.5" />
+            {t('view_all', lang)} <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -240,8 +247,8 @@ export const StaffHome = () => {
             <div className="w-14 h-14 bg-gradient-to-br from-green-100 to-emerald-50 rounded-3xl flex items-center justify-center mx-auto mb-3">
               <CheckCircle2 className="w-7 h-7 text-green-500" />
             </div>
-            <p className="text-sm font-bold text-slate-700">All caught up! 🎉</p>
-            <p className="text-xs text-slate-400 mt-1">No pending deliveries assigned to you.</p>
+            <p className="text-sm font-bold text-slate-700">{t('all_caught_up', lang)}</p>
+            <p className="text-xs text-slate-400 mt-1">{t('no_pending_deliveries', lang)}</p>
           </div>
         ) : (
           <div className="space-y-2.5">

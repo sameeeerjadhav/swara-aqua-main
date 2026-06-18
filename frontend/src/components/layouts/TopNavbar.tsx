@@ -5,6 +5,7 @@ import { Bell, Search, ChevronDown, LogOut, User, CheckCheck, MapPin, Wallet } f
 import { useAuth } from '../../context/AuthContext';
 import { useNotificationCenter } from '../../context/NotificationContext';
 import { addressApi, type UserAddress } from '../../api/address';
+import { useLang } from '../../context/LanguageContext';
 
 export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress?: () => void }) => {
   const { user, logout } = useAuth();
@@ -18,6 +19,10 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
     unregisterPush,
   } = useNotificationCenter();
   const isCustomer = user?.role === 'customer';
+  const isStaff    = user?.role === 'staff';
+
+  // useLang() is always safe — LanguageContext has a no-op default outside LanguageProvider
+  const { lang, toggleLang } = useLang();
 
   // Derive profile path from user role
   const profilePath = user?.role === 'admin'
@@ -297,6 +302,17 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Language toggle — staff only */}
+          {isStaff && (
+            <button
+              onPointerDown={e => { e.stopPropagation(); toggleLang(); }}
+              className="flex items-center justify-center h-8 px-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors text-xs font-bold text-slate-600"
+              title={lang === 'en' ? 'Switch to Marathi' : 'English वर बदला'}
+            >
+              {lang === 'en' ? 'मर' : 'EN'}
+            </button>
+          )}
+
           {/* Search */}
           <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 w-48 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10 transition-all">
             <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />

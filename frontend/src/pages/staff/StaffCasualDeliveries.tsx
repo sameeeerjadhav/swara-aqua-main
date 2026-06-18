@@ -8,6 +8,8 @@ import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import api from '../../api/axios';
+import { useLang } from '../../context/LanguageContext';
+import { t } from '../../i18n/staff';
 
 interface CasualDelivery {
   id: number;
@@ -43,6 +45,7 @@ const defaultForm = {
 
 const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
   const { toast } = useToast();
+  const { lang }  = useLang();
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
 
@@ -75,23 +78,20 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
     <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-5 space-y-4">
       <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
         <Plus className="w-4 h-4 text-brand-500" />
-        Record Casual Jar Delivery
+        {t('record_casual', lang)}
       </h3>
 
       {/* Info banner */}
       <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
         <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-700">
-          Use this form to log jars given to walk-in or casual customers who are <strong>not registered</strong> in the system.
-          Name and phone are optional but help with tracking.
-        </p>
+        <p className="text-xs text-amber-700">{t('casual_info', lang)}</p>
       </div>
 
       {/* Name + Phone row */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-            Person Name <span className="text-slate-300">(optional)</span>
+            {t('person_name', lang)} <span className="text-slate-300">{t('optional', lang)}</span>
           </label>
           <div className="relative">
             <UserRound className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
@@ -105,7 +105,7 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-            Phone <span className="text-slate-300">(optional)</span>
+            {t('phone', lang)} <span className="text-slate-300">{t('optional', lang)}</span>
           </label>
           <div className="relative">
             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
@@ -123,7 +123,7 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-            Jars *
+            {t('jars', lang)} *
           </label>
           <div className="relative">
             <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
@@ -136,7 +136,7 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-            Amount (₹)
+            {t('amount', lang)} (₹)
           </label>
           <div className="relative">
             <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
@@ -150,13 +150,13 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-            Payment
+            {t('payment', lang)}
           </label>
           <select value={form.payment_mode} onChange={e => set('payment_mode', e.target.value as any)}
             className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-brand-400 transition-all">
-            <option value="cash">Cash</option>
-            <option value="online">Online</option>
-            <option value="credit">Credit</option>
+            <option value="cash">{t('cash', lang)}</option>
+            <option value="online">{t('online', lang)}</option>
+            <option value="credit">{t('credit', lang)}</option>
           </select>
         </div>
       </div>
@@ -164,7 +164,7 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
       {/* Notes */}
       <div>
         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-          Notes <span className="text-slate-300">(optional)</span>
+          {t('notes', lang)} <span className="text-slate-300">{t('optional', lang)}</span>
         </label>
         <div className="relative">
           <StickyNote className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-300" />
@@ -179,8 +179,7 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
       </div>
 
       <Button loading={saving} icon={<Check className="w-4 h-4" />} onClick={handleSubmit}
-        className="w-full">
-        Save Record
+        className="w-full">{t('save_record', lang)}
       </Button>
     </div>
   );
@@ -190,6 +189,7 @@ const LogForm = ({ onSuccess }: { onSuccess: () => void }) => {
 
 export const StaffCasualDeliveries = () => {
   const { toast } = useToast();
+  const { lang }  = useLang();
   const [records,  setRecords]  = useState<CasualDelivery[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -226,14 +226,14 @@ export const StaffCasualDeliveries = () => {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Casual Deliveries</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Jars given to walk-in / non-registered persons</p>
+          <h2 className="text-lg font-bold text-slate-900">{t('casual_title', lang)}</h2>
+          <p className="text-xs text-slate-400 mt-0.5">{t('casual_subtitle', lang)}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>Refresh</Button>
+          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>{t('refresh', lang)}</Button>
           <Button size="sm" icon={showForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             onClick={() => setShowForm(v => !v)}>
-            {showForm ? 'Cancel' : 'Log Delivery'}
+            {showForm ? t('cancel', lang) : t('log_delivery', lang)}
           </Button>
         </div>
       </div>
@@ -242,9 +242,9 @@ export const StaffCasualDeliveries = () => {
       {records.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Records', value: records.length },
-            { label: 'Total Jars',    value: totalJars },
-            { label: 'Total Collected', value: `₹${totalAmount.toFixed(0)}` },
+            { label: t('total_records', lang), value: records.length },
+            { label: t('total_jars', lang),    value: totalJars },
+            { label: t('total_collected', lang), value: `₹${totalAmount.toFixed(0)}` },
           ].map(({ label, value }) => (
             <div key={label} className="bg-white rounded-2xl border border-slate-100 shadow-card p-3.5 text-center">
               <p className="text-[10px] text-slate-400 font-medium">{label}</p>
@@ -277,8 +277,8 @@ export const StaffCasualDeliveries = () => {
           <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
             <UserRound className="w-7 h-7 text-slate-300" />
           </div>
-          <p className="text-sm font-bold text-slate-600">No casual deliveries yet</p>
-          <p className="text-xs text-slate-400 mt-1">Tap "Log Delivery" to record a jar given to a walk-in person.</p>
+          <p className="text-sm font-bold text-slate-600">{t('no_casual', lang)}</p>
+          <p className="text-xs text-slate-400 mt-1">{t('no_casual_hint', lang)}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -298,7 +298,7 @@ export const StaffCasualDeliveries = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-bold text-slate-800">
-                      {rec.person_name || <span className="text-slate-400 font-medium italic">Unknown Person</span>}
+                      {rec.person_name || <span className="text-slate-400 font-medium italic">{t('unknown_person', lang)}</span>}
                     </p>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${PM_COLORS[rec.payment_mode]}`}>
                       {PM_LABELS[rec.payment_mode]}

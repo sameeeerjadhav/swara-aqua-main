@@ -445,12 +445,12 @@ export const StaffCustomers = () => {
             <motion.div key={c.id}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
-              className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
+              className="bg-white rounded-2xl border border-slate-100 shadow-sm"
             >
               {/* Main row — click to open profile */}
               <div
                 onClick={() => setProfiled(c)}
-                className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors"
+                className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors rounded-2xl"
               >
                 {/* Avatar */}
                 <div className="w-12 h-12 bg-gradient-to-br from-brand-500 to-aqua-400 rounded-2xl flex items-center justify-center text-white font-extrabold text-lg shrink-0 shadow-sm">
@@ -482,22 +482,23 @@ export const StaffCustomers = () => {
                   </div>
                 </div>
 
-                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                {/* Right actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {c.address && (
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 active:scale-95 transition-all"
+                      title="Navigate"
+                    >
+                      <Navigation className="w-4 h-4" />
+                    </a>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                </div>
               </div>
-
-              {/* Navigate strip */}
-              {c.address && (
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  className="flex items-center justify-center gap-1.5 py-2 border-t border-slate-100 bg-slate-50 text-xs font-bold text-brand-600 hover:bg-brand-50 active:bg-brand-100 transition-colors"
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                  Navigate
-                </a>
-              )}
             </motion.div>
           ))}
         </div>

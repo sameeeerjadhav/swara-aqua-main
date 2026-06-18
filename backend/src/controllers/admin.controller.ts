@@ -543,8 +543,8 @@ export const getCustomersForStaff = async (_req: AuthRequest, res: Response): Pr
         u.phone,
         u.jar_rate,
         u.pending_balance,
-        (SELECT a.address FROM addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address,
-        (SELECT a.label   FROM addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label
+        (SELECT a.address FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address,
+        (SELECT a.label   FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label
       FROM users u
       WHERE u.role = 'customer' AND u.status = 'active'
       ORDER BY u.name ASC

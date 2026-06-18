@@ -417,7 +417,7 @@ export const staffDirectDelivery = async (req: AuthRequest, res: Response): Prom
     // Fetch customer details (name, jar_rate, address)
     const [custRows] = await pool.query<RowDataPacket[]>(
       `SELECT id, name, phone, jar_rate,
-              (SELECT address FROM addresses WHERE user_id = users.id AND is_default = 1 LIMIT 1) AS address
+              (SELECT address FROM user_addresses WHERE user_id = users.id AND is_default = 1 LIMIT 1) AS address
        FROM users WHERE id = ? AND role = 'customer' AND status = 'active'`,
       [customerId]
     );

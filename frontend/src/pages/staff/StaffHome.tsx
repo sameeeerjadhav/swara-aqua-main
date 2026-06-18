@@ -67,6 +67,7 @@ export const StaffHome = () => {
       icon: CheckCircle2,
       from: 'from-emerald-500', to: 'to-green-400',
       glow: 'rgba(16,185,129,0.35)',
+      href: '/staff/deliveries',
     },
     {
       label: 'Jars Out',
@@ -74,6 +75,7 @@ export const StaffHome = () => {
       icon: Droplets,
       from: 'from-brand-500', to: 'to-aqua-400',
       glow: 'rgba(37,99,235,0.35)',
+      href: '/staff/inventory',
     },
     {
       label: 'Collected',
@@ -81,6 +83,7 @@ export const StaffHome = () => {
       icon: IndianRupee,
       from: 'from-amber-500', to: 'to-orange-400',
       glow: 'rgba(245,158,11,0.35)',
+      href: '/staff/deliveries',
     },
     {
       label: 'Pending',
@@ -88,6 +91,7 @@ export const StaffHome = () => {
       icon: Clock,
       from: 'from-purple-500', to: 'to-indigo-400',
       glow: 'rgba(139,92,246,0.35)',
+      href: '/staff/deliveries',
     },
   ];
 
@@ -154,11 +158,12 @@ export const StaffHome = () => {
         {loading ? (
           [0,1,2,3].map(i => <Skeleton key={i} className="h-28 rounded-3xl" />)
         ) : (
-          stats.map(({ label, value, icon: Icon, from, to, glow }, i) => (
+          stats.map(({ label, value, icon: Icon, from, to, glow, href }, i) => (
             <motion.div key={label}
               initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.07, duration: 0.3 }}
-              className="bg-white rounded-3xl border border-slate-100 shadow-card p-4 flex flex-col gap-2">
+              onClick={() => navigate(href)}
+              className="bg-white rounded-3xl border border-slate-100 shadow-card p-4 flex flex-col gap-2 cursor-pointer hover:shadow-md hover:border-slate-200 active:scale-[0.97] transition-all">
               <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${from} ${to} flex items-center justify-center`}
                 style={{ boxShadow: `0 4px 14px ${glow}` }}>
                 <Icon className="w-5 h-5 text-white" />
@@ -174,8 +179,10 @@ export const StaffHome = () => {
       {!loading && summary && (
         <motion.div {...fadeUp(0.22)} className="grid grid-cols-2 gap-3">
 
-          {/* Jars with you */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-aqua-500 p-4">
+          {/* Jars with you — click → inventory */}
+          <div
+            onClick={() => navigate('/staff/inventory')}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-aqua-500 p-4 cursor-pointer active:scale-[0.97] transition-all">
             <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
             <div className="flex items-center gap-2 mb-3">
               <Package className="w-4 h-4 text-white/70" />
@@ -188,8 +195,10 @@ export const StaffHome = () => {
             </p>
           </div>
 
-          {/* Cash in hand */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-400 p-4">
+          {/* Cash in hand — click → deliveries */}
+          <div
+            onClick={() => navigate('/staff/deliveries')}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-400 p-4 cursor-pointer active:scale-[0.97] transition-all">
             <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
             <div className="flex items-center gap-2 mb-3">
               <IndianRupee className="w-4 h-4 text-white/70" />

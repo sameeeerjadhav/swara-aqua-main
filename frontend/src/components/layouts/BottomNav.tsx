@@ -246,8 +246,39 @@ const AdminBottomNav = ({ items }: { items: NavItem[] }) => {
   );
 };
 
+// ── Staff bottom nav — all 5 items flat, no More button ─────────────────────
+const StaffBottomNav = ({ items }: { items: NavItem[] }) => (
+  <nav
+    className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-[0_-1px_12px_rgba(0,0,0,0.06)]"
+    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+  >
+    <div className="flex justify-around items-end px-1 pt-2 pb-2">
+      {items.map(({ label, icon: Icon, to }) => (
+        <NavLink key={to} to={to} end
+          className={({ isActive }) =>
+            `flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${isActive ? 'text-brand-600' : 'text-slate-400'}`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <span className={`flex items-center justify-center w-10 h-6 rounded-full transition-all duration-200 ${isActive ? 'bg-brand-100' : ''}`}>
+                <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-brand-600 scale-110' : 'text-slate-400'}`} />
+              </span>
+              <span className={`text-[9px] font-semibold leading-none ${isActive ? 'text-brand-600' : 'text-slate-400'}`}>
+                {label}
+              </span>
+            </>
+          )}
+        </NavLink>
+      ))}
+    </div>
+  </nav>
+);
+
 export const BottomNav = ({ items, onOrderPress }: Props) => {
   // Customer always has an onOrderPress FAB; admin does not
   if (onOrderPress) return <SimpleBottomNav items={items} onOrderPress={onOrderPress} />;
+  // Staff: 5 items, show all flat without More overflow
+  if (items.length <= 5 && items.every(i => !i.to.startsWith('/admin'))) return <StaffBottomNav items={items} />;
   return <AdminBottomNav items={items} />;
 };

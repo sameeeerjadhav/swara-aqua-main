@@ -9,11 +9,11 @@ import { StaffCustomers } from './staff/StaffCustomers';
 import { ProfilePage } from './shared/ProfilePage';
 
 const NAV = [
-  { label: 'Dashboard',         icon: LayoutDashboard, to: '/staff' },
-  { label: 'Deliveries',        icon: ClipboardList,   to: '/staff/deliveries' },
-  { label: 'Customers',         icon: Users,           to: '/staff/customers' },
-  { label: 'Casual Deliveries', icon: UserRound,       to: '/staff/casual' },
-  { label: 'Inventory',         icon: Warehouse,       to: '/staff/inventory' },
+  { label: 'Dashboard',  icon: LayoutDashboard, to: '/staff' },
+  { label: 'Deliveries', icon: ClipboardList,   to: '/staff/deliveries' },
+  { label: 'Customers',  icon: Users,           to: '/staff/customers' },
+  { label: 'Casual',     icon: UserRound,       to: '/staff/casual' },
+  { label: 'Inventory',  icon: Warehouse,       to: '/staff/inventory' },
 ];
 
 const TITLES: Record<string, string> = {

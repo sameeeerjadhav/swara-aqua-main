@@ -532,3 +532,26 @@ export const updateSetting = async (req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+// ── Customer list for Staff (staff need to see all customers for direct delivery) ──
+export const getCustomersForStaff = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        u.id,
+        u.name,
+        u.phone,
+        u.jar_rate,
+        u.pending_balance,
+        (SELECT a.address FROM addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address,
+        (SELECT a.label   FROM addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label
+      FROM users u
+      WHERE u.role = 'customer' AND u.status = 'active'
+      ORDER BY u.name ASC
+    `);
+    res.json({ customers: rows });
+  } catch (err) {
+    console.error('getCustomersForStaff error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};

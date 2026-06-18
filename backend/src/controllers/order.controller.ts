@@ -397,6 +397,128 @@ export const getStaffList = async (_req: AuthRequest, res: Response): Promise<vo
 
 // ── Deliveries ────────────────────────────────────────────────────────────────
 
+// ── Staff Direct Delivery (staff visits customer without prior order) ─────────
+// Creates an instant order for the customer + immediately completes it atomically.
+export const staffDirectDelivery = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { customerId, quantity, paymentMode, collectedAmount, notes } = req.body;
+
+    if (!customerId || !quantity || !paymentMode || collectedAmount == null) {
+      res.status(400).json({ message: 'customerId, quantity, paymentMode, collectedAmount are required' });
+      return;
+    }
+    if (!['cash', 'online', 'advance', 'pay_later'].includes(paymentMode)) {
+      res.status(400).json({ message: 'Invalid paymentMode' }); return;
+    }
+    if (req.user!.role !== 'staff' && req.user!.role !== 'admin') {
+      res.status(403).json({ message: 'Only staff can record direct deliveries' }); return;
+    }
+
+    // Fetch customer details (name, jar_rate, address)
+    const [custRows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, name, phone, jar_rate,
+              (SELECT address FROM addresses WHERE user_id = users.id AND is_default = 1 LIMIT 1) AS address
+       FROM users WHERE id = ? AND role = 'customer' AND status = 'active'`,
+      [customerId]
+    );
+    if (!custRows.length) {
+      res.status(404).json({ message: 'Customer not found or not active' }); return;
+    }
+    const customer = custRows[0];
+    const pricePerJar = Number(customer.jar_rate) || DEFAULT_PRICE;
+    const totalAmount = pricePerJar * Number(quantity);
+
+    // 1. Create a direct order on behalf of the customer
+    const orderId = await OrderModel.createOrder(Number(customerId), {
+      type:        'instant',
+      quantity:    Number(quantity),
+      pricePerJar,
+      notes:       notes ? `[Staff Direct] ${notes}` : '[Staff Direct Delivery]',
+      address:     customer.address || undefined,
+    });
+
+    // 2. Assign immediately to the delivering staff member
+    await pool.query(
+      `UPDATE orders SET staff_id = ?, status = 'assigned', updated_at = NOW() WHERE id = ?`,
+      [req.user!.id, orderId]
+    );
+
+    // 3. Create the delivery record
+    await OrderModel.createDelivery({
+      orderId,
+      staffId:           req.user!.id,
+      deliveredQuantity: Number(quantity),
+      collectedAmount:   Number(collectedAmount),
+      paymentMode,
+      notes: notes || undefined,
+    });
+
+    // 4. Mark order completed
+    await OrderModel.updateOrderStatus(orderId, 'completed', req.user!.id);
+
+    // 5. Update inventory
+    await Inv.recordDeliveryInventory(req.user!.id, Number(quantity), orderId);
+
+    // 6. Financial transaction
+    if (paymentMode !== 'pay_later') {
+      await Inv.createTransaction({
+        customerId:  Number(customerId),
+        orderId,
+        amount:      Number(collectedAmount),
+        mode:        paymentMode,
+        type:        'credit',
+        collectedBy: req.user!.id,
+      });
+    } else {
+      await pool.query(
+        `INSERT INTO pending_payments (customer_id, order_id, amount) VALUES (?, ?, ?)`,
+        [customerId, orderId, totalAmount]
+      );
+      await pool.query(
+        'UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?',
+        [totalAmount, customerId]
+      );
+    }
+
+    // 7. Notify customer
+    const notifBody = paymentMode === 'pay_later'
+      ? `${quantity} jars delivered. Payment of ₹${totalAmount} is pending.`
+      : `${quantity} jars delivered. Amount collected: ₹${collectedAmount}.`;
+
+    notify(() =>
+      NotifService.sendToUser({
+        userId: Number(customerId),
+        title:  paymentMode === 'pay_later' ? 'Jars Delivered — Payment Pending 💳' : 'Jars Delivered! 🎉',
+        body:   notifBody,
+        type:   'delivery',
+        data:   { orderId: String(orderId) },
+      })
+    );
+
+    // 8. SSE
+    SSE.sendToUser(Number(customerId), 'order_status_changed', { orderId, status: 'completed' });
+    SSE.broadcastToRoles(['admin', 'staff'], 'delivery_completed', { orderId, staffId: req.user!.id });
+
+    // 9. Billing sync
+    const month = new Date().toISOString().slice(0, 7);
+    const syncAmt = paymentMode === 'pay_later' ? totalAmount : Number(collectedAmount);
+    BillingModel.syncDeliveryToBill(Number(customerId), month, paymentMode, syncAmt)
+      .catch(e => console.warn('[Billing] syncDeliveryToBill (direct) failed:', e?.message));
+
+    res.status(201).json({
+      message: 'Direct delivery recorded successfully',
+      orderId,
+      customer: customer.name,
+      quantity: Number(quantity),
+      amount:   Number(collectedAmount),
+      mode:     paymentMode,
+    });
+  } catch (err) {
+    console.error('staffDirectDelivery error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
 export const completeDelivery = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { orderId, deliveredQuantity, collectedAmount, paymentMode, notes } = req.body;

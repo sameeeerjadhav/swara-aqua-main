@@ -105,4 +105,35 @@ export const ordersApi = {
   }) => api.post<{ message: string; orderId: number; amount: number }>(
     `/orders/${orderId}/pay/verify`, data
   ),
+
+  // ── Staff Direct Delivery ─────────────────────────────────────────────────
+  staffDirectDelivery: (data: {
+    customerId: number;
+    quantity: number;
+    paymentMode: 'cash' | 'online' | 'advance' | 'pay_later';
+    collectedAmount: number;
+    notes?: string;
+  }) => api.post<{
+    message: string;
+    orderId: number;
+    customer: string;
+    quantity: number;
+    amount: number;
+    mode: string;
+  }>('/orders/staff-direct', data),
+};
+
+export interface CustomerForStaff {
+  id: number;
+  name: string;
+  phone: string;
+  jar_rate: number;
+  pending_balance: number;
+  address: string | null;
+  address_label: string | null;
+}
+
+export const staffApi = {
+  getCustomersList: () =>
+    api.get<{ customers: CustomerForStaff[] }>('/admin/customers-list'),
 };

@@ -4,8 +4,9 @@ import {
   createOrder, getOrders, getOrderById, cancelOrder,
   assignOrder, updateOrderStatus, getOrderStats, getStaffList,
   completeDelivery, getDeliveries, getCalendarData, getDailySummary,
-  createOrderPayment, verifyOrderPayment,
+  createOrderPayment, verifyOrderPayment, staffDirectDelivery,
 } from '../controllers/order.controller';
+
 
 const router = Router();
 
@@ -16,6 +17,7 @@ router.get('/deliveries',  authenticate, getDeliveries);     // staff + admin
 router.post('/deliveries', authenticate, completeDelivery);  // staff
 router.get('/calendar',      authenticate, getCalendarData);   // customer + admin
 router.get('/daily-summary', authenticate, getDailySummary);   // staff + admin
+router.post('/staff-direct', authenticate, staffDirectDelivery); // staff direct delivery
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 router.post('/',           authenticate,  createOrder);       // customer

@@ -10,6 +10,8 @@ import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { ordersApi, staffApi, CustomerForStaff } from '../../api/orders';
+import { useLang } from '../../context/LanguageContext';
+import { t } from '../../i18n/staff';
 
 type PaymentMode = 'cash' | 'online' | 'pay_later';
 
@@ -108,6 +110,7 @@ const DeliverySheet = ({
   onSuccess: (data: { customer: string; quantity: number; amount: number; mode: string; orderId: number }) => void;
 }) => {
   const { toast } = useToast();
+  const { lang }  = useLang();
   const jarRate = Number(customer.jar_rate) || 50;
   const [quantity, setQuantity]     = useState(1);
   const [mode, setMode]             = useState<PaymentMode>('cash');
@@ -181,7 +184,7 @@ const DeliverySheet = ({
         <form onSubmit={handleSubmit} className="px-5 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
           {/* Quantity */}
           <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Jars Delivered</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">{t('jars_delivered', lang)}</label>
             <div className="flex items-center gap-4">
               <button type="button" onClick={() => updateQty(quantity - 1)}
                 className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 text-xl font-bold flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all">−</button>
@@ -196,13 +199,13 @@ const DeliverySheet = ({
 
           {/* Payment mode */}
           <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Payment Mode</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">{t('payment_mode', lang)}</label>
             <div className="grid grid-cols-3 gap-2">
               {MODE_OPTIONS.map(opt => (
                 <button key={opt.id} type="button" onClick={() => updateMode(opt.id)}
                   className={`py-2.5 px-2 rounded-2xl border-2 text-xs font-bold transition-all text-center
                     ${mode === opt.id ? `${opt.bg} ${opt.color} shadow-sm` : 'bg-white border-slate-200 text-slate-500'}`}>
-                  {opt.label}
+                  {opt.id === 'cash' ? t('cash', lang) : opt.id === 'online' ? t('online', lang) : t('pay_later', lang)}
                 </button>
               ))}
             </div>
@@ -211,7 +214,7 @@ const DeliverySheet = ({
           {/* Amount */}
           {mode !== 'pay_later' ? (
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Amount Collected (₹)</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">{t('amount_collected', lang)}</label>
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10 transition-all">
                 <IndianRupee className="w-4 h-4 text-slate-400 shrink-0" />
                 <input type="number" min={0} step={0.5} value={amount}
@@ -224,23 +227,23 @@ const DeliverySheet = ({
             <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
               <Clock className="w-4 h-4 text-amber-500 shrink-0" />
               <div>
-                <p className="text-xs font-bold text-amber-800">Pay Later selected</p>
-                <p className="text-xs text-amber-600">₹{quantity * jarRate} will be added to customer's pending balance</p>
+                <p className="text-xs font-bold text-amber-800">{t('pay_later_selected', lang)}</p>
+                <p className="text-xs text-amber-600">₹{quantity * jarRate} {t('pay_later_note', lang)}</p>
               </div>
             </div>
           )}
 
           {/* Notes */}
           <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Notes (optional)</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">{t('notes_optional', lang)}</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="e.g. Left at gate, customer not home..."
+              placeholder={t('notes_ph', lang)}
               rows={2}
               className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all resize-none placeholder-slate-400" />
           </div>
 
           <Button type="submit" loading={submitting} size="lg" className="w-full" icon={<Droplets className="w-4 h-4" />}>
-            Mark Delivered · {quantity} Jar{quantity > 1 ? 's' : ''}
+            {t('mark_delivered', lang)} · {quantity} {lang === 'mr' ? 'जार' : `Jar${quantity > 1 ? 's' : ''}`}
           </Button>
         </form>
       </motion.div>
@@ -255,120 +258,124 @@ const ProfileSheet = ({
   customer: CustomerForStaff;
   onClose: () => void;
   onDeliver: () => void;
-}) => (
-  <>
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-    <motion.div
-      initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-      transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      onClick={e => e.stopPropagation()}
-    >
-      {/* Handle */}
-      <div className="flex justify-center pt-3 pb-1">
-        <div className="w-10 h-1 bg-slate-200 rounded-full" />
-      </div>
-
-      {/* Close */}
-      <div className="flex items-center justify-between px-5 pb-2">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Customer Profile</p>
-        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Avatar + name */}
-      <div className="flex flex-col items-center px-5 pb-5 pt-2 border-b border-slate-100">
-        <div className="w-20 h-20 bg-gradient-to-br from-brand-500 to-aqua-400 rounded-3xl flex items-center justify-center text-white font-extrabold text-3xl shadow-md mb-3">
-          {customer.name.charAt(0).toUpperCase()}
+}) => {
+  const { lang } = useLang();
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 340, damping: 32 }}
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-slate-200 rounded-full" />
         </div>
-        <h3 className="text-xl font-extrabold text-slate-900">{customer.name}</h3>
 
-        {/* Copyable phone */}
-        <div className="mt-2">
-          <CopyPhone phone={customer.phone} />
+        {/* Close */}
+        <div className="flex items-center justify-between px-5 pb-2">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('customer_profile', lang)}</p>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      </div>
 
-      {/* Details */}
-      <div className="px-5 py-4 space-y-3">
-
-        {/* Jar rate */}
-        <div className="flex items-center justify-between bg-brand-50 rounded-2xl px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-brand-600" />
-            <span className="text-sm font-semibold text-brand-800">Jar Rate</span>
+        {/* Avatar + name */}
+        <div className="flex flex-col items-center px-5 pb-5 pt-2 border-b border-slate-100">
+          <div className="w-20 h-20 bg-gradient-to-br from-brand-500 to-aqua-400 rounded-3xl flex items-center justify-center text-white font-extrabold text-3xl shadow-md mb-3">
+            {customer.name.charAt(0).toUpperCase()}
           </div>
-          <span className="text-sm font-extrabold text-brand-700">₹{customer.jar_rate}/jar</span>
+          <h3 className="text-xl font-extrabold text-slate-900">{customer.name}</h3>
+
+          {/* Copyable phone */}
+          <div className="mt-2">
+            <CopyPhone phone={customer.phone} />
+          </div>
         </div>
 
-        {/* Pending balance */}
-        {Number(customer.pending_balance) > 0 && (
-          <div className="flex items-center justify-between bg-red-50 rounded-2xl px-4 py-3">
+        {/* Details */}
+        <div className="px-5 py-4 space-y-3">
+
+          {/* Jar rate */}
+          <div className="flex items-center justify-between bg-brand-50 rounded-2xl px-4 py-3">
             <div className="flex items-center gap-2">
-              <IndianRupee className="w-4 h-4 text-red-500" />
-              <span className="text-sm font-semibold text-red-700">Pending Balance</span>
+              <Package className="w-4 h-4 text-brand-600" />
+              <span className="text-sm font-semibold text-brand-800">{t('jar_rate', lang)}</span>
             </div>
-            <span className="text-sm font-extrabold text-red-600">₹{Number(customer.pending_balance).toLocaleString('en-IN')}</span>
+            <span className="text-sm font-extrabold text-brand-700">₹{customer.jar_rate}{t('per_jar', lang)}</span>
           </div>
-        )}
 
-        {/* Address + Navigate */}
-        {customer.address && (
-          <div className="bg-slate-50 rounded-2xl px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2 flex-1 min-w-0">
-                <MapPin className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  {customer.address_label && (
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{customer.address_label}</p>
-                  )}
-                  <p className="text-sm text-slate-700 font-medium">{customer.address}</p>
-                </div>
+          {/* Pending balance */}
+          {Number(customer.pending_balance) > 0 && (
+            <div className="flex items-center justify-between bg-red-50 rounded-2xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-4 h-4 text-red-500" />
+                <span className="text-sm font-semibold text-red-700">{t('pending_balance', lang)}</span>
               </div>
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(customer.address)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-brand-600 to-aqua-500 px-3 py-2 rounded-xl shadow-sm hover:opacity-90 active:scale-95 transition-all shrink-0"
-              >
-                <Navigation className="w-3.5 h-3.5" />
-                Navigate
-              </a>
+              <span className="text-sm font-extrabold text-red-600">₹{Number(customer.pending_balance).toLocaleString('en-IN')}</span>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* No address — just a navigate by name button */}
-        {!customer.address && (
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customer.name)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 active:scale-95 transition-all"
-          >
-            <Navigation className="w-4 h-4" />
-            Open in Maps
-          </a>
-        )}
-      </div>
+          {/* Address + Navigate */}
+          {customer.address && (
+            <div className="bg-slate-50 rounded-2xl px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <MapPin className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    {customer.address_label && (
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{customer.address_label}</p>
+                    )}
+                    <p className="text-sm text-slate-700 font-medium">{customer.address}</p>
+                  </div>
+                </div>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(customer.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-brand-600 to-aqua-500 px-3 py-2 rounded-xl shadow-sm hover:opacity-90 active:scale-95 transition-all shrink-0"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Navigate
+                </a>
+              </div>
+            </div>
+          )}
 
-      {/* Action buttons */}
-      <div className="px-5 pb-6 pt-1">
-        <Button size="lg" className="w-full" icon={<Droplets className="w-4 h-4" />} onClick={onDeliver}>
-          Deliver Jars
-        </Button>
-      </div>
-    </motion.div>
-  </>
-);
+          {/* No address — just a navigate by name button */}
+          {!customer.address && (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customer.name)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 active:scale-95 transition-all"
+            >
+              <Navigation className="w-4 h-4" />
+              Open in Maps
+            </a>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="px-5 pb-6 pt-1">
+          <Button size="lg" className="w-full" icon={<Droplets className="w-4 h-4" />} onClick={onDeliver}>
+            {t('deliver_jars', lang)}
+          </Button>
+        </div>
+      </motion.div>
+    </>
+  );
+};
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export const StaffCustomers = () => {
   const { toast } = useToast();
+  const { lang }  = useLang();
   const [customers, setCustomers]   = useState<CustomerForStaff[]>([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
@@ -412,11 +419,11 @@ export const StaffCustomers = () => {
         <div className="flex-1 flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-sm focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10 transition-all">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name or phone..."
+            placeholder={t('search', lang)}
             className="flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none" />
         </div>
         <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
-          Refresh
+          {t('refresh', lang)}
         </Button>
       </div>
 
@@ -436,7 +443,7 @@ export const StaffCustomers = () => {
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center">
           <Users className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-sm font-bold text-slate-500">No customers found</p>
+          <p className="text-sm font-bold text-slate-500">{t('no_customers', lang)}</p>
           {search && <p className="text-xs text-slate-400 mt-1">Try a different search term</p>}
         </div>
       ) : (

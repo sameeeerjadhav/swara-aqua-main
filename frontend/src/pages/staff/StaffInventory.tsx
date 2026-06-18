@@ -6,10 +6,13 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { inventoryApi, StaffInventory as SI, InventoryLog, CashSubmission } from '../../api/inventory';
+import { useLang } from '../../context/LanguageContext';
+import { t } from '../../i18n/staff';
 
 export const StaffInventory = () => {
   const { user }  = useAuth();
   const { toast } = useToast();
+  const { lang }  = useLang();
 
   const [myInventory,  setMyInventory]  = useState<SI | null>(null);
   const [logs,         setLogs]         = useState<InventoryLog[]>([]);
@@ -97,10 +100,10 @@ export const StaffInventory = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">My Inventory</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Jars & cash management</p>
+          <h2 className="text-lg font-bold text-slate-900">{t('inventory_title', lang)}</h2>
+          <p className="text-xs text-slate-400 mt-0.5">{lang === 'mr' ? 'जार आणि रोख व्यवस्थापन' : 'Jars & cash management'}</p>
         </div>
-        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>Refresh</Button>
+        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>{t('refresh', lang)}</Button>
       </div>
 
       {/* Inventory cards */}
@@ -111,12 +114,12 @@ export const StaffInventory = () => {
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 shadow-card">
             <span className="text-2xl block mb-2">📦</span>
             <p className="text-3xl font-bold text-blue-700">{myInventory?.assigned_jars ?? 0}</p>
-            <p className="text-xs text-blue-500 font-medium mt-1">Assigned Jars</p>
+            <p className="text-xs text-blue-500 font-medium mt-1">{t('assigned_jars', lang)}</p>
           </div>
           <div className="bg-teal-50 border border-teal-100 rounded-2xl p-5 shadow-card">
             <span className="text-2xl block mb-2">↩️</span>
             <p className="text-3xl font-bold text-teal-700">{myInventory?.empty_collected ?? 0}</p>
-            <p className="text-xs text-teal-500 font-medium mt-1">Empty Collected</p>
+            <p className="text-xs text-teal-500 font-medium mt-1">{t('empty_collected', lang)}</p>
           </div>
         </div>
       )}
@@ -132,10 +135,12 @@ export const StaffInventory = () => {
           <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-white/10" />
           <div className="relative z-10 flex items-center justify-between">
             <div>
-              <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Cash in Hand</p>
+              <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">{t('cash_in_hand', lang)}</p>
               <p className="text-3xl font-bold text-white">₹{cashInHand.toLocaleString('en-IN')}</p>
               <p className="text-white/60 text-xs mt-1">
-                {cashInHand > 0 ? 'Submit to admin at end of day' : 'No cash collected yet'}
+                {cashInHand > 0
+                  ? (lang === 'mr' ? 'दिवसाखेरीस admin कडे जमा करा' : 'Submit to admin at end of day')
+                  : (lang === 'mr' ? 'अद्याप रोख गोळा नाही' : 'No cash collected yet')}
               </p>
             </div>
             <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center">
@@ -150,17 +155,17 @@ export const StaffInventory = () => {
         <button onClick={() => setShowReturn(true)}
           className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-100 shadow-card hover:border-teal-300 hover:bg-teal-50 transition-all">
           <RotateCcw className="w-5 h-5 text-teal-600" />
-          <span className="text-xs font-semibold text-slate-700">Return Empty</span>
+          <span className="text-xs font-semibold text-slate-700">{t('return_empties', lang)}</span>
         </button>
         <button onClick={() => setShowDamaged(true)}
           className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-100 shadow-card hover:border-red-300 hover:bg-red-50 transition-all">
           <AlertTriangle className="w-5 h-5 text-red-500" />
-          <span className="text-xs font-semibold text-slate-700">Report Damage</span>
+          <span className="text-xs font-semibold text-slate-700">{t('report_damaged', lang)}</span>
         </button>
         <button onClick={() => { setShowCash(true); setCashAmount(String(cashInHand)); }} disabled={cashInHand === 0}
           className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border border-slate-100 shadow-card hover:border-amber-300 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
           <IndianRupee className="w-5 h-5 text-amber-600" />
-          <span className="text-xs font-semibold text-slate-700">Submit Cash</span>
+          <span className="text-xs font-semibold text-slate-700">{t('submit_cash', lang)}</span>
         </button>
       </div>
 
@@ -177,7 +182,7 @@ export const StaffInventory = () => {
       {submissions.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-800">Cash Submissions</h3>
+            <h3 className="text-sm font-bold text-slate-800">{t('cash_submitted', lang)}</h3>
           </div>
           <div className="divide-y divide-slate-50">
             {submissions.slice(0, 5).map(s => (
@@ -202,7 +207,7 @@ export const StaffInventory = () => {
       {logs.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-800">Activity Log</h3>
+            <h3 className="text-sm font-bold text-slate-800">{t('activity_log', lang)}</h3>
           </div>
           <div className="divide-y divide-slate-50 max-h-56 overflow-y-auto">
             {logs.map(log => (
@@ -226,10 +231,10 @@ export const StaffInventory = () => {
       {/* Return Empty Modal */}
       <AnimatePresence>
         {showReturn && (
-          <StaffModal title="Return Empty Jars" onClose={() => setShowReturn(false)}>
+          <StaffModal title={lang === 'mr' ? 'रिकामे जार परत करा' : 'Return Empty Jars'} onClose={() => setShowReturn(false)}>
             <form onSubmit={handleReturn} className="space-y-4">
               <p className="text-xs text-slate-500">
-                Empty collected: <span className="font-bold text-teal-600">{myInventory?.empty_collected ?? 0}</span>
+                {lang === 'mr' ? 'रिकामे गोळा:' : 'Empty collected:'} <span className="font-bold text-teal-600">{myInventory?.empty_collected ?? 0}</span>
               </p>
               <FieldInput label="Quantity to Return" value={returnQty}
                 onChange={v => setReturnQty(Math.max(1, v))} max={myInventory?.empty_collected ?? 0} />
@@ -244,7 +249,7 @@ export const StaffInventory = () => {
       {/* Damaged Modal */}
       <AnimatePresence>
         {showDamaged && (
-          <StaffModal title="Report Damaged Jars" onClose={() => setShowDamaged(false)}>
+          <StaffModal title={lang === 'mr' ? 'नुकसानग्रस्त जार नोंदवा' : 'Report Damaged Jars'} onClose={() => setShowDamaged(false)}>
             <form onSubmit={handleDamaged} className="space-y-4">
               <FieldInput label="Damaged Quantity" value={damagedQty}
                 onChange={v => setDamagedQty(Math.max(1, v))} max={myInventory?.assigned_jars ?? 0} />
@@ -266,12 +271,12 @@ export const StaffInventory = () => {
       {/* Cash Submit Modal */}
       <AnimatePresence>
         {showCash && (
-          <StaffModal title="Submit Cash to Admin" onClose={() => setShowCash(false)}>
+          <StaffModal title={lang === 'mr' ? 'Admin कडे रोख जमा करा' : 'Submit Cash to Admin'} onClose={() => setShowCash(false)}>
             <form onSubmit={handleCashSubmit} className="space-y-4">
               {/* Cash in hand context */}
               <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-amber-600 font-semibold">Cash in hand</p>
+                  <p className="text-xs text-amber-600 font-semibold">{t('cash_in_hand', lang)}</p>
                   <p className="text-2xl font-extrabold text-amber-700">₹{cashInHand.toLocaleString('en-IN')}</p>
                 </div>
                 <IndianRupee className="w-7 h-7 text-amber-400" />

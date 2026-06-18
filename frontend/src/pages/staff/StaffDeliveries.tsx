@@ -8,20 +8,18 @@ import { useToast } from '../../components/ui/Toast';
 import { ordersApi, Order, Delivery, TimelineEntry } from '../../api/orders';
 import { useAuth } from '../../context/AuthContext';
 import { useSSE } from '../../hooks/useSSE';
+import { useLang } from '../../context/LanguageContext';
+import { t } from '../../i18n/staff';
 
 type PaymentMode = 'cash' | 'online' | 'pay_later';
 type FilterTab = 'pending' | 'completed' | 'daily' | 'preorder';
 
-const TABS: { id: FilterTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'pending',   label: 'Pending',      icon: <Clock className="w-3.5 h-3.5" /> },
-  { id: 'daily',     label: 'Daily Orders', icon: <Repeat className="w-3.5 h-3.5" /> },
-  { id: 'completed', label: 'Completed',    icon: <CheckCircle className="w-3.5 h-3.5" /> },
-  { id: 'preorder',  label: 'Pre-orders',   icon: <Calendar className="w-3.5 h-3.5" /> },
-];
+// Tabs are built dynamically using lang inside the component
 
 export const StaffDeliveries = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { lang } = useLang();
   const [orders,  setOrders]  = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
@@ -170,6 +168,13 @@ export const StaffDeliveries = () => {
     preorder:  preOrders.length,
   };
 
+  const TABS = [
+    { id: 'pending'   as FilterTab, label: t('tab_pending', lang),   icon: <Clock className="w-3.5 h-3.5" /> },
+    { id: 'daily'     as FilterTab, label: t('tab_daily', lang),     icon: <Repeat className="w-3.5 h-3.5" /> },
+    { id: 'completed' as FilterTab, label: t('tab_completed', lang), icon: <CheckCircle className="w-3.5 h-3.5" /> },
+    { id: 'preorder'  as FilterTab, label: t('tab_preorder', lang),  icon: <Calendar className="w-3.5 h-3.5" /> },
+  ];
+
   return (
     <div className="max-w-2xl space-y-5">
 
@@ -209,7 +214,9 @@ export const StaffDeliveries = () => {
               </motion.div>
 
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-                <p className="text-white/80 text-sm font-semibold tracking-wide uppercase mb-1">Delivery Complete!</p>
+                <p className="text-white/80 text-sm font-semibold tracking-wide uppercase mb-1">
+                  {lang === 'mr' ? 'डिलिव्हरी पूर्ण! 🎉' : 'Delivery Complete!'}
+                </p>
                 <h2 className="text-2xl font-extrabold text-white mb-1">{deliverySuccess.customer}</h2>
                 <p className="text-white/70 text-sm mb-6">
                   {deliverySuccess.jars} jar{deliverySuccess.jars > 1 ? 's' : ''} · ₹{deliverySuccess.amount} · {deliverySuccess.mode}
@@ -220,13 +227,13 @@ export const StaffDeliveries = () => {
                   <span className="text-white font-bold text-sm">Order #{deliverySuccess.orderId}</span>
                 </div>
 
-                <p className="text-white/60 text-xs mb-8">✅ Great work! Move on to the next delivery.</p>
+                  {lang === 'mr' ? '✅ शाब्बास! पुढील डिलिव्हरीकडे जा.' : '✅ Great work! Move on to the next delivery.'}
 
                 <button
                   onClick={() => { setDeliverySuccess(null); setActiveTab('pending'); }}
                   className="w-full bg-white text-emerald-700 font-bold text-base py-4 rounded-2xl shadow-xl hover:bg-white/90 active:scale-95 transition-all"
                 >
-                  Back to Deliveries
+                  {lang === 'mr' ? 'डिलिव्हरीकडे परत जा' : 'Back to Deliveries'}
                 </button>
               </motion.div>
             </motion.div>
@@ -237,13 +244,15 @@ export const StaffDeliveries = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">My Deliveries</h2>
+          <h2 className="text-lg font-bold text-slate-900">
+            {lang === 'mr' ? 'माझ्या डिलिव्हरी' : 'My Deliveries'}
+          </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            {pendingOrders.length} pending · {completedOrders.length} completed · {preOrders.length} pre-orders
+            {pendingOrders.length} {t('tab_pending', lang).toLowerCase()} · {completedOrders.length} {t('tab_completed', lang).toLowerCase()}
           </p>
         </div>
         <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
-          Refresh
+          {t('refresh', lang)}
         </Button>
       </div>
 
@@ -274,8 +283,12 @@ export const StaffDeliveries = () => {
           {todayGroups.length === 0 && tomorrowGroups.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-10 text-center">
               <Repeat className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-slate-600">No daily plan orders</p>
-              <p className="text-xs text-slate-400 mt-1">Monthly subscription deliveries will show here.</p>
+              <p className="text-sm font-semibold text-slate-600">
+                {lang === 'mr' ? 'कोणतेही दैनंदिन ऑर्डर नाहीत' : 'No daily plan orders'}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {lang === 'mr' ? 'मासिक सदस्यता डिलिव्हरी येथे दिसतील.' : 'Monthly subscription deliveries will show here.'}
+              </p>
             </div>
           ) : (
             <>
@@ -283,7 +296,7 @@ export const StaffDeliveries = () => {
               {todayGroups.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" /> Today's Plan Deliveries
+                    <Clock className="w-3.5 h-3.5" /> {lang === 'mr' ? 'आजच्या योजना डिलिव्हरी' : "Today's Plan Deliveries"}
                   </p>
                   <div className="space-y-3">
                     {todayGroups.map(g => <DailyCustomerCard key={g.customerId} group={g} onDeliver={openOrder} onNavigate={openMaps} />)}

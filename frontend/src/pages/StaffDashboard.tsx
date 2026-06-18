@@ -9,9 +9,9 @@ import { StaffCustomers } from './staff/StaffCustomers';
 import { ProfilePage } from './shared/ProfilePage';
 
 const NAV = [
-  { label: 'Dashboard',  icon: LayoutDashboard, to: '/staff' },
   { label: 'Deliveries', icon: ClipboardList,   to: '/staff/deliveries' },
   { label: 'Customers',  icon: Users,           to: '/staff/customers' },
+  { label: 'Dashboard',  icon: LayoutDashboard, to: '/staff' },
   { label: 'Casual',     icon: UserRound,       to: '/staff/casual' },
   { label: 'Inventory',  icon: Warehouse,       to: '/staff/inventory' },
 ];

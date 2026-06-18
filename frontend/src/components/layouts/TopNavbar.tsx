@@ -52,14 +52,36 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
   };
 
   // ── Transparent backdrop — closes whichever dropdown is open ──────────────────
-  // Renders BEHIND the dropdown (z-[9998]) so taps outside hit the backdrop,
-  // but taps on dropdown buttons pass through to the buttons above.
+  // Renders BEHIND the dropdown (z-[9998]) so taps outside hit the backdrop.
+  // IMPORTANT: onPointerDown is used (fires before onClick) so clicking outside
+  // closes the panel before any other click handlers fire.
   const Backdrop = ({ onClose }: { onClose: () => void }) => (
     <div
       className="fixed inset-0 z-[9998]"
       onPointerDown={e => { e.preventDefault(); onClose(); }}
     />
   );
+
+  // ── Shared toggle helpers ─────────────────────────────────────────────────────
+  const toggleBell = (e: React.PointerEvent) => {
+    e.stopPropagation(); // prevent backdrop from also firing
+    if (bellOpen) {
+      setBellOpen(false);
+    } else {
+      setProfileOpen(false);
+      setBellOpen(true);
+      refresh();
+    }
+  };
+  const toggleProfile = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (profileOpen) {
+      setProfileOpen(false);
+    } else {
+      setBellOpen(false);
+      setProfileOpen(true);
+    }
+  };
 
   // ── Notification dropdown ─────────────────────────────────────────────────────
   const NotificationPanel = () => (
@@ -172,7 +194,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
                 <h2 className="text-2xl font-extrabold text-white italic">Order Jar</h2>
                 <div className="flex items-center gap-1 shrink-0">
                   <div className="relative">
-                    <button onClick={() => { setBellOpen(!bellOpen); if (!bellOpen) refresh(); }}
+                    <button onPointerDown={toggleBell}
                       className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors">
                       <Bell className="w-5 h-5 text-white" />
                       {unreadCount > 0 && (
@@ -184,7 +206,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
                     <NotificationPanel />
                   </div>
                   <div className="relative">
-                    <button onClick={() => setProfileOpen(!profileOpen)}
+                    <button onPointerDown={toggleProfile}
                       className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm hover:bg-white/30 transition-colors">
                       {user?.name?.charAt(0).toUpperCase()}
                     </button>
@@ -238,7 +260,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
 
               <div className="flex items-center gap-1 shrink-0">
                 <div className="relative">
-                  <button onClick={() => { setBellOpen(!bellOpen); if (!bellOpen) refresh(); }}
+                  <button onPointerDown={toggleBell}
                     className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors">
                     <Bell className="w-5 h-5 text-white" />
                     {unreadCount > 0 && (
@@ -251,7 +273,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
                 </div>
 
                 <div className="relative">
-                  <button onClick={() => setProfileOpen(!profileOpen)}
+                  <button onPointerDown={toggleProfile}
                     className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm hover:bg-white/30 transition-colors">
                     {user?.name?.charAt(0).toUpperCase()}
                   </button>
@@ -283,7 +305,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
 
           {/* Notification Bell */}
           <div className="relative">
-            <button onClick={() => { setBellOpen(!bellOpen); if (!bellOpen) refresh(); }}
+            <button onPointerDown={toggleBell}
               className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors">
               <Bell className="w-5 h-5 text-slate-500" />
               {unreadCount > 0 && (
@@ -297,7 +319,7 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
 
           {/* Profile */}
           <div className="relative">
-            <button onClick={() => setProfileOpen(!profileOpen)}
+            <button onPointerDown={toggleProfile}
               className="flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-xl hover:bg-slate-100 transition-colors">
               <div className="w-8 h-8 bg-gradient-aqua rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm">
                 {user?.name?.charAt(0).toUpperCase()}

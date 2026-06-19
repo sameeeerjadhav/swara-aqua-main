@@ -54,7 +54,7 @@ export const createUser = async (
 
 export const getAllUsers = async (): Promise<Omit<User, 'password'>[]> => {
   const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT id, name, phone, role, status, jar_rate, prepaid_balance, created_at FROM users'
+    'SELECT id, name, phone, role, status, jar_rate, prepaid_balance, advance_access, created_at FROM users'
   );
   return rows as Omit<User, 'password'>[];
 };

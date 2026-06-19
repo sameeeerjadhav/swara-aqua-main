@@ -10,7 +10,7 @@ import api from '../../api/axios';
 import { subscriptionApi } from '../../api/subscription';
 import { pendingApi } from '../../api/pending';
 
-interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; created_at: string; }
+interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
 interface BalanceInfo { total: number; months: MonthBill[]; }
 interface SavedAddress { label: string; address: string; is_default: number; }
@@ -217,13 +217,20 @@ export const AdminCustomers = () => {
   const filtered = customers.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.phone.includes(search);
     if (statusFilter === 'low_balance') {
-      return matchSearch && u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD;
+      return matchSearch
+        && u.status === 'active'
+        && u.advance_access === 'approved'
+        && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD;
     }
     const matchStatus = statusFilter === 'all' || u.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
-  const lowBalCount = customers.filter(u => u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD).length;
+  const lowBalCount = customers.filter(u =>
+    u.status === 'active' &&
+    u.advance_access === 'approved' &&
+    Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD
+  ).length;
 
   const counts: Record<string, number> = {
     all:          customers.length,
@@ -325,7 +332,7 @@ export const AdminCustomers = () => {
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-slate-800">{u.name}</p>
-                          {u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
+                          {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-0.5">
                               ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
                             </span>
@@ -435,7 +442,7 @@ export const AdminCustomers = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">{u.phone}</p>
-                  {u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
+                  {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-1">
                       ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
                     </span>

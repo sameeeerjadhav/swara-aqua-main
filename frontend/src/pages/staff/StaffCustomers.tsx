@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Users, Phone, MapPin, RefreshCw,
   Package, IndianRupee, CheckCircle2, X,
-  Droplets, Clock, Navigation, Copy, Check,
+  Droplets, Clock, Navigation,
   ChevronRight,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
@@ -30,31 +30,17 @@ const openMaps = (c: CustomerForStaff, e: React.MouseEvent) => {
   window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, '_blank');
 };
 
-// ── Copy to clipboard helper ───────────────────────────────────────────────────
-const CopyPhone = ({ phone }: { phone: string }) => {
-  const [copied, setCopied] = useState(false);
-  const copy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(phone);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback — select text
-    }
-  };
-  return (
-    <button onClick={copy}
-      className="flex items-center gap-1.5 text-sm font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-3 py-1.5 rounded-xl hover:bg-brand-100 active:scale-95 transition-all">
-      <Phone className="w-3.5 h-3.5" />
-      {phone}
-      {copied
-        ? <Check className="w-3.5 h-3.5 text-green-500" />
-        : <Copy className="w-3 h-3 text-slate-400" />
-      }
-    </button>
-  );
-};
+// ── Call phone helper ─────────────────────────────────────────────────────────
+const CallPhone = ({ phone }: { phone: string }) => (
+  <a
+    href={`tel:${phone}`}
+    onClick={e => e.stopPropagation()}
+    className="flex items-center gap-1.5 text-sm font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-3 py-1.5 rounded-xl hover:bg-brand-100 active:scale-95 transition-all"
+  >
+    <Phone className="w-3.5 h-3.5" />
+    {phone}
+  </a>
+);
 
 // ── Success flash card ─────────────────────────────────────────────────────────
 const SuccessCard = ({
@@ -291,9 +277,9 @@ const ProfileSheet = ({
           </div>
           <h3 className="text-xl font-extrabold text-slate-900">{customer.name}</h3>
 
-          {/* Copyable phone */}
+          {/* Callable phone */}
           <div className="mt-2">
-            <CopyPhone phone={customer.phone} />
+            <CallPhone phone={customer.phone} />
           </div>
         </div>
 

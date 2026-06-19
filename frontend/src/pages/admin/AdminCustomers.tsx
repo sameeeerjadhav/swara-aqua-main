@@ -17,7 +17,7 @@ interface SavedAddress { label: string; address: string; is_default: number; }
 interface PendingDetail { id: number; name: string; phone: string; status: string; created_at: string; address: string | null; savedAddresses: SavedAddress[]; }
 
 const LOW_BAL_THRESHOLD = 60;
-const STATUS_FILTERS = ['all', 'active', 'pending', 'rejected', 'low_balance'];
+const STATUS_FILTERS = ['all', 'low_balance', 'active', 'pending', 'rejected'];
 const MONTH_LABELS: Record<string, string> = {};
 const getMonthLabel = (m: string) => {
   if (MONTH_LABELS[m]) return MONTH_LABELS[m];
@@ -247,27 +247,6 @@ export const AdminCustomers = () => {
           Refresh
         </Button>
       </div>
-
-      {/* Low balance alert strip */}
-      {lowBalCount > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">⚠️</span>
-            <div>
-              <p className="text-sm font-bold text-orange-800">
-                {lowBalCount} Customer{lowBalCount > 1 ? 's' : ''} with Low Advance Balance
-              </p>
-              <p className="text-xs text-orange-600">Advance balance ≤ ₹{LOW_BAL_THRESHOLD} — they may need a refill reminder</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setStatusFilter('low_balance')}
-            className="shrink-0 text-xs font-bold text-orange-700 bg-orange-100 hover:bg-orange-200 border border-orange-200 px-3 py-1.5 rounded-xl transition-colors"
-          >
-            View
-          </button>
-        </div>
-      )}
 
       {/* Pay Later outstanding total */}
       {totalPayLater > 0 && (

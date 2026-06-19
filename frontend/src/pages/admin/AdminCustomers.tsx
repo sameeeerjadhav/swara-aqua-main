@@ -10,13 +10,14 @@ import api from '../../api/axios';
 import { subscriptionApi } from '../../api/subscription';
 import { pendingApi } from '../../api/pending';
 
-interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; created_at: string; }
+interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; created_at: string; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
 interface BalanceInfo { total: number; months: MonthBill[]; }
 interface SavedAddress { label: string; address: string; is_default: number; }
 interface PendingDetail { id: number; name: string; phone: string; status: string; created_at: string; address: string | null; savedAddresses: SavedAddress[]; }
 
-const STATUS_FILTERS = ['all', 'active', 'pending', 'rejected'];
+const LOW_BAL_THRESHOLD = 60;
+const STATUS_FILTERS = ['all', 'active', 'pending', 'rejected', 'low_balance'];
 const MONTH_LABELS: Record<string, string> = {};
 const getMonthLabel = (m: string) => {
   if (MONTH_LABELS[m]) return MONTH_LABELS[m];
@@ -215,15 +216,21 @@ export const AdminCustomers = () => {
 
   const filtered = customers.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.phone.includes(search);
+    if (statusFilter === 'low_balance') {
+      return matchSearch && u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD;
+    }
     const matchStatus = statusFilter === 'all' || u.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
-  const counts = {
-    all:      customers.length,
-    active:   customers.filter(u => u.status === 'active').length,
-    pending:  customers.filter(u => u.status === 'pending').length,
-    rejected: customers.filter(u => u.status === 'rejected').length,
+  const lowBalCount = customers.filter(u => u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD).length;
+
+  const counts: Record<string, number> = {
+    all:          customers.length,
+    active:       customers.filter(u => u.status === 'active').length,
+    pending:      customers.filter(u => u.status === 'pending').length,
+    rejected:     customers.filter(u => u.status === 'rejected').length,
+    low_balance:  lowBalCount,
   };
 
   // Selected customer's balance (for modal)
@@ -240,6 +247,27 @@ export const AdminCustomers = () => {
           Refresh
         </Button>
       </div>
+
+      {/* Low balance alert strip */}
+      {lowBalCount > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <p className="text-sm font-bold text-orange-800">
+                {lowBalCount} Customer{lowBalCount > 1 ? 's' : ''} with Low Advance Balance
+              </p>
+              <p className="text-xs text-orange-600">Advance balance ≤ ₹{LOW_BAL_THRESHOLD} — they may need a refill reminder</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setStatusFilter('low_balance')}
+            className="shrink-0 text-xs font-bold text-orange-700 bg-orange-100 hover:bg-orange-200 border border-orange-200 px-3 py-1.5 rounded-xl transition-colors"
+          >
+            View
+          </button>
+        </div>
+      )}
 
       {/* Pay Later outstanding total */}
       {totalPayLater > 0 && (
@@ -261,12 +289,16 @@ export const AdminCustomers = () => {
           <button key={s} onClick={() => setStatusFilter(s)}
             className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all capitalize
               ${statusFilter === s
-                ? 'bg-brand-600 text-white border-brand-600 shadow-brand'
-                : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
-            {s === 'all' ? 'All' : s}
+                ? s === 'low_balance'
+                  ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                  : 'bg-brand-600 text-white border-brand-600 shadow-brand'
+                : s === 'low_balance'
+                  ? 'bg-orange-50 text-orange-600 border-orange-200 hover:border-orange-400'
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
+            {s === 'all' ? 'All' : s === 'low_balance' ? '⚠️ Low Balance' : s}
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold
-              ${statusFilter === s ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              {counts[s as keyof typeof counts]}
+              ${statusFilter === s ? 'bg-white/20 text-white' : s === 'low_balance' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'}`}>
+              {counts[s]}
             </span>
           </button>
         ))}
@@ -311,7 +343,14 @@ export const AdminCustomers = () => {
                         <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs shrink-0 bg-gradient-to-br from-brand-500 to-aqua-500">
                           {u.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-sm font-semibold text-slate-800">{u.name}</span>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{u.name}</p>
+                          {u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-0.5">
+                              ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-sm text-slate-500">{u.phone}</td>
@@ -416,6 +455,11 @@ export const AdminCustomers = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">{u.phone}</p>
+                  {u.status === 'active' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-1">
+                      ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
+                    </span>
+                  )}
                 </div>
 
                 {/* Right: balance pill + status + arrow */}

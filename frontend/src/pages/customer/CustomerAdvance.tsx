@@ -28,6 +28,7 @@ const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
 const TX_AMOUNTS = [100, 200, 500, 1000];
+const LOW_BAL_THRESHOLD = 60;
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const ACCESS_CFG: Record<AdvanceAccess, { label: string; color: string; bg: string; icon: typeof ShieldCheck }> = {
@@ -241,6 +242,20 @@ export const CustomerAdvance = () => {
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* Low balance warning */}
+          {!loading && access === 'approved' && balance <= LOW_BAL_THRESHOLD && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-2 bg-orange-500/20 border border-orange-400/30 rounded-xl px-3 py-2.5 mb-4"
+            >
+              <span className="text-base">⚠️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-orange-200 text-xs font-bold">Low Balance — Refill Recommended</p>
+                <p className="text-orange-300/80 text-[10px]">Your advance balance is only ₹{balance}. Add credit to keep paying seamlessly.</p>
+              </div>
+            </motion.div>
+          )}
 
           {/* Access status */}
           <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${accessCfg.bg}`}>

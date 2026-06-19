@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package, Droplets, ArrowRight, Plus,
   ChevronLeft, ChevronRight as ChevronRightIcon,
-  TrendingUp,
+  TrendingUp, AlertTriangle,
 } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { TouchEvent } from 'react';
@@ -15,6 +15,9 @@ import { useToast } from '../../components/ui/Toast';
 import { subscriptionApi, Subscription } from '../../api/subscription';
 import { pendingApi } from '../../api/pending';
 import { loadRazorpay } from '../../utils/razorpay';
+import { advanceApi } from '../../api/advance';
+
+const LOW_ADVANCE_THRESHOLD = 60;
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } } };
@@ -258,6 +261,25 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
     if (onOrderPress) onOrderPress(); else navigate('/customer/orders?new=1');
   };
 
+  // Advance balance — for low-balance notification
+  const [advanceBalance,      setAdvanceBalance]      = useState<number | null>(null);
+  const [advanceAccessStatus, setAdvanceAccessStatus] = useState<string>('');
+
+  useEffect(() => {
+    advanceApi.get()
+      .then(({ data }) => {
+        setAdvanceBalance(Number(data.balance ?? 0));
+        setAdvanceAccessStatus(data.advanceAccess || '');
+      })
+      .catch(() => {});
+  }, []);
+
+  const showLowAdvance = (
+    advanceBalance !== null &&
+    advanceAccessStatus === 'approved' &&
+    advanceBalance <= LOW_ADVANCE_THRESHOLD
+  );
+
   // Pending balance
   const [pendingBalance, setPendingBalance] = useState(0);
   const [payingPending, setPayingPending] = useState(false);
@@ -307,6 +329,32 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
 
   return (
     <div className="space-y-5 max-w-2xl">
+
+      {/* ―― Low Advance Balance Alert ―― */}
+      {showLowAdvance && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-4 flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-orange-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-orange-700">Low Advance Balance</p>
+              <p className="text-xs text-orange-500">
+                Only ₹{advanceBalance} left — refill to avoid interruption
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/customer/advance')}
+            className="shrink-0 bg-orange-500 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-orange-600 active:scale-95 transition-all"
+          >
+            Refill Now
+          </button>
+        </motion.div>
+      )}
 
       {/* ―― Outstanding Balance Alert ―― */}
       {pendingBalance > 0 && (

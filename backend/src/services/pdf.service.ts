@@ -686,3 +686,274 @@ export const generateReportPDF = async (data: ReportData, res: Response): Promis
 
   doc.end();
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SUMMARY BILL PDF — All customers for a given month (same style as individual)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface SummaryBillRow {
+  name:     string;
+  phone:    string;
+  jars:     number;
+  total:    number;
+  cash:     number;
+  online:   number;
+  advance:  number;
+  payLater: number;
+  paid:     number;
+  pending:  number;
+}
+
+export const generateSummaryBillPDF = async (
+  month: string,
+  rows: SummaryBillRow[],
+  res: Response,
+): Promise<void> => {
+  const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition',
+    `inline; filename=SwaraAqua-SummaryBill-${month}.pdf`);
+  doc.pipe(res);
+
+  const W  = 595;
+  const M  = 36;
+  const IW = W - M * 2;
+
+  const logoPath = getAssetPath('swaralogo.png');
+  const sigPath  = getAssetPath('signature.png');
+
+  const today = new Date().toLocaleDateString('en-IN',
+    { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  // Totals
+  const tot = rows.reduce((a, r) => ({
+    jars:     a.jars     + r.jars,
+    total:    a.total    + r.total,
+    cash:     a.cash     + r.cash,
+    online:   a.online   + r.online,
+    advance:  a.advance  + r.advance,
+    payLater: a.payLater + r.payLater,
+    paid:     a.paid     + r.paid,
+    pending:  a.pending  + r.pending,
+  }), { jars:0, total:0, cash:0, online:0, advance:0, payLater:0, paid:0, pending:0 });
+
+  let y = M;
+
+  // ═══ HEADER ══════════════════════════════════════════════════════════════════
+
+  if (logoPath) {
+    try { doc.image(logoPath, W - M - 70, y, { width: 70, height: 70 }); } catch {}
+  }
+
+  doc.fillColor(C.black).fontSize(18).font('Helvetica-Bold').text(COMPANY.firm, M, y);
+  y += 22;
+  doc.fillColor(C.mid).fontSize(9).font('Helvetica').text(COMPANY.address, M, y);
+  y += 13;
+  doc.text(`Phone no.: ${COMPANY.phone}`, M, y);
+  y += 13;
+  doc.text(`Email: ${COMPANY.email}`, M, y);
+  y += 13;
+  doc.text(`State: ${COMPANY.state}`, M, y);
+  y += 24;
+
+  // ═══ TITLE ═══════════════════════════════════════════════════════════════════
+
+  doc.moveTo(M, y).lineTo(W - M, y).strokeColor(C.border).lineWidth(0.5).stroke();
+  y += 8;
+  doc.fillColor(C.mid).fontSize(20).font('Helvetica')
+     .text('Summary Bill', M, y, { width: IW, align: 'center' });
+  y += 28;
+  doc.moveTo(M, y).lineTo(W - M, y).strokeColor(C.border).lineWidth(0.5).stroke();
+  y += 14;
+
+  // ═══ MONTH + DATE ══════════════════════════════════════════════════════════
+
+  doc.fillColor(C.mid).fontSize(10).font('Helvetica-Bold').text('Billing Period', M, y);
+  y += 15;
+  doc.fillColor(C.black).fontSize(12).font('Helvetica-Bold')
+     .text(monthLabel(month), M, y);
+
+  const rightX = W - M - 180;
+  doc.fillColor(C.mid).fontSize(10).font('Helvetica-Bold')
+     .text('Summary Details', rightX, y - 15, { width: 180, align: 'right' });
+  doc.fillColor(C.dark).fontSize(9.5).font('Helvetica')
+     .text(`Customers: ${rows.length}`, rightX, y, { width: 180, align: 'right' });
+  doc.text(`Date: ${today}`, rightX, y + 14, { width: 180, align: 'right' });
+
+  y += 36;
+
+  // ═══ CUSTOMER TABLE ════════════════════════════════════════════════════════
+
+  // Column definitions — 9 data columns + 1 name column
+  const COL = {
+    no:      { x: M,        w: 22  },
+    name:    { x: M + 22,   w: 82  },
+    jars:    { x: M + 104,  w: 34  },
+    total:   { x: M + 138,  w: 54  },
+    cash:    { x: M + 192,  w: 50  },
+    online:  { x: M + 242,  w: 50  },
+    advance: { x: M + 292,  w: 46  },
+    plater:  { x: M + 338,  w: 46  },
+    paid:    { x: M + 384,  w: 52  },
+    pending: { x: M + 436,  w: IW - 436 + M - M },  // fill remaining
+  };
+  // Recalc pending width to fill exactly
+  COL.pending.w = (W - M) - COL.pending.x;
+
+  const ROW_H = 20;
+  const HDR_H = 22;
+
+  // Header row
+  doc.rect(M, y, IW, HDR_H).fill(C.headerBg);
+  doc.fillColor(C.dark).fontSize(7.5).font('Helvetica-Bold');
+  const hdrs: [keyof typeof COL, string][] = [
+    ['no',      '#'],
+    ['name',    'Customer'],
+    ['jars',    'Jars'],
+    ['total',   'Total'],
+    ['cash',    'Cash Paid'],
+    ['online',  'Online Paid'],
+    ['advance', 'Advance'],
+    ['plater',  'Pay-Later'],
+    ['paid',    'Total Paid'],
+    ['pending', 'Pending'],
+  ];
+  hdrs.forEach(([key, label]) => {
+    const col = COL[key];
+    const align = ['jars','total','cash','online','advance','plater','paid','pending'].includes(key)
+      ? 'right' : 'left';
+    doc.text(label, col.x + 3, y + 7, { width: col.w - 4, align: align as any });
+  });
+  y += HDR_H;
+
+  // Data rows
+  rows.forEach((r, i) => {
+    const rowY = y;
+    const hasPending = r.pending > 0;
+
+    // Row background (alternating / pending highlight)
+    if (hasPending) {
+      doc.rect(M, rowY, IW, ROW_H).fill('#fff5f5');
+    } else if (i % 2 === 1) {
+      doc.rect(M, rowY, IW, ROW_H).fill('#fafafa');
+    }
+
+    // Border
+    doc.rect(M, rowY, IW, ROW_H).strokeColor(C.border).lineWidth(0.3).stroke();
+
+    doc.fillColor(C.mid).fontSize(7.5).font('Helvetica');
+    doc.text(String(i + 1), COL.no.x + 3,    rowY + 6, { width: COL.no.w - 4,    align: 'left' });
+    doc.fillColor(C.dark).font('Helvetica-Bold');
+    doc.text(r.name,        COL.name.x + 3,   rowY + 6, { width: COL.name.w - 4,  align: 'left', ellipsis: true });
+    doc.fillColor(C.dark).font('Helvetica').fontSize(7.5);
+    doc.text(String(r.jars),          COL.jars.x + 3,    rowY + 6, { width: COL.jars.w - 4,    align: 'right' });
+    doc.text(fmt(r.total),            COL.total.x + 3,   rowY + 6, { width: COL.total.w - 4,   align: 'right' });
+    doc.text(r.cash    > 0 ? fmt(r.cash)    : '—', COL.cash.x + 3,    rowY + 6, { width: COL.cash.w - 4,    align: 'right' });
+    doc.text(r.online  > 0 ? fmt(r.online)  : '—', COL.online.x + 3,  rowY + 6, { width: COL.online.w - 4,  align: 'right' });
+    doc.text(r.advance > 0 ? fmt(r.advance) : '—', COL.advance.x + 3, rowY + 6, { width: COL.advance.w - 4, align: 'right' });
+    doc.text(r.payLater> 0 ? fmt(r.payLater): '—', COL.plater.x + 3,  rowY + 6, { width: COL.plater.w - 4,  align: 'right' });
+    doc.fillColor(C.green).font('Helvetica-Bold');
+    doc.text(fmt(r.paid), COL.paid.x + 3, rowY + 6, { width: COL.paid.w - 4, align: 'right' });
+    if (hasPending) {
+      doc.fillColor(C.red).font('Helvetica-Bold');
+      doc.text(fmt(r.pending), COL.pending.x + 3, rowY + 6, { width: COL.pending.w - 4, align: 'right' });
+    } else {
+      doc.fillColor(C.green).font('Helvetica');
+      doc.text('Clear', COL.pending.x + 3, rowY + 6, { width: COL.pending.w - 4, align: 'right' });
+    }
+    y += ROW_H;
+
+    // Page break if needed
+    if (y > 750 && i < rows.length - 1) {
+      doc.addPage();
+      y = M;
+    }
+  });
+
+  // Totals footer row (dark)
+  doc.rect(M, y, IW, ROW_H + 2).fill(C.totalBg);
+  doc.fillColor(C.white).fontSize(7.5).font('Helvetica-Bold');
+  doc.text('TOTALS',             COL.name.x + 3,   y + 7, { width: COL.name.w - 4 });
+  doc.text(String(tot.jars),     COL.jars.x + 3,   y + 7, { width: COL.jars.w - 4,    align: 'right' });
+  doc.text(fmt(tot.total),       COL.total.x + 3,  y + 7, { width: COL.total.w - 4,   align: 'right' });
+  doc.text(fmt(tot.cash),        COL.cash.x + 3,   y + 7, { width: COL.cash.w - 4,    align: 'right' });
+  doc.text(fmt(tot.online),      COL.online.x + 3, y + 7, { width: COL.online.w - 4,  align: 'right' });
+  doc.text(fmt(tot.advance),     COL.advance.x + 3,y + 7, { width: COL.advance.w - 4, align: 'right' });
+  doc.text(fmt(tot.payLater),    COL.plater.x + 3, y + 7, { width: COL.plater.w - 4,  align: 'right' });
+  doc.text(fmt(tot.paid),        COL.paid.x + 3,   y + 7, { width: COL.paid.w - 4,    align: 'right' });
+  doc.text(tot.pending > 0 ? fmt(tot.pending) : '—', COL.pending.x + 3, y + 7, { width: COL.pending.w - 4, align: 'right' });
+  y += ROW_H + 2;
+
+  y += 20;
+
+  // ═══ FINANCIAL SUMMARY (right-aligned block) ════════════════════════════════
+
+  const leftColW  = IW * 0.48;
+  const rightColW = IW * 0.52;
+  const rightStartX = M + leftColW;
+
+  doc.fillColor(C.dark).fontSize(9).font('Helvetica-Bold')
+     .text('Invoice Amount In Words', M, y);
+  y += 14;
+  const wordsY = y;
+  doc.fillColor(C.mid).fontSize(8.5).font('Helvetica')
+     .text(numberToWords(Math.round(tot.total)), M, y, { width: leftColW - 20 });
+
+  const finRows = [
+    { label: 'Total Billed', value: fmt(tot.total),    highlight: true  },
+    { label: 'Total Paid',   value: fmt(tot.paid),     highlight: false },
+    { label: 'Total Pending',value: fmt(tot.pending),  highlight: false },
+  ];
+  let ssy = wordsY - 14;
+  finRows.forEach(({ label, value, highlight }) => {
+    if (highlight) {
+      doc.rect(rightStartX, ssy, rightColW, 18).fill(C.totalBg);
+      doc.fillColor(C.white).fontSize(9).font('Helvetica-Bold')
+         .text(label, rightStartX + 8, ssy + 5, { width: rightColW * 0.45 });
+      doc.fillColor(C.white).fontSize(9).font('Helvetica-Bold')
+         .text(value, rightStartX + 8, ssy + 5, { width: rightColW - 16, align: 'right' });
+    } else {
+      doc.rect(rightStartX, ssy, rightColW, 18).strokeColor(C.border).lineWidth(0.5).stroke();
+      doc.fillColor(C.dark).fontSize(9).font('Helvetica')
+         .text(label, rightStartX + 8, ssy + 5, { width: rightColW * 0.45 });
+      doc.fillColor(C.dark).fontSize(9).font('Helvetica-Bold')
+         .text(value, rightStartX + 8, ssy + 5, { width: rightColW - 16, align: 'right' });
+    }
+    ssy += 18;
+  });
+
+  y = Math.max(y + 20, ssy + 8);
+
+  doc.fillColor(C.dark).fontSize(9).font('Helvetica-Bold')
+     .text('Terms And Conditions', M, y);
+  y += 14;
+  doc.fillColor(C.mid).fontSize(8.5).font('Helvetica')
+     .text('Thank you for doing business with us.', M, y, { width: leftColW - 20 });
+
+  y += 30;
+  doc.moveTo(M, y).lineTo(W - M, y).strokeColor(C.border).lineWidth(0.5).stroke();
+  y += 14;
+
+  // ═══ BANK + SIGNATURE ═══════════════════════════════════════════════════════
+
+  doc.fillColor(C.dark).fontSize(9.5).font('Helvetica-Bold').text('Pay To:', M, y);
+  y += 16;
+  const bankY = y;
+  doc.fillColor(C.mid).fontSize(8.5).font('Helvetica')
+     .text(`Bank Name: ${COMPANY.bank.name}`, M, y);       y += 13;
+  doc.text(`Bank Account No.: ${COMPANY.bank.account}`, M, y); y += 13;
+  doc.text(`Bank IFSC code: ${COMPANY.bank.ifsc}`, M, y);  y += 13;
+  doc.text(`Account Holder's Name: ${COMPANY.bank.holder}`, M, y);
+
+  const sigBlockX = rightStartX + 20;
+  doc.fillColor(C.dark).fontSize(9).font('Helvetica')
+     .text(`For: ${COMPANY.firm}`, sigBlockX, bankY - 16, { width: rightColW - 20 });
+  if (sigPath) {
+    try { doc.image(sigPath, sigBlockX + 10, bankY, { width: 100, height: 45 }); } catch {}
+  }
+  doc.fillColor(C.dark).fontSize(9).font('Helvetica-Bold')
+     .text('Authorized Signatory', sigBlockX, bankY + 50, { width: rightColW - 20 });
+
+  doc.end();
+};

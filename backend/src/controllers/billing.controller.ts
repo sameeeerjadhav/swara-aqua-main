@@ -3,7 +3,7 @@ import { errDetail } from '../utils/errors';
 import { AuthRequest } from '../middleware/auth.middleware';
 import * as BillingModel from '../models/billing.model';
 import * as NotifService from '../services/notification.service';
-import { generateBillPDF, generateReportPDF } from '../services/pdf.service';
+import { generateBillPDF, generateReportPDF, generateSummaryBillPDF, SummaryBillRow } from '../services/pdf.service';
 import pool from '../config/db';
 import { RowDataPacket } from 'mysql2/promise';
 import { z } from 'zod';
@@ -614,6 +614,58 @@ export const getDeliveryReportPDF = async (req: AuthRequest, res: Response): Pro
     await generateReportPDF(data, res);
   } catch (err) {
     console.error('getDeliveryReportPDF error:', err);
+    if (!res.headersSent) res.status(500).json({ message: 'Failed to generate PDF' });
+  }
+};
+
+// GET /api/billing/summary-bill/pdf?month=YYYY-MM  (admin)
+export const getSummaryBillPDF = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { month, token } = req.query as Record<string, string>;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      res.status(400).json({ message: 'month is required (YYYY-MM)' }); return;
+    }
+
+    const bills = await BillingModel.getBills({ month });
+
+    // Aggregate per customer
+    const map = new Map<number, SummaryBillRow>();
+    for (const b of bills) {
+      const due = Math.max(0, Number(b.total_amount) - Number(b.paid_amount));
+      const existing = map.get(b.customer_id);
+      if (existing) {
+        existing.jars     += Number(b.total_jars);
+        existing.total    += Number(b.total_amount);
+        existing.cash     += Number(b.cash_paid);
+        existing.online   += Number(b.online_paid);
+        existing.advance  += Number(b.advance_paid);
+        existing.payLater += Number(b.pay_later_amount);
+        existing.paid     += Number(b.paid_amount);
+        existing.pending  += due;
+      } else {
+        map.set(b.customer_id, {
+          name:     b.customer_name  || '',
+          phone:    b.customer_phone || '',
+          jars:     Number(b.total_jars),
+          total:    Number(b.total_amount),
+          cash:     Number(b.cash_paid),
+          online:   Number(b.online_paid),
+          advance:  Number(b.advance_paid),
+          payLater: Number(b.pay_later_amount),
+          paid:     Number(b.paid_amount),
+          pending:  due,
+        });
+      }
+    }
+
+    const rows = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (rows.length === 0) {
+      res.status(404).json({ message: 'No bills found for this month' }); return;
+    }
+
+    await generateSummaryBillPDF(month, rows, res);
+  } catch (err) {
+    console.error('getSummaryBillPDF error:', err);
     if (!res.headersSent) res.status(500).json({ message: 'Failed to generate PDF' });
   }
 };

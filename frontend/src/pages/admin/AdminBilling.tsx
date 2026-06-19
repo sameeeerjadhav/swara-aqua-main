@@ -712,9 +712,12 @@ export const AdminBilling = () => {
               </p>
             </div>
             <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:opacity-90 transition-all print:hidden">
-              <Printer className="w-3.5 h-3.5" /> Print
+              onClick={() => {
+                if (!monthFilter) { toast('Select a month first to download the summary bill', 'error'); return; }
+                window.open(billingApi.summaryBillPdfUrl(monthFilter), '_blank');
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:opacity-90 transition-all">
+              <Printer className="w-3.5 h-3.5" /> Download PDF
             </button>
           </div>
 

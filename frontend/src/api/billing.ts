@@ -179,6 +179,11 @@ export const billingApi = {
     return `/api/billing/${id}/pdf?token=${encodeURIComponent(token)}`;
   },
 
+  summaryBillPdfUrl: (month: string) => {
+    const token = localStorage.getItem('accessToken') || '';
+    return `/api/billing/summary-bill/pdf?month=${encodeURIComponent(month)}&token=${encodeURIComponent(token)}`;
+  },
+
   recordPayment: (id: number, amount: number) =>
     api.patch(`/billing/${id}/pay`, { amount }),
 

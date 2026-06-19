@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, allowAdmin } from '../middleware/auth.middleware';
 import {
   generateBills, getBills, getBillById, downloadBillPDF, recordPayment, payBillWithAdvance,
-  getDeliveryReport, getDeliveryReportPDF, getBillingSummary,
+  getDeliveryReport, getDeliveryReportPDF, getBillingSummary, getSummaryBillPDF,
   clearDuesAdvance, clearDuesOrder, clearDuesVerify,
 } from '../controllers/billing.controller';
 import {
@@ -23,6 +23,7 @@ router.get('/reports/orders-by-type',    ...allowAdmin, getOrdersByType);
 router.get('/reports/top-customers',     ...allowAdmin, getTopCustomers);
 router.get('/reports/order-volume',      ...allowAdmin, getOrderVolume);
 router.get('/summary',                   ...allowAdmin, getBillingSummary);
+router.get('/summary-bill/pdf',          ...allowAdmin, getSummaryBillPDF);
 
 // ── Clear All Dues (customer) ─────────────────────────────────────────────────
 router.post('/clear-dues/advance',       authenticate, clearDuesAdvance);

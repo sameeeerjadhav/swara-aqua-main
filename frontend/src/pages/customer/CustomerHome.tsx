@@ -489,6 +489,30 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
         </div>
       </motion.div>
 
+      {/* ── QR Code Promo ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+        className="bg-gradient-to-br from-brand-600 to-aqua-500 rounded-3xl p-5 flex items-center gap-4 shadow-lg"
+      >
+        <div className="bg-white rounded-2xl p-2 shrink-0 shadow-md">
+          <img
+            src="/swaraqr.png"
+            alt="Swara Aqua QR Code"
+            className="w-24 h-24 object-contain"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-extrabold text-base leading-tight">Share &amp; Refer</p>
+          <p className="text-white/80 text-xs mt-1 leading-relaxed">
+            Know someone who needs pure water? Share this QR code and help them join Swara Aqua!
+          </p>
+          <div className="mt-3 flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-white/60" />
+            <p className="text-white/70 text-[10px] font-semibold">Scan to register</p>
+          </div>
+        </div>
+      </motion.div>
+
       {/* ── Tagline ── */}
       <div className="py-10 mt-4 pl-1">
         <p className="text-4xl font-extrabold text-blue-400 leading-tight">

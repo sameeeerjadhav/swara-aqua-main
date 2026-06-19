@@ -544,7 +544,15 @@ export const getCustomersForStaff = async (_req: AuthRequest, res: Response): Pr
         u.jar_rate,
         u.pending_balance,
         (SELECT a.address FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address,
-        (SELECT a.label   FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label
+        (SELECT a.label   FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label,
+        COALESCE((
+          SELECT SUM(d.delivered_quantity)
+          FROM deliveries d
+          JOIN orders o ON o.id = d.order_id
+          WHERE o.customer_id = u.id
+            AND d.status = 'delivered'
+            AND DATE(COALESCE(d.delivered_at, d.created_at)) = CURDATE()
+        ), 0) AS today_jars
       FROM users u
       WHERE u.role = 'customer' AND u.status = 'active'
       ORDER BY u.name ASC
@@ -552,6 +560,42 @@ export const getCustomersForStaff = async (_req: AuthRequest, res: Response): Pr
     res.json({ customers: rows });
   } catch (err) {
     console.error('getCustomersForStaff error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// GET /admin/customer-deliveries/:id?month=YYYY-MM  (staff + admin)
+export const getCustomerDeliveryCalendar = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const customerId = Number(req.params.id);
+    const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        DAY(COALESCE(d.delivered_at, d.created_at)) AS day,
+        SUM(d.delivered_quantity) AS jars
+      FROM deliveries d
+      JOIN orders o ON o.id = d.order_id
+      WHERE o.customer_id = ?
+        AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?
+        AND d.status = 'delivered'
+      GROUP BY DAY(COALESCE(d.delivered_at, d.created_at))
+      ORDER BY day ASC
+    `, [customerId, month]);
+
+    const [y, m] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const dayMap = new Map(rows.map((r: RowDataPacket) => [Number(r.day), Number(r.jars)]));
+
+    const calendar = Array.from({ length: daysInMonth }, (_, i) => ({
+      day: i + 1,
+      jars: dayMap.get(i + 1) || 0,
+    }));
+
+    const totalJars = rows.reduce((s: number, r: RowDataPacket) => s + Number(r.jars), 0);
+    res.json({ month, calendar, totalJars });
+  } catch (err) {
+    console.error('getCustomerDeliveryCalendar error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };

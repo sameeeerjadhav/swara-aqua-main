@@ -129,6 +129,7 @@ export interface CustomerForStaff {
   phone: string;
   jar_rate: number;
   pending_balance: number;
+  today_jars: number;
   address: string | null;
   address_label: string | null;
 }
@@ -136,4 +137,9 @@ export interface CustomerForStaff {
 export const staffApi = {
   getCustomersList: () =>
     api.get<{ customers: CustomerForStaff[] }>('/admin/customers-list'),
+  getCustomerCalendar: (id: number, month: string) =>
+    api.get<{ month: string; calendar: { day: number; jars: number }[]; totalJars: number }>(
+      `/admin/customer-deliveries/${id}`,
+      { params: { month } }
+    ),
 };

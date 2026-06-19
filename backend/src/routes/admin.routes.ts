@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer, getSettings, updateSetting, getCustomersForStaff } from '../controllers/admin.controller';
+import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer, getSettings, updateSetting, getCustomersForStaff, getCustomerDeliveryCalendar } from '../controllers/admin.controller';
 
 
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
@@ -20,7 +20,8 @@ router.get('/staff/:id/profile',  ...allowAdmin, getStaffProfile);
 router.get('/customer-balances',  ...allowAdmin, getCustomerBalances);
 router.get('/settings',           ...allowAdmin, getSettings);
 router.put('/settings/:key',      ...allowAdmin, updateSetting);
-router.get('/customers-list',     authenticate,  getCustomersForStaff); // staff + admin
+router.get('/customers-list',              authenticate, getCustomersForStaff); // staff + admin
+router.get('/customer-deliveries/:id',     authenticate, getCustomerDeliveryCalendar); // staff + admin
 
 
 router.get('/firebase/status',    ...allowAdmin, getFirebaseStatus);

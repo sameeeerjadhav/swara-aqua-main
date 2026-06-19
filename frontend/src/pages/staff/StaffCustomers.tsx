@@ -4,7 +4,7 @@ import {
   Search, Users, Phone, MapPin, RefreshCw,
   Package, IndianRupee, CheckCircle2, X,
   Droplets, Clock, Navigation,
-  ChevronRight,
+  ChevronRight, Eye, CalendarDays, ChevronLeft,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -20,6 +20,139 @@ const MODE_OPTIONS: { id: PaymentMode; label: string; color: string; bg: string 
   { id: 'online',    label: '📱 Online',    color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-300' },
   { id: 'pay_later', label: '⏳ Pay Later', color: 'text-amber-700',  bg: 'bg-amber-50 border-amber-300' },
 ];
+
+// ── Calendar Modal ──────────────────────────────────────────────────────────
+const CalendarModal = ({ customer, onClose }: { customer: CustomerForStaff; onClose: () => void }) => {
+  const today = new Date();
+  const [month, setMonth] = useState(today.toISOString().slice(0, 7));
+  const [calendar, setCalendar] = useState<{ day: number; jars: number }[]>([]);
+  const [totalJars, setTotalJars] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const loadCalendar = useCallback(async (m: string) => {
+    setLoading(true);
+    try {
+      const { data } = await staffApi.getCustomerCalendar(customer.id, m);
+      setCalendar(data.calendar);
+      setTotalJars(data.totalJars);
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [customer.id]);
+
+  useEffect(() => { loadCalendar(month); }, [month, loadCalendar]);
+
+  const changeMonth = (delta: number) => {
+    const [y, m] = month.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
+
+  const monthLabel = (m: string) => {
+    const [y, mo] = m.split('-');
+    return new Date(Number(y), Number(mo) - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  };
+
+  // 7-column calendar grid
+  const firstDay = (() => { const [y, m] = month.split('-').map(Number); return new Date(y, m - 1, 1).getDay(); })();
+  const weeks: ({ day: number; jars: number } | null)[][] = [];
+  let week: ({ day: number; jars: number } | null)[] = Array(firstDay).fill(null);
+  for (const cell of calendar) {
+    week.push(cell);
+    if (week.length === 7) { weeks.push(week); week = []; }
+  }
+  if (week.length > 0) { while (week.length < 7) week.push(null); weeks.push(week); }
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 bg-white rounded-3xl shadow-2xl overflow-hidden max-w-sm mx-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-brand-600 to-aqua-500 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white/70 text-[10px] font-semibold uppercase tracking-wider">Delivery Calendar</p>
+              <p className="text-white font-extrabold text-base">{customer.name}</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Month nav */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+          <button onClick={() => changeMonth(-1)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors">
+            <ChevronLeft className="w-4 h-4 text-slate-600" />
+          </button>
+          <p className="text-sm font-bold text-slate-800">{monthLabel(month)}</p>
+          <button onClick={() => changeMonth(1)}
+            disabled={month >= today.toISOString().slice(0, 7)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-30">
+            <ChevronRight className="w-4 h-4 text-slate-600" />
+          </button>
+        </div>
+
+        {/* Calendar grid */}
+        <div className="px-4 pb-4 pt-3">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+              <p key={d} className="text-center text-[10px] font-bold text-slate-400">{d}</p>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-7 gap-1">
+              {Array(35).fill(0).map((_, i) => <div key={i} className="h-10 rounded-lg bg-slate-100 animate-pulse" />)}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {weeks.map((week, wi) => (
+                <div key={wi} className="grid grid-cols-7 gap-1">
+                  {week.map((cell, di) => (
+                    <div key={di}
+                      className={`h-10 rounded-lg flex flex-col items-center justify-center ${
+                        cell === null ? '' :
+                        cell.jars > 0 ? 'bg-green-100 border border-green-300' :
+                        'bg-slate-50 border border-slate-200'
+                      }`}>
+                      {cell && (
+                        <>
+                          <p className={`text-[9px] font-semibold leading-none ${
+                            cell.jars > 0 ? 'text-green-700' : 'text-slate-400'
+                          }`}>{cell.day}</p>
+                          <p className={`text-xs font-extrabold leading-tight ${
+                            cell.jars > 0 ? 'text-green-800' : 'text-slate-300'
+                          }`}>{cell.jars > 0 ? cell.jars : '–'}</p>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Total */}
+          <div className="mt-3 flex items-center justify-between bg-slate-50 rounded-2xl px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <Droplets className="w-4 h-4 text-brand-500" />
+              <span className="text-sm font-semibold text-slate-700">Total this month</span>
+            </div>
+            <span className="text-sm font-extrabold text-brand-700">{totalJars} jars</span>
+          </div>
+        </div>
+      </motion.div>
+    </>
+  );
+};
 
 // ── Navigate to customer address ───────────────────────────────────────────────
 const openMaps = (c: CustomerForStaff, e: React.MouseEvent) => {
@@ -239,11 +372,12 @@ const DeliverySheet = ({
 
 // ── Customer Profile Sheet ─────────────────────────────────────────────────────
 const ProfileSheet = ({
-  customer, onClose, onDeliver,
+  customer, onClose, onDeliver, onCalendar,
 }: {
   customer: CustomerForStaff;
   onClose: () => void;
   onDeliver: () => void;
+  onCalendar: () => void;
 }) => {
   const { lang } = useLang();
   return (
@@ -262,12 +396,19 @@ const ProfileSheet = ({
           <div className="w-10 h-1 bg-slate-200 rounded-full" />
         </div>
 
-        {/* Close */}
+        {/* Close + Calendar */}
         <div className="flex items-center justify-between px-5 pb-2">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('customer_profile', lang)}</p>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onCalendar}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors"
+              title="View delivery calendar">
+              <Eye className="w-4 h-4" />
+            </button>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Avatar + name */}
@@ -295,16 +436,20 @@ const ProfileSheet = ({
             <span className="text-sm font-extrabold text-brand-700">₹{customer.jar_rate}{t('per_jar', lang)}</span>
           </div>
 
-          {/* Pending balance */}
-          {Number(customer.pending_balance) > 0 && (
-            <div className="flex items-center justify-between bg-red-50 rounded-2xl px-4 py-3">
-              <div className="flex items-center gap-2">
-                <IndianRupee className="w-4 h-4 text-red-500" />
-                <span className="text-sm font-semibold text-red-700">{t('pending_balance', lang)}</span>
-              </div>
-              <span className="text-sm font-extrabold text-red-600">₹{Number(customer.pending_balance).toLocaleString('en-IN')}</span>
+          {/* Today's delivered jars */}
+          <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${
+            Number(customer.today_jars) > 0 ? 'bg-green-50' : 'bg-slate-50'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Droplets className={`w-4 h-4 ${Number(customer.today_jars) > 0 ? 'text-green-600' : 'text-slate-400'}`} />
+              <span className={`text-sm font-semibold ${Number(customer.today_jars) > 0 ? 'text-green-800' : 'text-slate-500'}`}>
+                Jars Delivered Today
+              </span>
             </div>
-          )}
+            <span className={`text-sm font-extrabold ${Number(customer.today_jars) > 0 ? 'text-green-700' : 'text-slate-400'}`}>
+              {Number(customer.today_jars)} jar{Number(customer.today_jars) !== 1 ? 's' : ''}
+            </span>
+          </div>
 
           {/* Address + Navigate */}
           {customer.address && (
@@ -370,6 +515,7 @@ export const StaffCustomers = () => {
   const [successData, setSuccessData] = useState<{
     customer: string; quantity: number; amount: number; mode: string; orderId: number;
   } | null>(null);
+  const [calendarCustomer, setCalendarCustomer] = useState<CustomerForStaff | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -467,9 +613,9 @@ export const StaffCustomers = () => {
                     <span className="flex items-center gap-1 text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">
                       <Package className="w-2.5 h-2.5" /> ₹{c.jar_rate}/jar
                     </span>
-                    {Number(c.pending_balance) > 0 && (
-                      <span className="flex items-center gap-1 text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold">
-                        <IndianRupee className="w-2.5 h-2.5" /> ₹{Number(c.pending_balance).toLocaleString('en-IN')} due
+                    {Number(c.today_jars) > 0 && (
+                      <span className="flex items-center gap-1 text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                        <Droplets className="w-2.5 h-2.5" /> {Number(c.today_jars)} today
                       </span>
                     )}
                   </div>
@@ -505,6 +651,7 @@ export const StaffCustomers = () => {
             customer={profiled}
             onClose={() => setProfiled(null)}
             onDeliver={() => setSelected(profiled)}
+            onCalendar={() => { setCalendarCustomer(profiled); }}
           />
         )}
       </AnimatePresence>
@@ -525,6 +672,17 @@ export const StaffCustomers = () => {
       <AnimatePresence>
         {successData && (
           <SuccessCard data={successData} onClose={() => setSuccessData(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Calendar modal */}
+      <AnimatePresence>
+        {calendarCustomer && (
+          <CalendarModal
+            key={`cal-${calendarCustomer.id}`}
+            customer={calendarCustomer}
+            onClose={() => setCalendarCustomer(null)}
+          />
         )}
       </AnimatePresence>
     </div>

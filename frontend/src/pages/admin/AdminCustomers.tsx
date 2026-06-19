@@ -234,7 +234,8 @@ export const AdminCustomers = () => {
   };
 
   // Selected customer's balance (for modal)
-  const selBal = selectedCustomer ? balances[selectedCustomer.id] : null;
+  const selBal      = selectedCustomer ? balances[selectedCustomer.id]       : null;
+  const selPayLater = selectedCustomer ? (payLaterMap[selectedCustomer.id] ?? 0) : 0;
 
   return (
     <div className="max-w-4xl space-y-5">
@@ -529,13 +530,13 @@ export const AdminCustomers = () => {
                     </div>
                   </div>
 
-                  {/* Pending balance */}
-                  {selBal && selBal.total > 0 ? (
+                  {/* Billing pending balance */}
+                  {selBal && selBal.total > 0 && (
                     <div className="bg-red-50 border border-red-100 rounded-2xl overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 border-b border-red-100">
                         <div className="flex items-center gap-2">
                           <IndianRupee className="w-3.5 h-3.5 text-red-500" />
-                          <span className="text-xs font-bold text-red-700">Pending Balance</span>
+                          <span className="text-xs font-bold text-red-700">Bill Pending</span>
                         </div>
                         <span className="text-base font-extrabold text-red-600">₹{selBal.total.toLocaleString('en-IN')}</span>
                       </div>
@@ -562,7 +563,21 @@ export const AdminCustomers = () => {
                         </div>
                       )}
                     </div>
-                  ) : (
+                  )}
+
+                  {/* Pay-later outstanding */}
+                  {selPayLater > 0 && (
+                    <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">⏳</span>
+                        <span className="text-xs font-bold text-amber-700">Pay-Later Outstanding</span>
+                      </div>
+                      <span className="text-base font-extrabold text-amber-600">₹{selPayLater.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+
+                  {/* All clear — only when both are zero */}
+                  {(!selBal || selBal.total === 0) && selPayLater === 0 && (
                     <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-2xl px-4 py-3">
                       <CheckCircle className="w-4 h-4 text-green-500" />
                       <span className="text-sm font-semibold text-green-700">No pending balance — All clear!</span>

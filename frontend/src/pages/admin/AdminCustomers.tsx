@@ -17,7 +17,7 @@ interface SavedAddress { label: string; address: string; is_default: number; }
 interface PendingDetail { id: number; name: string; phone: string; status: string; created_at: string; address: string | null; savedAddresses: SavedAddress[]; }
 
 const LOW_BAL_THRESHOLD = 60;
-const STATUS_FILTERS = ['all', 'low_balance', 'active', 'pending', 'rejected'];
+const STATUS_FILTERS = ['all', 'low_balance', 'pay_later', 'active', 'pending', 'rejected'];
 const MONTH_LABELS: Record<string, string> = {};
 const getMonthLabel = (m: string) => {
   if (MONTH_LABELS[m]) return MONTH_LABELS[m];
@@ -222,6 +222,9 @@ export const AdminCustomers = () => {
         && u.advance_access === 'approved'
         && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD;
     }
+    if (statusFilter === 'pay_later') {
+      return matchSearch && (payLaterMap[u.id] ?? 0) > 0;
+    }
     const matchStatus = statusFilter === 'all' || u.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -234,10 +237,11 @@ export const AdminCustomers = () => {
 
   const counts: Record<string, number> = {
     all:          customers.length,
+    low_balance:  lowBalCount,
+    pay_later:    customers.filter(u => (payLaterMap[u.id] ?? 0) > 0).length,
     active:       customers.filter(u => u.status === 'active').length,
     pending:      customers.filter(u => u.status === 'pending').length,
     rejected:     customers.filter(u => u.status === 'rejected').length,
-    low_balance:  lowBalCount,
   };
 
   // Selected customer's balance (for modal)
@@ -278,13 +282,23 @@ export const AdminCustomers = () => {
               ${statusFilter === s
                 ? s === 'low_balance'
                   ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                  : 'bg-brand-600 text-white border-brand-600 shadow-brand'
+                  : s === 'pay_later'
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                    : 'bg-brand-600 text-white border-brand-600 shadow-brand'
                 : s === 'low_balance'
                   ? 'bg-orange-50 text-orange-600 border-orange-200 hover:border-orange-400'
-                  : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
-            {s === 'all' ? 'All' : s === 'low_balance' ? '⚠️ Low Balance' : s}
+                  : s === 'pay_later'
+                    ? 'bg-amber-50 text-amber-600 border-amber-200 hover:border-amber-400'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
+            {s === 'all' ? 'All'
+              : s === 'low_balance' ? '⚠️ Low Balance'
+              : s === 'pay_later'   ? '⏳ Pay-Later'
+              : s}
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold
-              ${statusFilter === s ? 'bg-white/20 text-white' : s === 'low_balance' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'}`}>
+              ${statusFilter === s ? 'bg-white/20 text-white'
+                : s === 'low_balance' ? 'bg-orange-100 text-orange-600'
+                : s === 'pay_later'   ? 'bg-amber-100 text-amber-600'
+                : 'bg-slate-100 text-slate-500'}`}>
               {counts[s]}
             </span>
           </button>

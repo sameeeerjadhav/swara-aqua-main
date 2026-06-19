@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Download, RefreshCw, Plus, X, IndianRupee, CheckCircle, FileText,
+import { Download, RefreshCw, Plus, X, IndianRupee, CheckCircle, FileText,
   Banknote, CreditCard, AlertCircle, Clock, ChevronDown, ChevronUp,
-  User, Search, TrendingDown, BarChart3, Wallet,
+  User, Search, TrendingDown, BarChart3, Wallet, Printer, List, LayoutGrid,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -81,6 +80,9 @@ export const AdminBilling = () => {
   const [report,        setReport]        = useState<DeliveryReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [customers,     setCustomers]     = useState<{id:number;name:string;phone:string}[]>([]);
+
+  // ── View tab ─────────────────────────────────────────────────────────────────
+  const [viewTab, setViewTab] = useState<'customer' | 'bills' | 'summary'>('customer');
 
   // ── Load bills ───────────────────────────────────────────────────────────────
   const loadBills = useCallback(async () => {
@@ -166,6 +168,54 @@ export const AdminBilling = () => {
   // ── Per-bill due ──────────────────────────────────────────────────────────────
   const billDue = (b: Bill) => Math.max(0, Number(b.total_amount) - Number(b.paid_amount));
 
+  // ── Summary Bill: aggregate bills per customer for selected month ─────────────
+  const summaryRows = useMemo(() => {
+    // Group bills (already filtered by month via API) by customer
+    const map = new Map<number, {
+      name: string; phone: string;
+      jars: number; total: number; cash: number; online: number;
+      advance: number; payLater: number; paid: number; pending: number;
+    }>();
+    for (const b of bills) {
+      const existing = map.get(b.customer_id);
+      const due = billDue(b);
+      if (existing) {
+        existing.jars    += Number(b.total_jars);
+        existing.total   += Number(b.total_amount);
+        existing.cash    += Number(b.cash_paid);
+        existing.online  += Number(b.online_paid);
+        existing.advance += Number(b.advance_paid);
+        existing.payLater+= Number(b.pay_later_amount);
+        existing.paid    += Number(b.paid_amount);
+        existing.pending += due;
+      } else {
+        map.set(b.customer_id, {
+          name: b.customer_name || '', phone: b.customer_phone || '',
+          jars: Number(b.total_jars),
+          total: Number(b.total_amount),
+          cash: Number(b.cash_paid),
+          online: Number(b.online_paid),
+          advance: Number(b.advance_paid),
+          payLater: Number(b.pay_later_amount),
+          paid: Number(b.paid_amount),
+          pending: due,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [bills]);
+
+  const summaryTotals = useMemo(() => summaryRows.reduce((acc, r) => ({
+    jars: acc.jars + r.jars,
+    total: acc.total + r.total,
+    cash: acc.cash + r.cash,
+    online: acc.online + r.online,
+    advance: acc.advance + r.advance,
+    payLater: acc.payLater + r.payLater,
+    paid: acc.paid + r.paid,
+    pending: acc.pending + r.pending,
+  }), { jars: 0, total: 0, cash: 0, online: 0, advance: 0, payLater: 0, paid: 0, pending: 0 }), [summaryRows]);
+
   return (
     <div className="max-w-6xl space-y-5">
 
@@ -244,8 +294,30 @@ export const AdminBilling = () => {
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════
+          VIEW TABS
+      ══════════════════════════════════════════════════════════════ */}
+      <div className="flex gap-2">
+        {([
+          { id: 'customer', label: 'Customer Billing', icon: <User className="w-3.5 h-3.5" /> },
+          { id: 'bills',    label: 'All Bills',        icon: <FileText className="w-3.5 h-3.5" /> },
+          { id: 'summary',  label: 'Summary Bill',     icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+        ] as const).map(tab => (
+          <button key={tab.id} onClick={() => setViewTab(tab.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all
+              ${viewTab === tab.id
+                ? tab.id === 'summary'
+                  ? 'bg-purple-600 text-white border-purple-600'
+                  : 'bg-brand-600 text-white border-brand-600'
+                : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════
           CUSTOMER BREAKDOWN TABLE
       ══════════════════════════════════════════════════════════════ */}
+      {viewTab === 'customer' && (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -258,7 +330,7 @@ export const AdminBilling = () => {
         {sumLoading ? (
           <div className="p-4 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-50 max-h-[480px] overflow-y-auto">
             {custSums.filter(c => Number(c.bill_count) > 0 || Number(c.total_billed) > 0).map((c, i) => {
               const isExpanded = expandedCust === c.customer_id;
               const custBills  = filteredBills.filter(b => b.customer_id === c.customer_id);
@@ -424,9 +496,12 @@ export const AdminBilling = () => {
         )}
       </div>
 
+      )}
+
       {/* ══════════════════════════════════════════════════════════════
-          FULL BILLS TABLE (with search + filters)
+          ALL BILLS TABLE
       ══════════════════════════════════════════════════════════════ */}
+      {viewTab === 'bills' && (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
 
         {/* Table header bar */}
@@ -479,13 +554,14 @@ export const AdminBilling = () => {
           </div>
         </div>
 
-        {/* Desktop table */}
+        {/* Desktop table — scrollable */}
         <div className="hidden md:block overflow-x-auto">
+          <div className="max-h-[520px] overflow-y-auto">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-100">
                 {['#', 'Customer', 'Month', 'Jars', 'Total', 'Paid (Online)', 'Paid (Cash)', 'Total Paid', 'Due', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -564,6 +640,7 @@ export const AdminBilling = () => {
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Mobile card list */}
@@ -613,6 +690,125 @@ export const AdminBilling = () => {
           })}
         </div>
       </div>
+
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════
+          SUMMARY BILL TAB
+      ══════════════════════════════════════════════════════════════ */}
+      {viewTab === 'summary' && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <LayoutGrid className="w-4 h-4 text-purple-600" />
+                All Customers Summary Bill
+              </h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {monthFilter ? monthFilter : 'All Time'} · {summaryRows.length} customers
+              </p>
+            </div>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:opacity-90 transition-all print:hidden">
+              <Printer className="w-3.5 h-3.5" /> Print
+            </button>
+          </div>
+
+          {/* Hint if no month selected */}
+          {!monthFilter && (
+            <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
+              <span className="text-xs text-amber-700">⚠️ Select a month in the Billing Overview to see per-month summary</span>
+            </div>
+          )}
+
+          {billsLoading ? (
+            <div className="p-5 space-y-2">{[...Array(5)].map((_,i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
+          ) : summaryRows.length === 0 ? (
+            <div className="p-12 text-center">
+              <LayoutGrid className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-slate-500">No bills found for this period</p>
+              <p className="text-xs text-slate-400 mt-1">Generate bills first or select a different month</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="max-h-[520px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      {['#', 'Customer', 'Phone', 'Jars', 'Total', 'Cash Paid', 'Online Paid', 'Advance', 'Pay-Later', 'Total Paid', 'Pending'].map(h => (
+                        <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {summaryRows.map((r, i) => (
+                      <tr key={i} className={`hover:bg-slate-50/50 transition-colors ${r.pending > 0 ? 'bg-red-50/20' : ''}`}>
+                        <td className="px-3 py-3 text-slate-400 font-bold">{i + 1}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0
+                              ${r.pending > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                              {r.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="font-semibold text-slate-800 whitespace-nowrap">{r.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-slate-400">{r.phone}</td>
+                        <td className="px-3 py-3 font-bold text-slate-700">{r.jars}</td>
+                        <td className="px-3 py-3 font-bold text-slate-800">{fmt(r.total)}</td>
+                        <td className="px-3 py-3">
+                          {r.cash > 0
+                            ? <span className="flex items-center gap-1 font-semibold text-green-700"><Banknote className="w-3 h-3" />{fmt(r.cash)}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-3">
+                          {r.online > 0
+                            ? <span className="flex items-center gap-1 font-semibold text-blue-700"><CreditCard className="w-3 h-3" />{fmt(r.online)}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-3">
+                          {r.advance > 0
+                            ? <span className="font-semibold text-purple-700">{fmt(r.advance)}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-3">
+                          {r.payLater > 0
+                            ? <span className="font-semibold text-amber-700">{fmt(r.payLater)}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-3 font-bold text-emerald-700">{fmt(r.paid)}</td>
+                        <td className="px-3 py-3">
+                          {r.pending > 0
+                            ? <span className="font-bold text-red-600">{fmt(r.pending)}</span>
+                            : <span className="text-green-500 font-semibold">✔ Clear</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {/* Totals footer */}
+                  <tfoot className="sticky bottom-0 z-10">
+                    <tr className="bg-slate-900 border-t-2 border-slate-700">
+                      <td className="px-3 py-3 text-slate-400 text-[10px] font-bold uppercase" colSpan={3}>Totals</td>
+                      <td className="px-3 py-3 font-extrabold text-white">{summaryTotals.jars}</td>
+                      <td className="px-3 py-3 font-extrabold text-white">{fmt(summaryTotals.total)}</td>
+                      <td className="px-3 py-3 font-extrabold text-green-400">{fmt(summaryTotals.cash)}</td>
+                      <td className="px-3 py-3 font-extrabold text-blue-400">{fmt(summaryTotals.online)}</td>
+                      <td className="px-3 py-3 font-extrabold text-purple-400">{fmt(summaryTotals.advance)}</td>
+                      <td className="px-3 py-3 font-extrabold text-amber-400">{fmt(summaryTotals.payLater)}</td>
+                      <td className="px-3 py-3 font-extrabold text-emerald-400">{fmt(summaryTotals.paid)}</td>
+                      <td className="px-3 py-3 font-extrabold text-red-400">{summaryTotals.pending > 0 ? fmt(summaryTotals.pending) : '—'}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════
           DELIVERY REPORT SECTION

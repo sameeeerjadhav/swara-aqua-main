@@ -25,6 +25,9 @@ interface CalendarProps { customerId?: number; }
 
 export const CustomerCalendar = ({ customerId }: CalendarProps = {}) => {
   const { toast } = useToast();
+  // Use a stable Date object. All date comparisons use LOCAL time parts to
+  // avoid UTC-shift bugs (e.g. in IST+5:30, toISOString() can give yesterday
+  // before 05:30 AM).
   const now = new Date();
   const [year,    setYear]    = useState(now.getFullYear());
   const [month,   setMonth]   = useState(now.getMonth());
@@ -76,15 +79,17 @@ export const CustomerCalendar = ({ customerId }: CalendarProps = {}) => {
     } finally { setDayLoading(false); }
   };
 
+  // dayMap: key is always YYYY-MM-DD (backend now returns DATE_FORMAT plain string)
   const dayMap = new Map<string, CalendarDay>();
   days.forEach(d => {
-    const dateStr = typeof d.date === 'string'
-      ? d.date.split('T')[0]
-      : new Date(d.date).toISOString().split('T')[0];
-    dayMap.set(dateStr, d);
+    const dateStr = typeof d.date === 'string' ? d.date.split('T')[0] : '';
+    if (dateStr) dayMap.set(dateStr, d);
   });
 
-  const todayStr    = now.toISOString().split('T')[0];
+  // ── Local-date helper ──────────────────────────────────────────────────────
+  // IMPORTANT: use local date, NOT toISOString() which returns UTC.
+  // In IST+5:30, toISOString() gives previous day's date before 05:30 AM.
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const totalJars   = days.reduce((s, d) => s + Number(d.jars_delivered), 0);
   const totalAmount = days.reduce((s, d) => s + Number(d.total_amount), 0);
   const deliveryDays = days.filter(d => Number(d.jars_delivered) > 0).length;
@@ -102,8 +107,8 @@ export const CustomerCalendar = ({ customerId }: CalendarProps = {}) => {
   const deliveryList = days
     .filter(d => Number(d.jars_delivered) > 0)
     .sort((a, b) => {
-      const da = typeof a.date === 'string' ? a.date.split('T')[0] : new Date(a.date).toISOString().split('T')[0];
-      const db = typeof b.date === 'string' ? b.date.split('T')[0] : new Date(b.date).toISOString().split('T')[0];
+      const da = typeof a.date === 'string' ? a.date.split('T')[0] : '';
+      const db = typeof b.date === 'string' ? b.date.split('T')[0] : '';
       return da.localeCompare(db);
     });
 

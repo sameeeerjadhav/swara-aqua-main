@@ -678,7 +678,7 @@ export const getCalendarData = async (req: AuthRequest, res: Response): Promise<
 
     const [rows] = await pool.query<RowDataPacket[]>(`
       SELECT
-        DATE(d.delivered_at)                       AS date,
+        DATE_FORMAT(d.delivered_at, '%Y-%m-%d')    AS date,
         SUM(d.delivered_quantity)                   AS jars_delivered,
         COUNT(DISTINCT d.order_id)                 AS orders_count,
         SUM(d.collected_amount)                    AS total_amount
@@ -687,7 +687,7 @@ export const getCalendarData = async (req: AuthRequest, res: Response): Promise<
       WHERE o.customer_id = ?
         AND DATE_FORMAT(d.delivered_at, '%Y-%m') = ?
         AND d.status = 'delivered'
-      GROUP BY DATE(d.delivered_at)
+      GROUP BY DATE_FORMAT(d.delivered_at, '%Y-%m-%d')
       ORDER BY date ASC
     `, [targetCustomerId, month]);
 

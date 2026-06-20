@@ -119,11 +119,12 @@ export const AdminCustomerProfile = () => {
 
   const dayMap = new Map<string, CalendarDay>();
   calDays.forEach(d => {
-    const dateStr = typeof d.date === 'string' ? d.date.split('T')[0] : new Date(d.date).toISOString().split('T')[0];
-    dayMap.set(dateStr, d);
+    const dateStr = typeof d.date === 'string' ? d.date.split('T')[0] : '';
+    if (dateStr) dayMap.set(dateStr, d);
   });
 
-  const todayStr = now.toISOString().split('T')[0];
+  // Use local date parts — toISOString() is UTC and causes off-by-one in IST+5:30
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const calTotalJars = calDays.reduce((s, d) => s + Number(d.jars_delivered), 0);
   const calTotalAmount = calDays.reduce((s, d) => s + Number(d.total_amount), 0);
 

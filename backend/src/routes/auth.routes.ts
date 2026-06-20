@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { signup, login, getMe, refreshToken, changePassword, updateProfile } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
+import { upload, uploadMyPhoto } from '../controllers/photo.controller';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ router.get('/me', authenticate, getMe);
 router.post('/refresh', refreshLimiter, refreshToken);
 router.post('/change-password', authenticate, changePassword);
 router.patch('/profile', authenticate, updateProfile);
+router.post('/profile-photo', authenticate, upload.single('photo'), uploadMyPhoto);
 
 export default router;
 

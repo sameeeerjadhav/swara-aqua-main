@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import { Avatar } from '../../components/ui/Avatar';
 import api from '../../api/axios';
 import { subscriptionApi } from '../../api/subscription';
 import { pendingApi } from '../../api/pending';
 
-interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; }
+interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; profile_photo?: string | null; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
 interface BalanceInfo { total: number; months: MonthBill[]; }
 interface SavedAddress { label: string; address: string; is_default: number; }
@@ -341,9 +342,7 @@ export const AdminCustomers = () => {
                     className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs shrink-0 bg-gradient-to-br from-brand-500 to-aqua-500">
-                          {u.name.charAt(0).toUpperCase()}
-                        </div>
+                        <Avatar name={u.name} photo={u.profile_photo} size="xs" className="w-8 h-8" />
                         <div>
                           <p className="text-sm font-semibold text-slate-800">{u.name}</p>
                           {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
@@ -448,9 +447,7 @@ export const AdminCustomers = () => {
                 className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 transition-colors">
 
                 {/* Avatar */}
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 bg-gradient-to-br from-brand-500 to-aqua-500 shadow-sm">
-                  {u.name.charAt(0).toUpperCase()}
-                </div>
+                <Avatar name={u.name} photo={u.profile_photo} size="sm" className="w-10 h-10" />
 
                 {/* Name + phone */}
                 <div className="flex-1 min-w-0">
@@ -506,8 +503,38 @@ export const AdminCustomers = () => {
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br from-brand-500 to-aqua-500 shadow-sm">
-                      {selectedCustomer.name.charAt(0).toUpperCase()}
+                    <div className="relative shrink-0">
+                      <Avatar name={selectedCustomer.name} photo={selectedCustomer.profile_photo} size="md" className="w-12 h-12" />
+                      <label
+                        htmlFor="admin-customer-photo"
+                        className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer border border-slate-100 hover:bg-brand-50 transition-colors"
+                        title="Upload photo"
+                      >
+                        <Camera className="w-2.5 h-2.5 text-brand-600" />
+                      </label>
+                      <input
+                        id="admin-customer-photo"
+                        type="file" accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const fd = new FormData();
+                          fd.append('photo', file);
+                          try {
+                            await api.post(`/admin/users/${selectedCustomer.id}/photo`, fd, {
+                              headers: { 'Content-Type': 'multipart/form-data' },
+                            });
+                            toast('Photo updated!', 'success');
+                            setCustomers(prev => prev.map(c =>
+                              c.id === selectedCustomer.id
+                                ? { ...c, profile_photo: URL.createObjectURL(file) }
+                                : c
+                            ));
+                          } catch { toast('Failed to upload photo', 'error'); }
+                          e.target.value = '';
+                        }}
+                      />
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-slate-900">{selectedCustomer.name}</h3>

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer, getSettings, updateSetting, getCustomersForStaff, getCustomerDeliveryCalendar } from '../controllers/admin.controller';
+import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
 
 
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
@@ -10,9 +11,10 @@ const router = Router();
 
 router.get('/stats',              ...allowAdmin, getStats);
 router.get('/users',              ...allowAdmin, getUsers);
-router.get('/users/:id/profile',  ...allowAdmin, getCustomerProfile);
-router.patch('/users/:id/status', ...allowAdmin, updateStatus);
-router.patch('/users/:id/jar-rate', ...allowAdmin, updateJarRate);
+router.get('/users/:id/profile',              ...allowAdmin, getCustomerProfile);
+router.patch('/users/:id/status',             ...allowAdmin, updateStatus);
+router.patch('/users/:id/jar-rate',           ...allowAdmin, updateJarRate);
+router.post('/users/:id/photo',               ...allowAdmin, photoUpload.single('photo'), uploadCustomerPhoto);
 router.post('/staff',             ...allowAdmin, createStaff);
 router.post('/customer',          ...allowAdmin, createCustomer);
 router.post('/orders',            ...allowAdmin, createOrderForCustomer);

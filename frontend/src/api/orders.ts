@@ -130,6 +130,7 @@ export interface CustomerForStaff {
   jar_rate: number;
   pending_balance: number;
   today_jars: number;
+  profile_photo?: string | null;
   address: string | null;
   address_label: string | null;
 }

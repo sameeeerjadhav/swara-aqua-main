@@ -545,6 +545,7 @@ export const getCustomersForStaff = async (_req: AuthRequest, res: Response): Pr
         u.pending_balance,
         (SELECT a.address FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address,
         (SELECT a.label   FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label,
+        u.profile_photo,
         COALESCE((
           SELECT SUM(d.delivered_quantity)
           FROM deliveries d

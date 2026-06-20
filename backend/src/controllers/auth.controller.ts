@@ -124,6 +124,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         role: user.role,
         status: user.status,
         jar_rate: user.jar_rate,
+        profile_photo: user.profile_photo || null,
       },
     });
   } catch (err) {

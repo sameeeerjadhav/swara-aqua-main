@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Phone, LogOut, Edit3, Key, MapPin,
   Check, ChevronRight, Eye, EyeOff, Plus, Trash2,
-  Home, Briefcase, Star, Monitor, Smartphone,
+  Home, Briefcase, Star, Monitor, Smartphone, Camera,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
+import { Avatar } from '../../components/ui/Avatar';
 import api from '../../api/axios';
 // import { useNavigate } from 'react-router-dom'; // kept for wallet restore
 
@@ -32,8 +33,30 @@ const applyViewport = (mode: 'mobile' | 'desktop') => {
 type Section = 'name' | 'password' | null;
 
 export const ProfilePage = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { toast } = useToast();
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      await api.post('/auth/profile-photo', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      await refreshUser();
+      toast('Profile photo updated!', 'success');
+    } catch {
+      toast('Failed to upload photo', 'error');
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
 
   const [openSection, setOpenSection] = useState<Section>(null);
   const toggle = (s: Section) => setOpenSection(prev => prev === s ? null : s);
@@ -117,8 +140,31 @@ export const ProfilePage = () => {
         <div className="absolute right-8 -bottom-6 w-20 h-20 rounded-full bg-white/10" />
 
         <div className="relative z-10 flex items-center gap-4">
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shrink-0">
-            {user?.name?.charAt(0).toUpperCase()}
+          {/* Tappable avatar with camera overlay */}
+          <div className="relative shrink-0">
+            <Avatar
+              name={user?.name || '?'}
+              photo={user?.profile_photo}
+              size="lg"
+              className="cursor-pointer"
+              onClick={() => photoInputRef.current?.click()}
+            />
+            <div
+              onClick={() => photoInputRef.current?.click()}
+              className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer border border-slate-100 hover:bg-brand-50 transition-colors"
+            >
+              {uploadingPhoto
+                ? <div className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                : <Camera className="w-3 h-3 text-brand-600" />
+              }
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-white font-bold text-xl truncate">{user?.name}</h2>

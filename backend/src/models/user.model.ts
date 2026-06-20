@@ -12,6 +12,7 @@ export interface User {
   role: Role;
   status: Status;
   jar_rate: number;
+  profile_photo?: string | null;
   created_at: Date;
 }
 
@@ -25,7 +26,7 @@ export const findByPhone = async (phone: string): Promise<User | null> => {
 
 export const findById = async (id: number): Promise<User | null> => {
   const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT id, name, phone, role, status, jar_rate, advance_balance, wallet_balance, wallet_access, created_at FROM users WHERE id = ?',
+    'SELECT id, name, phone, role, status, jar_rate, advance_balance, wallet_balance, wallet_access, profile_photo, created_at FROM users WHERE id = ?',
     [id]
   );
   return rows.length ? (rows[0] as User) : null;

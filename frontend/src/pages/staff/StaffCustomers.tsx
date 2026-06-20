@@ -9,6 +9,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import { Avatar } from '../../components/ui/Avatar';
 import { ordersApi, staffApi, CustomerForStaff } from '../../api/orders';
 import { useLang } from '../../context/LanguageContext';
 import { t } from '../../i18n/staff';
@@ -287,9 +288,7 @@ const DeliverySheet = ({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-gradient-to-br from-brand-500 to-aqua-400 rounded-2xl flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
-              {customer.name.charAt(0).toUpperCase()}
-            </div>
+            <Avatar name={customer.name} photo={customer.profile_photo} size="sm" className="w-11 h-11" />
             <div>
               <p className="font-bold text-slate-900">{customer.name}</p>
               <p className="text-xs text-slate-400">{customer.phone} · ₹{jarRate}/jar</p>
@@ -413,9 +412,7 @@ const ProfileSheet = ({
 
         {/* Avatar + name */}
         <div className="flex flex-col items-center px-5 pb-5 pt-2 border-b border-slate-100">
-          <div className="w-20 h-20 bg-gradient-to-br from-brand-500 to-aqua-400 rounded-3xl flex items-center justify-center text-white font-extrabold text-3xl shadow-md mb-3">
-            {customer.name.charAt(0).toUpperCase()}
-          </div>
+            <Avatar name={customer.name} photo={customer.profile_photo} size="xl" />
           <h3 className="text-xl font-extrabold text-slate-900">{customer.name}</h3>
 
           {/* Callable phone */}
@@ -592,9 +589,7 @@ export const StaffCustomers = () => {
                 className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors rounded-2xl"
               >
                 {/* Avatar */}
-                <div className="w-12 h-12 bg-gradient-to-br from-brand-500 to-aqua-400 rounded-2xl flex items-center justify-center text-white font-extrabold text-lg shrink-0 shadow-sm">
-                  {c.name.charAt(0).toUpperCase()}
-                </div>
+                <Avatar name={c.name} photo={c.profile_photo} size="md" />
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">

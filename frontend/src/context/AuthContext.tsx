@@ -11,6 +11,7 @@ export interface AuthUser {
   role: Role;
   status: string;
   jar_rate?: number;
+  profile_photo?: string | null;
 }
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ interface AuthContextType {
   loading: boolean;
   login: (phone: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -38,6 +40,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const refreshUser = async () => {
+    try {
+      const { data } = await api.get('/auth/me');
+      setUser(data.user);
+    } catch { /* silent */ }
+  };
+
   const login = async (phone: string, password: string) => {
     const { data } = await api.post('/auth/login', { phone, password });
     localStorage.setItem('accessToken', data.accessToken);
@@ -52,7 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

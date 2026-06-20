@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotificationCenter } from '../../context/NotificationContext';
 import { addressApi, type UserAddress } from '../../api/address';
 import { useLang } from '../../context/LanguageContext';
+import { Avatar } from '../ui/Avatar';
 
 export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress?: () => void }) => {
   const { user, logout } = useAuth();
@@ -212,8 +213,8 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
                   </div>
                   <div className="relative">
                     <button onPointerDown={toggleProfile}
-                      className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm hover:bg-white/30 transition-colors">
-                      {user?.name?.charAt(0).toUpperCase()}
+                      className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center hover:opacity-90 transition-opacity">
+                      <Avatar name={user?.name || '?'} photo={user?.profile_photo} size="sm" />
                     </button>
                     <ProfilePanel />
                   </div>
@@ -279,8 +280,8 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
 
                 <div className="relative">
                   <button onPointerDown={toggleProfile}
-                    className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm hover:bg-white/30 transition-colors">
-                    {user?.name?.charAt(0).toUpperCase()}
+                    className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center hover:opacity-90 transition-opacity">
+                    <Avatar name={user?.name || '?'} photo={user?.profile_photo} size="sm" />
                   </button>
                   <ProfilePanel />
                 </div>
@@ -337,8 +338,8 @@ export const TopNavbar = ({ title, onOrderPress }: { title: string; onOrderPress
           <div className="relative">
             <button onPointerDown={toggleProfile}
               className="flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-xl hover:bg-slate-100 transition-colors">
-              <div className="w-8 h-8 bg-gradient-aqua rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                {user?.name?.charAt(0).toUpperCase()}
+              <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0">
+                <Avatar name={user?.name || '?'} photo={user?.profile_photo} size="xs" className="w-8 h-8" />
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-semibold text-slate-800 leading-tight">{user?.name}</p>

@@ -698,6 +698,62 @@ export const getCalendarData = async (req: AuthRequest, res: Response): Promise<
   }
 };
 
+// GET /orders/calendar/day?date=YYYY-MM-DD[&customerId=x]  (customer self or admin for a customer)
+export const getCalendarDayDetail = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { date, customerId } = req.query as Record<string, string>;
+
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      res.status(400).json({ message: 'date query param required in YYYY-MM-DD format' });
+      return;
+    }
+
+    let targetCustomerId: number;
+    if (req.user!.role === 'customer') {
+      targetCustomerId = req.user!.id;
+    } else if (customerId) {
+      targetCustomerId = Number(customerId);
+    } else {
+      res.status(400).json({ message: 'customerId query param required for admin/staff' });
+      return;
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        d.id,
+        d.delivered_quantity                                AS jars,
+        TIME_FORMAT(COALESCE(d.delivered_at, d.created_at), '%h:%i %p') AS time_str,
+        HOUR(COALESCE(d.delivered_at, d.created_at))        AS hour,
+        u.name                                              AS staff_name
+      FROM deliveries d
+      JOIN orders o     ON o.id  = d.order_id
+      LEFT JOIN users u ON u.id  = d.staff_id
+      WHERE o.customer_id = ?
+        AND DATE(COALESCE(d.delivered_at, d.created_at)) = ?
+        AND d.status = 'delivered'
+      ORDER BY COALESCE(d.delivered_at, d.created_at) ASC
+    `, [targetCustomerId, date]);
+
+    const deliveries = rows.map((r: RowDataPacket) => {
+      const h = Number(r.hour);
+      const period = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+      return {
+        id:         r.id,
+        jars:       Number(r.jars),
+        time:       r.time_str,
+        period,
+        staff_name: r.staff_name || 'Unknown',
+      };
+    });
+
+    const totalJars = deliveries.reduce((s, d) => s + d.jars, 0);
+    res.json({ date, deliveries, totalJars });
+  } catch (err) {
+    console.error('getCalendarDayDetail error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
 // ── Staff Daily Summary ────────────────────────────────────────────────────────
 
 export const getDailySummary = async (req: AuthRequest, res: Response): Promise<void> => {

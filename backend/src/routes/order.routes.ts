@@ -3,7 +3,7 @@ import { authenticate, allowAdmin } from '../middleware/auth.middleware';
 import {
   createOrder, getOrders, getOrderById, cancelOrder,
   assignOrder, updateOrderStatus, getOrderStats, getStaffList,
-  completeDelivery, getDeliveries, getCalendarData, getDailySummary,
+  completeDelivery, getDeliveries, getCalendarData, getCalendarDayDetail, getDailySummary,
   createOrderPayment, verifyOrderPayment, staffDirectDelivery,
 } from '../controllers/order.controller';
 
@@ -15,7 +15,8 @@ router.get('/stats',       ...allowAdmin, getOrderStats);    // admin
 router.get('/staff-list',  ...allowAdmin, getStaffList);     // admin
 router.get('/deliveries',  authenticate, getDeliveries);     // staff + admin
 router.post('/deliveries', authenticate, completeDelivery);  // staff
-router.get('/calendar',      authenticate, getCalendarData);   // customer + admin
+router.get('/calendar',      authenticate, getCalendarData);      // customer + admin
+router.get('/calendar/day',  authenticate, getCalendarDayDetail);  // customer + admin (day breakdown)
 router.get('/daily-summary', authenticate, getDailySummary);   // staff + admin
 router.post('/staff-direct', authenticate, staffDirectDelivery); // staff direct delivery
 

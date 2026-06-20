@@ -29,11 +29,25 @@ export interface CustomerProfileStats {
   pending_bills: number;
 }
 
+export interface DayDelivery {
+  id: number;
+  jars: number;
+  time: string;
+  period: 'morning' | 'afternoon' | 'evening';
+  staff_name: string;
+}
+
 export const calendarApi = {
   getCalendar: (month: string, customerId?: number) =>
     api.get<{ days: CalendarDay[] }>('/orders/calendar', {
       params: { month, ...(customerId ? { customerId } : {}) },
     }),
+
+  getDayDetail: (date: string, customerId?: number) =>
+    api.get<{ date: string; deliveries: DayDelivery[]; totalJars: number }>(
+      '/orders/calendar/day',
+      { params: { date, ...(customerId ? { customerId } : {}) } }
+    ),
 
   getCustomerProfile: (id: number) =>
     api.get<{

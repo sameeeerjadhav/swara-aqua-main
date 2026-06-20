@@ -600,3 +600,45 @@ export const getCustomerDeliveryCalendar = async (req: AuthRequest, res: Respons
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };
+
+// GET /admin/customer-deliveries/:id/day?date=YYYY-MM-DD  (staff + admin)
+export const getCustomerDayDeliveries = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const customerId = Number(req.params.id);
+    const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        d.id,
+        d.delivered_quantity                                AS jars,
+        TIME_FORMAT(COALESCE(d.delivered_at, d.created_at), '%h:%i %p') AS time_str,
+        HOUR(COALESCE(d.delivered_at, d.created_at))        AS hour,
+        u.name                                              AS staff_name
+      FROM deliveries d
+      JOIN orders o     ON o.id  = d.order_id
+      LEFT JOIN users u ON u.id  = d.staff_id
+      WHERE o.customer_id = ?
+        AND DATE(COALESCE(d.delivered_at, d.created_at)) = ?
+        AND d.status = 'delivered'
+      ORDER BY COALESCE(d.delivered_at, d.created_at) ASC
+    `, [customerId, date]);
+
+    const deliveries = rows.map((r: RowDataPacket) => {
+      const h = Number(r.hour);
+      const period = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+      return {
+        id:         r.id,
+        jars:       Number(r.jars),
+        time:       r.time_str,
+        period,
+        staff_name: r.staff_name || 'Unknown',
+      };
+    });
+
+    const totalJars = deliveries.reduce((s, d) => s + d.jars, 0);
+    res.json({ date, deliveries, totalJars });
+  } catch (err) {
+    console.error('getCustomerDayDeliveries error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};

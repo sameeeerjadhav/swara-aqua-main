@@ -22,6 +22,14 @@ const MODE_OPTIONS: { id: PaymentMode; label: string; color: string; bg: string 
   { id: 'pay_later', label: '⏳ Pay Later', color: 'text-amber-700',  bg: 'bg-amber-50 border-amber-300' },
 ];
 
+// ── Period helpers ─────────────────────────────────────────────────────────────
+type Period = 'morning' | 'afternoon' | 'evening';
+const PERIOD_META: Record<Period, { label: string; emoji: string; bg: string; text: string; border: string }> = {
+  morning:   { label: 'Morning',   emoji: '🌅', bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200' },
+  afternoon: { label: 'Afternoon', emoji: '☀️',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+  evening:   { label: 'Evening',   emoji: '🌆', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+};
+
 // ── Calendar Modal ──────────────────────────────────────────────────────────
 const CalendarModal = ({ customer, onClose }: { customer: CustomerForStaff; onClose: () => void }) => {
   const today = new Date();
@@ -29,6 +37,13 @@ const CalendarModal = ({ customer, onClose }: { customer: CustomerForStaff; onCl
   const [calendar, setCalendar] = useState<{ day: number; jars: number }[]>([]);
   const [totalJars, setTotalJars] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Day detail state
+  type DayDelivery = { id: number; jars: number; time: string; period: string; staff_name: string };
+  const [selectedDay, setSelectedDay] = useState<{ day: number; dateStr: string } | null>(null);
+  const [dayDeliveries, setDayDeliveries] = useState<DayDelivery[]>([]);
+  const [dayTotal, setDayTotal] = useState(0);
+  const [dayLoading, setDayLoading] = useState(false);
 
   const loadCalendar = useCallback(async (m: string) => {
     setLoading(true);
@@ -43,6 +58,7 @@ const CalendarModal = ({ customer, onClose }: { customer: CustomerForStaff; onCl
   useEffect(() => { loadCalendar(month); }, [month, loadCalendar]);
 
   const changeMonth = (delta: number) => {
+    setSelectedDay(null);
     const [y, m] = month.split('-').map(Number);
     const d = new Date(y, m - 1 + delta, 1);
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
@@ -53,7 +69,25 @@ const CalendarModal = ({ customer, onClose }: { customer: CustomerForStaff; onCl
     return new Date(Number(y), Number(mo) - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
   };
 
-  // 7-column calendar grid
+  const dayLabel = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  };
+
+  const handleDayClick = async (cell: { day: number; jars: number }) => {
+    if (cell.jars === 0) return; // non-delivery day — ignore
+    const dateStr = `${month}-${String(cell.day).padStart(2, '0')}`;
+    setSelectedDay({ day: cell.day, dateStr });
+    setDayLoading(true);
+    try {
+      const { data } = await staffApi.getDayDeliveries(customer.id, dateStr);
+      setDayDeliveries(data.deliveries);
+      setDayTotal(data.totalJars);
+    } catch { setDayDeliveries([]); setDayTotal(0); }
+    finally { setDayLoading(false); }
+  };
+
+  // Build weeks grid
   const firstDay = (() => { const [y, m] = month.split('-').map(Number); return new Date(y, m - 1, 1).getDay(); })();
   const weeks: ({ day: number; jars: number } | null)[][] = [];
   let week: ({ day: number; jars: number } | null)[] = Array(firstDay).fill(null);
@@ -72,110 +106,188 @@ const CalendarModal = ({ customer, onClose }: { customer: CustomerForStaff; onCl
         onClick={onClose}
       />
 
-      {/* Sheet — slides up from bottom on mobile, centered on desktop */}
+      {/* Sheet */}
       <motion.div
         initial={{ y: '100%', opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: '100%', opacity: 0 }}
         transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-        className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[92vh] sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:max-w-sm sm:mx-auto"
+        className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[92vh] sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:max-w-sm sm:mx-auto overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Drag handle (mobile only) */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden shrink-0">
           <div className="w-10 h-1 bg-slate-200 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="bg-gradient-to-r from-brand-600 to-aqua-500 px-5 py-4 rounded-t-3xl shrink-0">
+        <div className="bg-gradient-to-r from-brand-600 to-aqua-500 px-5 py-4 shrink-0">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-white/70 text-[10px] font-semibold uppercase tracking-wider">Delivery Calendar</p>
-              <p className="text-white font-extrabold text-base">{customer.name}</p>
+            <div className="flex items-center gap-2">
+              {selectedDay && (
+                <button onClick={() => setSelectedDay(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20 text-white mr-1">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+              <div>
+                <p className="text-white/70 text-[10px] font-semibold uppercase tracking-wider">
+                  {selectedDay ? 'Day Detail' : 'Delivery Calendar'}
+                </p>
+                <p className="text-white font-extrabold text-base">
+                  {selectedDay ? dayLabel(selectedDay.dateStr) : customer.name}
+                </p>
+              </div>
             </div>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white active:bg-white/30 transition-colors">
+            <button onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white active:bg-white/30 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Month nav */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
-          <button onClick={() => changeMonth(-1)}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all">
-            <ChevronLeft className="w-4 h-4 text-slate-600" />
-          </button>
-          <p className="text-sm font-bold text-slate-800">{monthLabel(month)}</p>
-          <button onClick={() => changeMonth(1)}
-            disabled={month >= today.toISOString().slice(0, 7)}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-            <ChevronRight className="w-4 h-4 text-slate-600" />
-          </button>
-        </div>
+        {/* ── CALENDAR VIEW ── */}
+        <AnimatePresence mode="wait">
+          {!selectedDay ? (
+            <motion.div key="calendar" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col flex-1 overflow-hidden">
+              {/* Month nav */}
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+                <button onClick={() => changeMonth(-1)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all">
+                  <ChevronLeft className="w-4 h-4 text-slate-600" />
+                </button>
+                <p className="text-sm font-bold text-slate-800">{monthLabel(month)}</p>
+                <button onClick={() => changeMonth(1)}
+                  disabled={month >= today.toISOString().slice(0, 7)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-30">
+                  <ChevronRight className="w-4 h-4 text-slate-600" />
+                </button>
+              </div>
 
-        {/* Scrollable calendar area */}
-        <div className="overflow-y-auto flex-1 px-4 pb-5 pt-3">
-          {/* Day-of-week headers */}
-          <div className="grid grid-cols-7 mb-2">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-              <p key={d} className="text-center text-[11px] font-bold text-slate-400 pb-1">{d}</p>
-            ))}
-          </div>
-
-          {loading ? (
-            <div className="space-y-1.5">
-              {[0,1,2,3,4].map(ri => (
-                <div key={ri} className="grid grid-cols-7 gap-1.5">
-                  {[0,1,2,3,4,5,6].map(ci => (
-                    <div key={ci} className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+              {/* Calendar grid */}
+              <div className="overflow-y-auto flex-1 px-4 pb-5 pt-3">
+                <div className="grid grid-cols-7 mb-2">
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                    <p key={d} className="text-center text-[11px] font-bold text-slate-400 pb-1">{d}</p>
                   ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {weeks.map((wk, wi) => (
-                <div key={wi} className="grid grid-cols-7 gap-1.5">
-                  {wk.map((cell, di) => {
-                    if (!cell) {
-                      return <div key={di} className="h-12" />;
-                    }
-                    const hasDelivery = cell.jars > 0;
-                    return (
-                      <div key={di}
-                        className={`h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 border transition-colors ${
-                          hasDelivery
-                            ? 'bg-green-50 border-green-200'
-                            : 'bg-slate-50 border-slate-200'
-                        }`}
-                      >
-                        <p className={`text-[11px] font-bold leading-none ${
-                          hasDelivery ? 'text-green-700' : 'text-slate-400'
-                        }`}>
-                          {cell.day}
-                        </p>
-                        <p className={`text-sm font-extrabold leading-none ${
-                          hasDelivery ? 'text-green-800' : 'text-slate-300'
-                        }`}>
-                          {hasDelivery ? cell.jars : '·'}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
 
-          {/* Total bar */}
-          <div className="mt-4 flex items-center justify-between bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Droplets className="w-4 h-4 text-brand-500" />
-              <span className="text-sm font-semibold text-slate-700">Total this month</span>
-            </div>
-            <span className="text-sm font-extrabold text-brand-700">{totalJars} jar{totalJars !== 1 ? 's' : ''}</span>
-          </div>
-        </div>
+                {loading ? (
+                  <div className="space-y-1.5">
+                    {[0,1,2,3,4].map(ri => (
+                      <div key={ri} className="grid grid-cols-7 gap-1.5">
+                        {[0,1,2,3,4,5,6].map(ci => <div key={ci} className="h-12 rounded-xl bg-slate-100 animate-pulse" />)}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {weeks.map((wk, wi) => (
+                      <div key={wi} className="grid grid-cols-7 gap-1.5">
+                        {wk.map((cell, di) => {
+                          if (!cell) return <div key={di} className="h-12" />;
+                          const hasDelivery = cell.jars > 0;
+                          return (
+                            <button key={di}
+                              onClick={() => handleDayClick(cell)}
+                              disabled={!hasDelivery}
+                              className={`h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 border transition-all ${
+                                hasDelivery
+                                  ? 'bg-green-50 border-green-200 active:scale-95 cursor-pointer hover:bg-green-100 hover:border-green-300'
+                                  : 'bg-slate-50 border-slate-200 cursor-default'
+                              }`}
+                            >
+                              <p className={`text-[11px] font-bold leading-none ${hasDelivery ? 'text-green-700' : 'text-slate-400'}`}>
+                                {cell.day}
+                              </p>
+                              <p className={`text-sm font-extrabold leading-none ${hasDelivery ? 'text-green-800' : 'text-slate-300'}`}>
+                                {hasDelivery ? cell.jars : '·'}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Total bar */}
+                <div className="mt-4 flex items-center justify-between bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Droplets className="w-4 h-4 text-brand-500" />
+                    <span className="text-sm font-semibold text-slate-700">Total this month</span>
+                  </div>
+                  <span className="text-sm font-extrabold text-brand-700">{totalJars} jar{totalJars !== 1 ? 's' : ''}</span>
+                </div>
+
+                <p className="text-center text-[10px] text-slate-400 mt-2">Tap a green day to see delivery details</p>
+              </div>
+            </motion.div>
+          ) : (
+            /* ── DAY DETAIL VIEW ── */
+            <motion.div key="daydetail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+              className="flex flex-col flex-1 overflow-hidden">
+              <div className="overflow-y-auto flex-1 px-4 pb-5 pt-4 space-y-3">
+
+                {dayLoading ? (
+                  <div className="space-y-3">
+                    {[0,1,2].map(i => (
+                      <div key={i} className="h-20 rounded-2xl bg-slate-100 animate-pulse" />
+                    ))}
+                  </div>
+                ) : dayDeliveries.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3">
+                    <CalendarDays className="w-10 h-10 text-slate-200" />
+                    <p className="text-sm text-slate-400">No delivery records for this day</p>
+                  </div>
+                ) : (
+                  <>
+                    {dayDeliveries.map((d, i) => {
+                      const p = PERIOD_META[d.period as Period] || PERIOD_META.morning;
+                      return (
+                        <motion.div key={d.id}
+                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                          className={`rounded-2xl border px-4 py-3.5 ${p.bg} ${p.border}`}>
+                          <div className="flex items-center justify-between">
+                            {/* Period badge */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">{p.emoji}</span>
+                              <div>
+                                <p className={`text-xs font-bold ${p.text}`}>{p.label}</p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">{d.time}</p>
+                              </div>
+                            </div>
+                            {/* Jar count */}
+                            <div className="flex items-center gap-1.5 bg-white/70 rounded-xl px-3 py-1.5 border border-white">
+                              <Droplets className="w-3.5 h-3.5 text-brand-500" />
+                              <span className="text-sm font-extrabold text-slate-800">{d.jars} jar{d.jars !== 1 ? 's' : ''}</span>
+                            </div>
+                          </div>
+                          {/* Staff */}
+                          <div className="mt-2 pt-2 border-t border-white/60 flex items-center gap-1.5">
+                            <span className="text-[10px] text-slate-400">Delivered by</span>
+                            <span className="text-[11px] font-semibold text-slate-600">{d.staff_name}</span>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+
+                    {/* Day total */}
+                    <div className="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3 mt-1">
+                      <div className="flex items-center gap-2">
+                        <Droplets className="w-4 h-4 text-brand-500" />
+                        <span className="text-sm font-semibold text-slate-700">Total for the day</span>
+                      </div>
+                      <span className="text-sm font-extrabold text-brand-700">{dayTotal} jar{dayTotal !== 1 ? 's' : ''}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </>
   );

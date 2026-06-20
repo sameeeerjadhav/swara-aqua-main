@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer, getSettings, updateSetting, getCustomersForStaff, getCustomerDeliveryCalendar } from '../controllers/admin.controller';
+import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer, getSettings, updateSetting, getCustomersForStaff, getCustomerDeliveryCalendar, getCustomerDayDeliveries } from '../controllers/admin.controller';
 import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
 
 
@@ -23,7 +23,8 @@ router.get('/customer-balances',  ...allowAdmin, getCustomerBalances);
 router.get('/settings',           ...allowAdmin, getSettings);
 router.put('/settings/:key',      ...allowAdmin, updateSetting);
 router.get('/customers-list',              authenticate, getCustomersForStaff); // staff + admin
-router.get('/customer-deliveries/:id',     authenticate, getCustomerDeliveryCalendar); // staff + admin
+router.get('/customer-deliveries/:id',     authenticate, getCustomerDeliveryCalendar);  // staff + admin
+router.get('/customer-deliveries/:id/day', authenticate, getCustomerDayDeliveries);     // staff + admin
 
 
 router.get('/firebase/status',    ...allowAdmin, getFirebaseStatus);

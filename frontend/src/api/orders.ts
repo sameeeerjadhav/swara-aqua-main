@@ -143,4 +143,10 @@ export const staffApi = {
       `/admin/customer-deliveries/${id}`,
       { params: { month } }
     ),
+  getDayDeliveries: (id: number, date: string) =>
+    api.get<{
+      date: string;
+      deliveries: { id: number; jars: number; time: string; period: string; staff_name: string }[];
+      totalJars: number;
+    }>(`/admin/customer-deliveries/${id}/day`, { params: { date } }),
 };

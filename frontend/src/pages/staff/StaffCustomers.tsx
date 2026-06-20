@@ -65,89 +65,115 @@ const CalendarModal = ({ customer, onClose }: { customer: CustomerForStaff; onCl
 
   return (
     <>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      {/* Backdrop */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 bg-white rounded-3xl shadow-2xl overflow-hidden max-w-sm mx-auto"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Sheet — slides up from bottom on mobile, centered on desktop */}
+      <motion.div
+        initial={{ y: '100%', opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[92vh] sm:inset-x-4 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:max-w-sm sm:mx-auto"
         onClick={e => e.stopPropagation()}
       >
+        {/* Drag handle (mobile only) */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 bg-slate-200 rounded-full" />
+        </div>
+
         {/* Header */}
-        <div className="bg-gradient-to-r from-brand-600 to-aqua-500 px-5 py-4">
+        <div className="bg-gradient-to-r from-brand-600 to-aqua-500 px-5 py-4 rounded-t-3xl shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-white/70 text-[10px] font-semibold uppercase tracking-wider">Delivery Calendar</p>
               <p className="text-white font-extrabold text-base">{customer.name}</p>
             </div>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white">
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white active:bg-white/30 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Month nav */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
           <button onClick={() => changeMonth(-1)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors">
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all">
             <ChevronLeft className="w-4 h-4 text-slate-600" />
           </button>
           <p className="text-sm font-bold text-slate-800">{monthLabel(month)}</p>
           <button onClick={() => changeMonth(1)}
             disabled={month >= today.toISOString().slice(0, 7)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-30">
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
             <ChevronRight className="w-4 h-4 text-slate-600" />
           </button>
         </div>
 
-        {/* Calendar grid */}
-        <div className="px-4 pb-4 pt-3">
-          {/* Day headers */}
-          <div className="grid grid-cols-7 mb-1">
-            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-              <p key={d} className="text-center text-[10px] font-bold text-slate-400">{d}</p>
+        {/* Scrollable calendar area */}
+        <div className="overflow-y-auto flex-1 px-4 pb-5 pt-3">
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 mb-2">
+            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+              <p key={d} className="text-center text-[11px] font-bold text-slate-400 pb-1">{d}</p>
             ))}
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-7 gap-1">
-              {Array(35).fill(0).map((_, i) => <div key={i} className="h-10 rounded-lg bg-slate-100 animate-pulse" />)}
+            <div className="space-y-1.5">
+              {[0,1,2,3,4].map(ri => (
+                <div key={ri} className="grid grid-cols-7 gap-1.5">
+                  {[0,1,2,3,4,5,6].map(ci => (
+                    <div key={ci} className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="space-y-1">
-              {weeks.map((week, wi) => (
-                <div key={wi} className="grid grid-cols-7 gap-1">
-                  {week.map((cell, di) => (
-                    <div key={di}
-                      className={`h-10 rounded-lg flex flex-col items-center justify-center ${
-                        cell === null ? '' :
-                        cell.jars > 0 ? 'bg-green-100 border border-green-300' :
-                        'bg-slate-50 border border-slate-200'
-                      }`}>
-                      {cell && (
-                        <>
-                          <p className={`text-[9px] font-semibold leading-none ${
-                            cell.jars > 0 ? 'text-green-700' : 'text-slate-400'
-                          }`}>{cell.day}</p>
-                          <p className={`text-xs font-extrabold leading-tight ${
-                            cell.jars > 0 ? 'text-green-800' : 'text-slate-300'
-                          }`}>{cell.jars > 0 ? cell.jars : '–'}</p>
-                        </>
-                      )}
-                    </div>
-                  ))}
+            <div className="space-y-1.5">
+              {weeks.map((wk, wi) => (
+                <div key={wi} className="grid grid-cols-7 gap-1.5">
+                  {wk.map((cell, di) => {
+                    if (!cell) {
+                      return <div key={di} className="h-12" />;
+                    }
+                    const hasDelivery = cell.jars > 0;
+                    return (
+                      <div key={di}
+                        className={`h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 border transition-colors ${
+                          hasDelivery
+                            ? 'bg-green-50 border-green-200'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <p className={`text-[11px] font-bold leading-none ${
+                          hasDelivery ? 'text-green-700' : 'text-slate-400'
+                        }`}>
+                          {cell.day}
+                        </p>
+                        <p className={`text-sm font-extrabold leading-none ${
+                          hasDelivery ? 'text-green-800' : 'text-slate-300'
+                        }`}>
+                          {hasDelivery ? cell.jars : '·'}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
           )}
 
-          {/* Total */}
-          <div className="mt-3 flex items-center justify-between bg-slate-50 rounded-2xl px-4 py-2.5">
+          {/* Total bar */}
+          <div className="mt-4 flex items-center justify-between bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
             <div className="flex items-center gap-2">
               <Droplets className="w-4 h-4 text-brand-500" />
               <span className="text-sm font-semibold text-slate-700">Total this month</span>
             </div>
-            <span className="text-sm font-extrabold text-brand-700">{totalJars} jars</span>
+            <span className="text-sm font-extrabold text-brand-700">{totalJars} jar{totalJars !== 1 ? 's' : ''}</span>
           </div>
         </div>
       </motion.div>

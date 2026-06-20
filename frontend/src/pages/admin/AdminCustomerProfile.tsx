@@ -1,22 +1,29 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Phone, MapPin, Droplets, Package, CreditCard, IndianRupee,
-  ChevronLeft, ChevronRight, FileText,
+  ChevronLeft, ChevronRight, FileText, CalendarDays,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { calendarApi, CalendarDay, CustomerProfile, CustomerProfileStats } from '../../api/calendar';
+import { calendarApi, CalendarDay, DayDelivery, CustomerProfile, CustomerProfileStats } from '../../api/calendar';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+type Period = 'morning' | 'afternoon' | 'evening';
+const PERIOD_META: Record<Period, { label: string; emoji: string; bg: string; text: string; border: string }> = {
+  morning:   { label: 'Morning',   emoji: '🌅', bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200' },
+  afternoon: { label: 'Afternoon', emoji: '☀️',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+  evening:   { label: 'Evening',   emoji: '🌆', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+};
 
 const BILL_STATUS: Record<string, string> = {
   paid:    'bg-green-50 text-green-700 border-green-200',
@@ -41,6 +48,12 @@ export const AdminCustomerProfile = () => {
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [calDays, setCalDays]   = useState<CalendarDay[]>([]);
   const [calLoading, setCalLoading] = useState(true);
+
+  // Day detail state
+  const [selectedDate, setSelectedDate]     = useState<string | null>(null);
+  const [dayDeliveries, setDayDeliveries]   = useState<DayDelivery[]>([]);
+  const [dayTotal, setDayTotal]             = useState(0);
+  const [dayLoading, setDayLoading]         = useState(false);
 
   const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
 
@@ -68,13 +81,34 @@ export const AdminCustomerProfile = () => {
   }, [id, calYear, calMonth]);
 
   const prevMonth = () => {
+    setSelectedDate(null);
     if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
     else setCalMonth(m => m - 1);
   };
   const nextMonth = () => {
+    setSelectedDate(null);
     if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
     else setCalMonth(m => m + 1);
   };
+
+  const handleDayClick = async (dateStr: string, hasData: boolean) => {
+    if (!hasData) return;
+    setSelectedDate(dateStr);
+    setDayLoading(true);
+    try {
+      const { data } = await calendarApi.getDayDetail(dateStr, Number(id));
+      setDayDeliveries(data.deliveries);
+      setDayTotal(data.totalJars);
+    } catch {
+      setDayDeliveries([]);
+      setDayTotal(0);
+    } finally { setDayLoading(false); }
+  };
+
+  const dayDetailLabel = selectedDate ? (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  })() : '';
 
   // Calendar grid
   const firstDay = new Date(calYear, calMonth, 1);
@@ -175,56 +209,138 @@ export const AdminCustomerProfile = () => {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Delivery Calendar</h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {calTotalJars} jars · ₹{calTotalAmount} · {calDays.length} days
-            </p>
+            {selectedDate ? (
+              <>
+                <button onClick={() => setSelectedDate(null)}
+                  className="flex items-center gap-1.5 text-brand-600 text-xs font-semibold hover:text-brand-700 transition-colors mb-1">
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Back to Calendar
+                </button>
+                <h3 className="text-sm font-bold text-slate-800">{dayDetailLabel}</h3>
+              </>
+            ) : (
+              <>
+                <h3 className="text-sm font-bold text-slate-800">Delivery Calendar</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {calTotalJars} jars · ₹{calTotalAmount} · {calDays.filter(d => Number(d.jars_delivered) > 0).length} days
+                </p>
+              </>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
-              <ChevronLeft className="w-4 h-4 text-slate-500" />
-            </button>
-            <span className="text-sm font-semibold text-slate-700 min-w-[130px] text-center">
-              {MONTH_NAMES[calMonth]} {calYear}
-            </span>
-            <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
-              <ChevronRight className="w-4 h-4 text-slate-500" />
-            </button>
-          </div>
+          {!selectedDate && (
+            <div className="flex items-center gap-2">
+              <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+                <ChevronLeft className="w-4 h-4 text-slate-500" />
+              </button>
+              <span className="text-sm font-semibold text-slate-700 min-w-[130px] text-center">
+                {MONTH_NAMES[calMonth]} {calYear}
+              </span>
+              <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+                <ChevronRight className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
-          {DAYS_OF_WEEK.map(d => (
-            <div key={d} className="py-2.5 text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{d}</div>
-          ))}
-        </div>
-
-        {calLoading ? (
-          <div className="p-4"><Skeleton className="h-48 w-full rounded-xl" /></div>
-        ) : (
-          <div className="grid grid-cols-7">
-            {cells.map((day, i) => {
-              if (day === null) return <div key={`e-${i}`} className="aspect-square border-b border-r border-slate-50 bg-slate-50/30" />;
-              const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const data = dayMap.get(dateStr);
-              const isToday = dateStr === todayStr;
-              const hasData = !!data && Number(data.jars_delivered) > 0;
-              return (
-                <div key={dateStr} className={`aspect-square border-b border-r border-slate-50 p-1 flex flex-col items-center justify-center
-                  ${isToday ? 'ring-2 ring-brand-400 ring-inset bg-brand-50/40' : ''}
-                  ${hasData ? 'bg-gradient-to-br from-brand-50 to-aqua-400/10' : ''}
-                `}>
-                  <span className={`text-[10px] font-medium ${isToday ? 'text-brand-700 font-bold' : hasData ? 'text-brand-600' : 'text-slate-400'}`}>
-                    {day}
-                  </span>
-                  {hasData && (
-                    <span className="text-xs font-bold text-brand-700 leading-none mt-0.5">{data.jars_delivered}</span>
-                  )}
+        <AnimatePresence mode="wait">
+          {!selectedDate ? (
+            <motion.div key="cal-grid"
+              initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.18 }}>
+              <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
+                {DAYS_OF_WEEK.map(d => (
+                  <div key={d} className="py-2.5 text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{d}</div>
+                ))}
+              </div>
+              {calLoading ? (
+                <div className="p-4"><Skeleton className="h-48 w-full rounded-xl" /></div>
+              ) : (
+                <div className="grid grid-cols-7">
+                  {cells.map((day, i) => {
+                    if (day === null) return <div key={`e-${i}`} className="aspect-square border-b border-r border-slate-50 bg-slate-50/30" />;
+                    const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const data = dayMap.get(dateStr);
+                    const isToday = dateStr === todayStr;
+                    const hasData = !!data && Number(data.jars_delivered) > 0;
+                    return (
+                      <button key={dateStr}
+                        onClick={() => handleDayClick(dateStr, hasData)}
+                        disabled={!hasData}
+                        className={`aspect-square border-b border-r border-slate-50 p-1 flex flex-col items-center justify-center transition-all
+                          ${isToday ? 'ring-2 ring-brand-400 ring-inset bg-brand-50/40' : ''}
+                          ${hasData ? 'bg-gradient-to-br from-brand-50 to-aqua-400/10 cursor-pointer hover:from-brand-100 hover:to-aqua-400/20 active:scale-95' : 'cursor-default'}
+                        `}>
+                        <span className={`text-[10px] font-medium ${isToday ? 'text-brand-700 font-bold' : hasData ? 'text-brand-600' : 'text-slate-400'}`}>
+                          {day}
+                        </span>
+                        {hasData && (
+                          <span className="text-xs font-bold text-brand-700 leading-none mt-0.5">{data!.jars_delivered}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              )}
+              {!calLoading && (
+                <p className="text-center text-[10px] text-slate-400 py-2">Tap a delivery day to see details</p>
+              )}
+            </motion.div>
+          ) : (
+            /* ── Day Detail ── */
+            <motion.div key="day-detail"
+              initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}
+              transition={{ duration: 0.18 }}
+              className="p-4 space-y-3">
+              {dayLoading ? (
+                <div className="space-y-3">
+                  {[0,1,2].map(i => <div key={i} className="h-20 rounded-2xl bg-slate-100 animate-pulse" />)}
+                </div>
+              ) : dayDeliveries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <CalendarDays className="w-10 h-10 text-slate-200" />
+                  <p className="text-sm text-slate-400">No delivery records for this day</p>
+                </div>
+              ) : (
+                <>
+                  {dayDeliveries.map((d, i) => {
+                    const p = PERIOD_META[d.period as Period] || PERIOD_META.morning;
+                    return (
+                      <motion.div key={d.id}
+                        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className={`rounded-2xl border px-4 py-3.5 ${p.bg} ${p.border}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{p.emoji}</span>
+                            <div>
+                              <p className={`text-xs font-bold ${p.text}`}>{p.label}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{d.time}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 bg-white/70 rounded-xl px-3 py-1.5 border border-white">
+                            <Droplets className="w-3.5 h-3.5 text-brand-500" />
+                            <span className="text-sm font-extrabold text-slate-800">{d.jars} jar{d.jars !== 1 ? 's' : ''}</span>
+                          </div>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-white/60 flex items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400">Delivered by</span>
+                          <span className="text-[11px] font-semibold text-slate-600">{d.staff_name}</span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                  <div className="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Droplets className="w-4 h-4 text-brand-500" />
+                      <span className="text-sm font-semibold text-slate-700">Total for the day</span>
+                    </div>
+                    <span className="text-sm font-extrabold text-brand-700">{dayTotal} jar{dayTotal !== 1 ? 's' : ''}</span>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Bills History ── */}

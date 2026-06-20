@@ -648,67 +648,91 @@ export const CustomerOrders = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {orders.map((order, i) => (
-            <motion.div
-              key={order.id}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              onClick={() => openDetail(order)}
-              className="bg-white rounded-2xl border border-slate-100 shadow-card p-4 cursor-pointer hover:border-brand-200 hover:shadow-md transition-all group">
+          {orders.map((order, i) => {
+            const isCancelled = order.status === 'cancelled';
+            const hasPendingRequest = order.cancel_request_status === 'pending';
 
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400">#{order.id}</span>
-                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full capitalize font-medium">
-                    {order.type}
-                  </span>
+            return (
+              <motion.div
+                key={order.id}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                onClick={() => !isCancelled && openDetail(order)}
+                className={`bg-white rounded-2xl border shadow-card p-4 transition-all group
+                  ${isCancelled
+                    ? 'opacity-55 border-dashed border-slate-200 cursor-default'
+                    : 'border-slate-100 cursor-pointer hover:border-brand-200 hover:shadow-md'}`}>
+
+                {/* Cancelled banner */}
+                {isCancelled && (
+                  <div className="mb-2 flex items-center gap-1.5 bg-red-50 border border-red-100 rounded-xl px-3 py-1.5">
+                    <span className="text-xs">❌</span>
+                    <span className="text-xs font-bold text-red-500">Order Cancelled</span>
+                  </div>
+                )}
+
+                {/* Pending approval banner */}
+                {!isCancelled && hasPendingRequest && (
+                  <div className="mb-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
+                    <span className="text-xs">⏳</span>
+                    <span className="text-xs font-bold text-amber-700">Cancellation request awaiting admin review</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-400">#{order.id}</span>
+                    <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full capitalize font-medium">
+                      {order.type}
+                    </span>
+                  </div>
+                  <OrderStatusBadge status={order.status} />
                 </div>
-                <OrderStatusBadge status={order.status} />
-              </div>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{order.quantity} Jars</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {new Date(order.created_at).toLocaleDateString('en-IN', {
-                      day: 'numeric', month: 'short', year: 'numeric',
-                    })}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{order.quantity} Jars</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {new Date(order.created_at).toLocaleDateString('en-IN', {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-bold text-brand-600">₹{order.total_amount}</p>
+                    {!isCancelled && <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-500 transition-colors" />}
+                  </div>
+                </div>
+
+                {/* Pay Now / Paid indicator — only for non-cancelled, non-pending-request orders */}
+                {!isCancelled && !hasPendingRequest && (
+                  <div className="mt-3 pt-3 border-t border-slate-50" onClick={e => e.stopPropagation()}>
+                    {(order.paid_online || paidOrderIds.has(order.id)) ? (
+                      <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
+                        <Check className="w-3.5 h-3.5 text-green-600" />
+                        <span className="text-xs font-bold text-green-700">Payment Done — Thank you!</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handlePayNow(order)}
+                        disabled={payingOrderId === order.id}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-xs font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        {payingOrderId === order.id ? 'Opening Payment…' : `Pay Now · ₹${order.total_amount}`}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {order.address && (
+                  <p className="text-xs text-slate-400 mt-2 flex items-center gap-1 truncate">
+                    <MapPin className="w-3 h-3 shrink-0" />{order.address}
                   </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-base font-bold text-brand-600">₹{order.total_amount}</p>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-500 transition-colors" />
-                </div>
-              </div>
-
-              {/* Pay Now / Paid indicator — for non-cancelled orders */}
-              {order.status !== 'cancelled' && (
-                <div className="mt-3 pt-3 border-t border-slate-50" onClick={e => e.stopPropagation()}>
-                  {(order.paid_online || paidOrderIds.has(order.id)) ? (
-                    <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
-                      <Check className="w-3.5 h-3.5 text-green-600" />
-                      <span className="text-xs font-bold text-green-700">Payment Done — Thank you!</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handlePayNow(order)}
-                      disabled={payingOrderId === order.id}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-aqua-500 text-white text-xs font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
-                    >
-                      <CreditCard className="w-3.5 h-3.5" />
-                      {payingOrderId === order.id ? 'Opening Payment…' : `Pay Now · ₹${order.total_amount}`}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {order.address && (
-                <p className="text-xs text-slate-400 mt-2 flex items-center gap-1 truncate">
-                  <MapPin className="w-3 h-3 shrink-0" />{order.address}
-                </p>
-              )}
-            </motion.div>
-          ))}
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
@@ -849,7 +873,7 @@ export const CustomerOrders = () => {
                       </div>
                     )}
 
-                    {/* Cancel button — smart policy */}
+                    {/* Cancel section — smart policy */}
                     {!['completed', 'cancelled'].includes(selected.order.status) && (
                       <>
                         {/* Pay Now / Paid indicator in detail modal */}
@@ -869,7 +893,19 @@ export const CustomerOrders = () => {
                           </button>
                         )}
 
-                        {(() => {
+                        {/* Cancel / Request section */}
+                        {selected.order.cancel_request_status === 'pending' ? (
+                          /* Already submitted — show status */
+                          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                            <span className="text-base">⏳</span>
+                            <div>
+                              <p className="text-xs font-bold text-amber-700">Cancellation Request Pending</p>
+                              <p className="text-[11px] text-amber-600 mt-0.5">
+                                Admin will review and cancel your order. You'll be notified.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (() => {
                           const ageMs = Date.now() - new Date(selected.order.created_at).getTime();
                           const isWithinHour = ageMs < 60 * 60 * 1000;
                           return isWithinHour ? (
@@ -888,37 +924,42 @@ export const CustomerOrders = () => {
                             </Button>
                           );
                         })()}
+
+                        {/* Cancel reason modal */}
+                        <AnimatePresence>
+                          {showReasonModal === selected.order.id && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden">
+                              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3 mt-2">
+                                <div>
+                                  <p className="text-xs font-bold text-amber-800">Request Cancellation Approval</p>
+                                  <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">
+                                    Since this order is older than 1 hour, your request will be sent to the admin for approval. Please provide a reason below.
+                                  </p>
+                                </div>
+                                <textarea
+                                  value={cancelReason}
+                                  onChange={e => setCancelReason(e.target.value)}
+                                  placeholder="Why do you want to cancel this order?"
+                                  rows={2}
+                                  className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-amber-400 transition-all resize-none" />
+                                <div className="flex gap-2">
+                                  <Button variant="secondary" size="sm" className="flex-1"
+                                    onClick={() => { setShowReasonModal(null); setCancelReason(''); }}>
+                                    Never mind
+                                  </Button>
+                                  <Button variant="danger" size="sm" className="flex-1" loading={cancelling}
+                                    onClick={() => handleCancel(selected.order.id, cancelReason)}
+                                    disabled={!cancelReason.trim()}>
+                                    Submit Request
+                                  </Button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </>
                     )}
-
-                    {/* Cancel reason modal */}
-                    <AnimatePresence>
-                      {showReasonModal === selected.order.id && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden">
-                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3 mt-2">
-                            <p className="text-xs font-bold text-red-700">This order is older than 1 hour. Please provide a reason:</p>
-                            <textarea
-                              value={cancelReason}
-                              onChange={e => setCancelReason(e.target.value)}
-                              placeholder="Why do you want to cancel?"
-                              rows={2}
-                              className="w-full bg-white border border-red-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-red-400 transition-all resize-none" />
-                            <div className="flex gap-2">
-                              <Button variant="secondary" size="sm" className="flex-1"
-                                onClick={() => { setShowReasonModal(null); setCancelReason(''); }}>
-                                Never mind
-                              </Button>
-                              <Button variant="danger" size="sm" className="flex-1" loading={cancelling}
-                                onClick={() => handleCancel(selected.order.id, cancelReason)}
-                                disabled={!cancelReason.trim()}>
-                                Submit Request
-                              </Button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
                   </div>
                 </>
               )}

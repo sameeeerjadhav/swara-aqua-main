@@ -5,6 +5,7 @@ import {
   assignOrder, updateOrderStatus, getOrderStats, getStaffList,
   completeDelivery, getDeliveries, getCalendarData, getCalendarDayDetail, getDailySummary,
   createOrderPayment, verifyOrderPayment, staffDirectDelivery,
+  getOrderCancelRequests, reviewOrderCancelRequest,
 } from '../controllers/order.controller';
 
 
@@ -19,6 +20,8 @@ router.get('/calendar',      authenticate, getCalendarData);      // customer + 
 router.get('/calendar/day',  authenticate, getCalendarDayDetail);  // customer + admin (day breakdown)
 router.get('/daily-summary', authenticate, getDailySummary);   // staff + admin
 router.post('/staff-direct', authenticate, staffDirectDelivery); // staff direct delivery
+router.get('/cancel-requests',      ...allowAdmin, getOrderCancelRequests);    // admin
+router.patch('/cancel-requests/:id', ...allowAdmin, reviewOrderCancelRequest); // admin
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 router.post('/',           authenticate,  createOrder);       // customer

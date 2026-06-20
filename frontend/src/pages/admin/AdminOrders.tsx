@@ -5,10 +5,9 @@ import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { ordersApi, Order } from '../../api/orders';
+import { ordersApi, Order, CancelRequest } from '../../api/orders';
 import { useSSE } from '../../hooks/useSSE';
 import api from '../../api/axios';
-import { subscriptionApi, CancelRequest } from '../../api/subscription';
 
 interface CustomerOption { id: number; name: string; phone: string; jar_rate: number; }
 
@@ -74,7 +73,7 @@ export const AdminOrders = () => {
   const loadCancelRequests = async () => {
     setCrLoading(true);
     try {
-      const { data } = await subscriptionApi.getCancelRequests();
+      const { data } = await ordersApi.getCancelRequests('pending');
       setCancelRequests(data.requests);
     } catch { /* silent */ }
     finally { setCrLoading(false); }
@@ -84,7 +83,7 @@ export const AdminOrders = () => {
 
   const handleReview = async (id: number, action: 'approved' | 'rejected') => {
     try {
-      await subscriptionApi.reviewCancelRequest(id, action);
+      await ordersApi.reviewCancelRequest(id, action);
       toast(`Cancel request ${action}`, action === 'approved' ? 'success' : 'warning');
       await loadCancelRequests();
       await load();
@@ -152,13 +151,13 @@ export const AdminOrders = () => {
                 <AlertTriangle className="w-4 h-4 text-white" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-bold text-amber-900">Cancellation Requests</p>
+                <p className="text-sm font-bold text-amber-900">Order Cancellation Requests</p>
                 <p className="text-[11px] text-amber-600 mt-0.5">Customers waiting for your decision</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">
-                {cancelRequests.filter(r => r.status === 'pending').length} pending
+                {cancelRequests.length} pending
               </span>
             </div>
           </button>
@@ -177,8 +176,8 @@ export const AdminOrders = () => {
                       </div>
                     </div>
                   ) : cancelRequests.map(cr => (
-                    <div key={cr.id} className={`px-5 py-4 ${
-                      cr.status !== 'pending' ? 'opacity-60' : ''
+                    <div key={cr.request_id} className={`px-5 py-4 ${
+                      cr.request_status !== 'pending' ? 'opacity-60' : ''
                     }`}>
                       <div className="flex items-start gap-3">
                         {/* Avatar */}
@@ -208,27 +207,27 @@ export const AdminOrders = () => {
                           {/* Time + Actions */}
                           <div className="flex items-center justify-between mt-2.5">
                             <p className="text-[10px] text-slate-400">
-                              {new Date(cr.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              {new Date(cr.requested_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </p>
 
-                            {cr.status === 'pending' ? (
+                            {cr.request_status === 'pending' ? (
                               <div className="flex gap-2">
-                                <button onClick={() => handleReview(cr.id, 'rejected')}
+                                <button onClick={() => handleReview(cr.request_id, 'rejected')}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-xs font-semibold transition-colors">
                                   <XCircle className="w-3.5 h-3.5" /> Reject
                                 </button>
-                                <button onClick={() => handleReview(cr.id, 'approved')}
+                                <button onClick={() => handleReview(cr.request_id, 'approved')}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors shadow-sm">
-                                  <Check className="w-3.5 h-3.5" /> Approve
+                                  <Check className="w-3.5 h-3.5" /> Approve & Cancel
                                 </button>
                               </div>
                             ) : (
                               <span className={`text-xs font-bold px-2.5 py-1 rounded-lg capitalize ${
-                                cr.status === 'approved'
+                                cr.request_status === 'approved'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'bg-red-50 text-red-600 border border-red-200'
                               }`}>
-                                {cr.status === 'approved' ? '\u2705' : '\u274c'} {cr.status}
+                                {cr.request_status === 'approved' ? '\u2705' : '\u274c'} {cr.request_status}
                               </span>
                             )}
                           </div>
@@ -363,7 +362,11 @@ export const AdminOrders = () => {
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No orders found</td></tr>
               ) : orders.map((o, i) => (
                 <motion.tr key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                  className="hover:bg-slate-50/50 transition-colors">
+                  className={`transition-colors ${
+                    o.status === 'cancelled'
+                      ? 'opacity-40 blur-[0.3px] pointer-events-none bg-slate-50/60'
+                      : 'hover:bg-slate-50/50'
+                  }`}>
                   <td className="px-4 py-3.5 text-xs font-bold text-slate-400">#{o.id}</td>
                   <td className="px-4 py-3.5">
                     <p className="text-sm font-semibold text-slate-800">{o.customer_name}</p>
@@ -400,7 +403,11 @@ export const AdminOrders = () => {
             <div className="py-12 text-center text-slate-400 text-sm">No orders found</div>
           ) : orders.map(o => (
             <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/60 transition-colors">
+              className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                o.status === 'cancelled'
+                  ? 'opacity-40 blur-[0.3px] pointer-events-none'
+                  : 'hover:bg-slate-50/60'
+              }`}>
 
               {/* Customer info */}
               <div className="flex-1 min-w-0">

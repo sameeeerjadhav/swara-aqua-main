@@ -284,6 +284,89 @@ export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
+// ── Admin: Order Cancel Requests ───────────────────────────────────────────────
+
+export const getOrderCancelRequests = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { status = 'pending' } = req.query as Record<string, string>;
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        cr.id             AS request_id,
+        cr.order_id,
+        cr.customer_id,
+        cr.reason,
+        cr.status         AS request_status,
+        cr.reviewed_by,
+        cr.reviewed_at,
+        cr.created_at     AS requested_at,
+        o.quantity,
+        o.type            AS order_type,
+        o.total_amount,
+        o.status          AS order_status,
+        o.created_at      AS order_created_at,
+        u.name            AS customer_name,
+        u.phone           AS customer_phone
+      FROM cancel_requests cr
+      JOIN orders o ON o.id = cr.order_id
+      JOIN users  u ON u.id = cr.customer_id
+      WHERE cr.status = ?
+      ORDER BY cr.created_at DESC
+    `, [status]);
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error('getOrderCancelRequests error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+export const reviewOrderCancelRequest = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body as { action: 'approved' | 'rejected' };
+
+    if (!['approved', 'rejected'].includes(action)) {
+      res.status(400).json({ message: 'action must be approved or rejected' });
+      return;
+    }
+
+    // Fetch the request
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT cr.*, o.customer_id FROM cancel_requests cr JOIN orders o ON o.id = cr.order_id WHERE cr.id = ?`,
+      [Number(id)]
+    );
+    if (!rows.length) { res.status(404).json({ message: 'Cancel request not found' }); return; }
+    const cr = rows[0];
+
+    if (cr.status !== 'pending') {
+      res.status(400).json({ message: `Request already ${cr.status}` });
+      return;
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      // Update the cancel request
+      await conn.query(
+        `UPDATE cancel_requests SET status = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?`,
+        [action, req.user!.id, Number(id)]
+      );
+      if (action === 'approved') {
+        // Actually cancel the order
+        await OrderModel.cancelOrder(cr.order_id, req.user!.id);
+        // Refund advance if applicable
+        await refundAdvanceOnCancel(conn, cr.order_id, cr.customer_id);
+      }
+      await conn.commit();
+    } catch (e) { await conn.rollback(); throw e; }
+    finally { conn.release(); }
+
+    res.json({ message: action === 'approved' ? 'Order cancelled and advance refunded if applicable' : 'Cancellation request rejected' });
+  } catch (err) {
+    console.error('reviewOrderCancelRequest error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export const assignOrder = async (req: AuthRequest, res: Response): Promise<void> => {

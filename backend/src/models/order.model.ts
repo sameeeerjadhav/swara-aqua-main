@@ -24,6 +24,10 @@ export interface Order {
   customer_phone?: string;
   staff_name?: string;
   paid_online?: boolean;  // true if a completed online payment exists in transactions
+  cancel_request_id?: number | null;
+  cancel_request_status?: 'pending' | 'approved' | 'rejected' | null;
+  cancel_request_reason?: string | null;
+  cancel_requested_at?: Date | null;
 }
 
 export interface Delivery {
@@ -47,7 +51,11 @@ const orderQuery = (where: string) => `
     c.name  AS customer_name,
     c.phone AS customer_phone,
     s.name  AS staff_name,
-    CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END AS paid_online
+    CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END AS paid_online,
+    cr.id         AS cancel_request_id,
+    cr.status     AS cancel_request_status,
+    cr.reason     AS cancel_request_reason,
+    cr.created_at AS cancel_requested_at
   FROM orders o
   JOIN  users c ON c.id = o.customer_id
   LEFT JOIN users s ON s.id = o.staff_id
@@ -56,6 +64,9 @@ const orderQuery = (where: string) => `
     AND t.mode      = 'online'
     AND t.status    = 'completed'
     AND t.type      = 'credit'
+  LEFT JOIN cancel_requests cr
+    ON  cr.order_id = o.id
+    AND cr.status   = 'pending'
   ${where}
   ORDER BY o.created_at DESC
 `;

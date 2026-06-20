@@ -603,6 +603,7 @@ const OrderCard = ({ order, onOpen, onNavigate, isAssignedToMe }: {
   isAssignedToMe: boolean;
 }) => {
   const isDone = ['completed', 'delivered'].includes(order.status);
+  const isCancelled = order.status === 'cancelled';
   const isFuture = order.status === 'pending' && !!order.delivery_date;
   const isMonthly = order.type === 'monthly';
 
@@ -618,13 +619,23 @@ const OrderCard = ({ order, onOpen, onNavigate, isAssignedToMe }: {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className={`bg-white rounded-2xl border shadow-card p-4 transition-all
-        ${isDone ? 'border-green-100 opacity-80' : isMonthly ? 'border-purple-100 ring-1 ring-purple-100' : isAssignedToMe ? 'border-brand-100 ring-1 ring-brand-100' : 'border-slate-100'}`}>
+        ${isCancelled ? 'opacity-50 border-dashed border-slate-200 blur-[0.2px]'
+          : isDone ? 'border-green-100 opacity-80' : isMonthly ? 'border-purple-100 ring-1 ring-purple-100' : isAssignedToMe ? 'border-brand-100 ring-1 ring-brand-100' : 'border-slate-100'}`}>
+
+      {/* Cancelled tag */}
+      {isCancelled && (
+        <div className="mb-2 flex items-center gap-1.5 bg-red-50 border border-red-100 rounded-xl px-2.5 py-1">
+          <span className="text-[10px]">❌</span>
+          <span className="text-[10px] font-bold text-red-500">Order Cancelled</span>
+        </div>
+      )}
+
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-xs font-bold text-slate-400">#{order.id}</span>
             <OrderStatusBadge status={order.status} />
-            {isAssignedToMe && !isDone && (
+            {isAssignedToMe && !isDone && !isCancelled && (
               <span className="text-[9px] font-bold bg-brand-600 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wide">
                 Yours
               </span>
@@ -639,7 +650,7 @@ const OrderCard = ({ order, onOpen, onNavigate, isAssignedToMe }: {
           <p className="text-sm font-bold text-slate-800">{order.customer_name}</p>
 
           {/* Delivery time — all pending orders */}
-          {!isDone && deliveryTime && (
+          {!isDone && !isCancelled && deliveryTime && (
             <div className="flex items-center gap-1.5 mt-1">
               {isMonthly ? (
                 <>
@@ -678,24 +689,26 @@ const OrderCard = ({ order, onOpen, onNavigate, isAssignedToMe }: {
           <p className="text-xs text-slate-400">{order.quantity} jars</p>
         </div>
       </div>
-      <div className="flex gap-2">
-        {!isDone && (
-          <Button variant={isAssignedToMe ? 'primary' : 'secondary'} size="sm" className="flex-1"
-            onClick={() => onOpen(order)}>
-            {order.status === 'assigned' ? 'Deliver' : 'Open'}
+      {!isCancelled && (
+        <div className="flex gap-2">
+          {!isDone && (
+            <Button variant={isAssignedToMe ? 'primary' : 'secondary'} size="sm" className="flex-1"
+              onClick={() => onOpen(order)}>
+              {order.status === 'assigned' ? 'Deliver' : 'Open'}
+            </Button>
+          )}
+          {isDone && (
+            <Button variant="secondary" size="sm" className="flex-1"
+              onClick={() => onOpen(order)}>
+              View Details
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" icon={<Navigation className="w-3.5 h-3.5" />}
+            onClick={() => onNavigate(order)} className="text-brand-600 hover:bg-brand-50">
+            Navigate
           </Button>
-        )}
-        {isDone && (
-          <Button variant="secondary" size="sm" className="flex-1"
-            onClick={() => onOpen(order)}>
-            View Details
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" icon={<Navigation className="w-3.5 h-3.5" />}
-          onClick={() => onNavigate(order)} className="text-brand-600 hover:bg-brand-50">
-          Navigate
-        </Button>
-      </div>
+        </div>
+      )}
     </motion.div>
   );
 };

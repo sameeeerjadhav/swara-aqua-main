@@ -494,12 +494,12 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
       res.status(400).json({ message: 'deliveryId, deliveredQuantity and collectedAmount are required' });
       return;
     }
-    if (deliveredQuantity < 0 || collectedAmount < 0) {
+    if (Number(deliveredQuantity) < 0 || Number(collectedAmount) < 0) {
       res.status(400).json({ message: 'Values cannot be negative' });
       return;
     }
 
-    // Fetch existing delivery + order
+    // Fetch existing delivery + joined order + admin name
     const [delRows] = await pool.query<RowDataPacket[]>(
       `SELECT d.*, o.customer_id, o.id AS order_id, o.price_per_jar, u.name AS admin_name
        FROM deliveries d
@@ -522,9 +522,9 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
     try {
       await conn.beginTransaction();
 
-      // 1. Update delivery row
+      // 1. Update delivery row (deliveries has no updated_at column)
       await conn.query(
-        `UPDATE deliveries SET delivered_quantity = ?, collected_amount = ?, updated_at = NOW() WHERE id = ?`,
+        `UPDATE deliveries SET delivered_quantity = ?, collected_amount = ? WHERE id = ?`,
         [newQty, newAmount, deliveryId]
       );
 
@@ -536,24 +536,16 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
         );
       }
 
-      // 3. Adjust inventory: update staff's jars_delivered by qtyDiff
-      if (qtyDiff !== 0) {
-        await conn.query(
-          `UPDATE inventory SET jars_delivered = GREATEST(0, jars_delivered + ?) WHERE staff_id = ? AND DATE(date) = CURDATE()`,
-          [qtyDiff, del.staff_id]
-        );
-      }
-
-      // 4. Timeline entry
+      // 3. Timeline entry (column is created_by, not actor_id)
       const noteText = [
         `Admin correction by ${del.admin_name}:`,
-        qtyDiff !== 0 ? `Jars ${oldQty}→${newQty} (${qtyDiff > 0 ? '+' : ''}${qtyDiff})` : null,
-        amtDiff !== 0 ? `Amount ₹${oldAmount}→₹${newAmount}` : null,
+        qtyDiff !== 0 ? `Jars ${oldQty}\u2192${newQty} (${qtyDiff > 0 ? '+' : ''}${qtyDiff})` : null,
+        amtDiff !== 0 ? `Amount \u20b9${oldAmount}\u2192\u20b9${newAmount}` : null,
         reason ? `Reason: ${reason}` : null,
-      ].filter(Boolean).join(' · ');
+      ].filter(Boolean).join(' \u00b7 ');
 
       await conn.query(
-        `INSERT INTO order_timeline (order_id, status, note, actor_id, created_at)
+        `INSERT INTO order_timeline (order_id, status, note, created_by, created_at)
          VALUES (?, 'adjustment', ?, ?, NOW())`,
         [del.order_id, noteText, req.user!.id]
       );

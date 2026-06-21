@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { inventoryApi, Inventory, StaffInventory, InventoryLog } from '../../api/inventory';
+import api from '../../api/axios';
 
 const LOG_COLORS: Record<string, string> = {
   add:       'bg-green-50  text-green-700  border-green-200',
@@ -30,17 +31,25 @@ export const AdminInventory = () => {
   const [assignStaffId,  setAssignStaffId]  = useState('');
   const [assignQty,      setAssignQty]      = useState(1);
   const [submitting,     setSubmitting]     = useState(false);
+  // Full staff list (all active staff, regardless of whether they have inventory rows)
+  const [allStaff, setAllStaff] = useState<{ id: number; name: string }[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [invRes, logRes] = await Promise.all([
+      const [invRes, logRes, usersRes] = await Promise.all([
         inventoryApi.get(),
         inventoryApi.getLogs(30),
+        api.get('/admin/users'),
       ]);
       setInventory(invRes.data.inventory);
       setStaffInventory(invRes.data.staffInventory);
       setLogs(logRes.data.logs);
+      // Keep only active staff for the assign dropdown
+      const staff = (usersRes.data.users as any[]).filter(
+        (u: any) => u.role === 'staff' && u.status === 'active' && !u.deleted_at
+      );
+      setAllStaff(staff.map((u: any) => ({ id: u.id, name: u.name })));
     } catch { toast('Failed to load inventory', 'error'); }
     finally { setLoading(false); }
   }, []);
@@ -249,8 +258,8 @@ export const AdminInventory = () => {
               <Field label="Staff Member">
                 <select value={assignStaffId} onChange={e => setAssignStaffId(e.target.value)} className={inputCls}>
                   <option value="">— Select staff —</option>
-                  {staffInventory.map(si => (
-                    <option key={si.staff_id} value={si.staff_id}>{si.staff_name}</option>
+                  {allStaff.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </Field>

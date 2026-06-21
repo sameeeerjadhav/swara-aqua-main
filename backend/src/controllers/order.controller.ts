@@ -528,19 +528,36 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
         [newQty, newAmount, deliveryId]
       );
 
-      // 2. If pay_later: adjust customer pending_balance by amount difference
-      if (del.payment_mode === 'pay_later' && amtDiff !== 0) {
+      // 2. Balance adjustment
+      //    - pay_later: pending_balance was added as price_per_jar × qty.
+      //      collected_amount stays 0, so we must use qtyDiff × price_per_jar.
+      //    - other modes: adjust by amtDiff (collected_amount change).
+      if (del.payment_mode === 'pay_later') {
+        if (qtyDiff !== 0) {
+          const balanceAdjust = qtyDiff * Number(del.price_per_jar); // negative = reduction
+          await conn.query(
+            `UPDATE users SET pending_balance = GREATEST(0, pending_balance + ?) WHERE id = ?`,
+            [balanceAdjust, del.customer_id]
+          );
+        }
+      } else if (amtDiff !== 0) {
+        // For cash/online adjustments, reflect the difference in pending_balance if needed
         await conn.query(
-          `UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?`,
+          `UPDATE users SET pending_balance = GREATEST(0, pending_balance + ?) WHERE id = ?`,
           [amtDiff, del.customer_id]
         );
       }
 
-      // 3. Timeline entry (column is created_by, not actor_id)
+      // 3. Timeline entry
+      const payLaterBalanceNote = del.payment_mode === 'pay_later' && qtyDiff !== 0
+        ? `Balance \u20b9${qtyDiff * Number(del.price_per_jar) > 0 ? '+' : ''}\u20b9${qtyDiff * Number(del.price_per_jar)}`
+        : null;
+
       const noteText = [
         `Admin correction by ${del.admin_name}:`,
         qtyDiff !== 0 ? `Jars ${oldQty}\u2192${newQty} (${qtyDiff > 0 ? '+' : ''}${qtyDiff})` : null,
-        amtDiff !== 0 ? `Amount \u20b9${oldAmount}\u2192\u20b9${newAmount}` : null,
+        del.payment_mode !== 'pay_later' && amtDiff !== 0 ? `Amount \u20b9${oldAmount}\u2192\u20b9${newAmount}` : null,
+        payLaterBalanceNote,
         reason ? `Reason: ${reason}` : null,
       ].filter(Boolean).join(' \u00b7 ');
 

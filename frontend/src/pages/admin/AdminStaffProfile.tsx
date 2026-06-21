@@ -142,34 +142,44 @@ export const AdminStaffProfile = () => {
       </AnimatePresence>
 
       {/* Back + Header */}
-      <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/admin/staff')}
-          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 hover:bg-slate-50 transition-all shrink-0">
-          <ArrowLeft className="w-4 h-4 text-slate-600" />
-        </button>
-        <div className="flex items-center gap-3 flex-1">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-4">
+        {/* Top row: back arrow + action buttons */}
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => navigate('/admin/staff')}
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all shrink-0">
+            <ArrowLeft className="w-4 h-4 text-slate-600" />
+          </button>
+          {/* Edit + Delete */}
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={() => setShowEdit(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors">
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+            <button
+              onClick={() => setShowDelete(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-xl border border-red-100 transition-colors">
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
+          </div>
+        </div>
+        {/* Profile info */}
+        <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br from-purple-500 to-brand-500 shadow-sm shrink-0">
             {profile.name.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">{profile.name}</h2>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold text-slate-900 truncate">{profile.name}</h2>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <Badge status={profile.status} />
-              <span className="text-xs text-slate-400">·</span>
               <span className="text-xs text-slate-500 flex items-center gap-1">
                 <Phone className="w-3 h-3" />{profile.phone}
               </span>
-              <span className="text-xs text-slate-400">·</span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-400">
                 Joined {new Date(profile.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             </div>
           </div>
-        </div>
-        {/* Edit + Delete */}
-        <div className="flex gap-2 shrink-0">
-          <Button size="sm" variant="secondary" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setShowEdit(true)}>Edit</Button>
-          <Button size="sm" variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => setShowDelete(true)}>Delete</Button>
         </div>
       </div>
 

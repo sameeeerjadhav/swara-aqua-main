@@ -202,13 +202,29 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
 // PATCH /auth/profile — update name and/or password
 export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, currentPassword, newPassword } = req.body;
+    const { name, phone, currentPassword, newPassword } = req.body;
     const userId = req.user!.id;
     const pool = (await import('../config/db')).default;
 
     // Update name if provided
     if (name && name.trim()) {
       await pool.query('UPDATE users SET name = ? WHERE id = ?', [name.trim(), userId]);
+    }
+
+    // Update phone if provided
+    if (phone && phone.trim()) {
+      const cleanPhone = String(phone).replace(/[\s\-]/g, '');
+      if (!/^[6-9][0-9]{9}$/.test(cleanPhone)) {
+        res.status(400).json({ message: 'Enter a valid 10-digit Indian mobile number' }); return;
+      }
+      // Check for duplicate phone (excluding self)
+      const [dup] = await pool.query<any[]>(
+        'SELECT id FROM users WHERE phone = ? AND id != ? AND deleted_at IS NULL', [cleanPhone, userId]
+      );
+      if ((dup as any[]).length) {
+        res.status(409).json({ message: 'This phone number is already registered to another account' }); return;
+      }
+      await pool.query('UPDATE users SET phone = ? WHERE id = ?', [cleanPhone, userId]);
     }
 
     // Update password if provided

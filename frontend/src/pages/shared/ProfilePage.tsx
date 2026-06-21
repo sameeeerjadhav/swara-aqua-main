@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Phone, LogOut, Edit3, Key, MapPin,
   Check, ChevronRight, Eye, EyeOff, Plus, Trash2,
-  Home, Briefcase, Star, Monitor, Smartphone, Camera,
+  Home, Briefcase, Star, Monitor, Smartphone, Camera, Pencil,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { Avatar } from '../../components/ui/Avatar';
+import { EditProfileModal } from '../../components/ui/EditProfileModal';
 import api from '../../api/axios';
 // import { useNavigate } from 'react-router-dom'; // kept for wallet restore
 
@@ -37,6 +38,14 @@ export const ProfilePage = () => {
   const { toast } = useToast();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [localName, setLocalName] = useState(user?.name || '');
+  const [localPhone, setLocalPhone] = useState(user?.phone || '');
+
+  useEffect(() => {
+    setLocalName(user?.name || '');
+    setLocalPhone(user?.phone || '');
+  }, [user?.name, user?.phone]);
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -167,15 +176,30 @@ export const ProfilePage = () => {
             />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-white font-bold text-xl truncate">{user?.name}</h2>
-            <p className="text-white/70 text-sm mt-0.5">{user?.phone}</p>
+            <h2 className="text-white font-bold text-xl truncate">{localName || user?.name}</h2>
+            <p className="text-white/70 text-sm mt-0.5">{localPhone || user?.phone}</p>
             <div className="flex items-center gap-2 mt-2">
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${role.color}`}>{role.label}</span>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
             </div>
           </div>
+          {/* Edit profile pencil */}
+          <button onClick={() => setShowEditProfile(true)}
+            className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors shrink-0">
+            <Pencil className="w-4 h-4 text-white" />
+          </button>
         </div>
       </motion.div>
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        open={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        initialName={localName || user?.name || ''}
+        initialPhone={localPhone || user?.phone || ''}
+        apiEndpoint="/auth/profile"
+        onSave={({ name, phone }) => { setLocalName(name); setLocalPhone(phone); }}
+      />
 
       {/* ── Account Details ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -352,7 +376,6 @@ export const ProfilePage = () => {
 
 // ── Address Section ────────────────────────────────────────────────────────────
 import { addressApi, UserAddress } from '../../api/address';
-import { useEffect } from 'react';
 
 const LABEL_ICONS: Record<string, React.ReactNode> = {
   Home:  <Home className="w-3.5 h-3.5" />,

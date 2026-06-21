@@ -414,6 +414,14 @@ export const runMigrations = async (): Promise<void> => {
     await addIndex('notifications',    'idx_notifications_is_read',   'is_read');
     await addIndex('wallet_transactions','idx_wallet_tx_user_id',     'user_id');
 
+    // ── Soft-delete column for users ─────────────────────────────────────────
+    try {
+      await conn.query(`ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL`);
+      console.log('  ✅ Added users.deleted_at');
+    } catch (e: any) {
+      if (e.errno !== 1060) throw e; // 1060 = Duplicate column name
+    }
+
     console.log('✅ Migrations complete');  } catch (err) {
     console.error('❌ Migration error:', (err as Error).message);
     // Don't crash the server — log and continue

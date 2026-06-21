@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, Shield, Activity, LogOut, Lock, KeyRound, Eye, EyeOff, CalendarDays, Bell, Upload, RefreshCw, CheckCircle2, AlertCircle, Percent, Coins } from 'lucide-react';
+import { Phone, Shield, Activity, LogOut, Lock, KeyRound, Eye, EyeOff, CalendarDays, Bell, Upload, RefreshCw, CheckCircle2, AlertCircle, Percent, Coins, Pencil } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
+import { EditProfileModal } from '../../components/ui/EditProfileModal';
 import api from '../../api/axios';
 
 export const AdminProfile = () => {
@@ -18,6 +19,14 @@ export const AdminProfile = () => {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew]         = useState(false);
   const [submitting, setSubmitting]   = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [localName, setLocalName]     = useState(user?.name || '');
+  const [localPhone, setLocalPhone]   = useState(user?.phone || '');
+
+  useEffect(() => {
+    setLocalName(user?.name || '');
+    setLocalPhone(user?.phone || '');
+  }, [user?.name, user?.phone]);
 
   const [fbReady, setFbReady]         = useState<boolean | null>(null);
   const [fbUploading, setFbUploading] = useState(false);
@@ -98,6 +107,16 @@ export const AdminProfile = () => {
   return (
     <div className="max-w-lg space-y-5">
 
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        open={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        initialName={localName}
+        initialPhone={localPhone}
+        apiEndpoint="/auth/profile"
+        onSave={({ name, phone }) => { setLocalName(name); setLocalPhone(phone); }}
+      />
+
       {/* Avatar card */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
         className="bg-gradient-to-br from-brand-700 via-brand-600 to-aqua-600 rounded-3xl p-6 relative overflow-hidden">
@@ -106,11 +125,11 @@ export const AdminProfile = () => {
         <div className="relative z-10 flex items-center gap-5">
           <div className="w-18 h-18 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg shrink-0"
             style={{ width: 72, height: 72 }}>
-            {user?.name?.charAt(0).toUpperCase()}
+            {(localName || user?.name)?.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">{user?.name}</h2>
-            <p className="text-white/60 text-sm mt-0.5">{user?.phone}</p>
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-white">{localName || user?.name}</h2>
+            <p className="text-white/60 text-sm mt-0.5">{localPhone || user?.phone}</p>
             <div className="flex items-center gap-2 mt-2">
               <span className="text-[10px] font-bold uppercase tracking-widest bg-white/20 text-white px-2.5 py-1 rounded-full">
                 {user?.role}
@@ -120,6 +139,10 @@ export const AdminProfile = () => {
               </span>
             </div>
           </div>
+          <button onClick={() => setShowEditProfile(true)}
+            className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors shrink-0">
+            <Pencil className="w-4 h-4 text-white" />
+          </button>
         </div>
       </motion.div>
 

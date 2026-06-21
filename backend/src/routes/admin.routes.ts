@@ -1,20 +1,25 @@
 import { Router } from 'express';
-import { getStats, getUsers, updateStatus, createStaff, updateJarRate, getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer, createOrderForCustomer, getSettings, updateSetting, getCustomersForStaff, getCustomerDeliveryCalendar, getCustomerDayDeliveries } from '../controllers/admin.controller';
+import {
+  getStats, getUsers, updateStatus, createStaff, updateJarRate,
+  getCustomerProfile, getCustomerBalances, getStaffProfile, createCustomer,
+  createOrderForCustomer, getSettings, updateSetting,
+  getCustomersForStaff, getCustomerDeliveryCalendar, getCustomerDayDeliveries,
+  updateUserProfile, deleteUser,
+} from '../controllers/admin.controller';
 import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
-
-
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
 import { allowAdmin, authenticate } from '../middleware/auth.middleware';
-
 
 const router = Router();
 
 router.get('/stats',              ...allowAdmin, getStats);
 router.get('/users',              ...allowAdmin, getUsers);
-router.get('/users/:id/profile',              ...allowAdmin, getCustomerProfile);
-router.patch('/users/:id/status',             ...allowAdmin, updateStatus);
-router.patch('/users/:id/jar-rate',           ...allowAdmin, updateJarRate);
-router.post('/users/:id/photo',               ...allowAdmin, photoUpload.single('photo'), uploadCustomerPhoto);
+router.get('/users/:id/profile',  ...allowAdmin, getCustomerProfile);
+router.patch('/users/:id/status', ...allowAdmin, updateStatus);
+router.patch('/users/:id/jar-rate', ...allowAdmin, updateJarRate);
+router.patch('/users/:id/profile',  ...allowAdmin, updateUserProfile);   // ← NEW: admin edit any user
+router.delete('/users/:id',         ...allowAdmin, deleteUser);           // ← NEW: soft delete user
+router.post('/users/:id/photo',   ...allowAdmin, photoUpload.single('photo'), uploadCustomerPhoto);
 router.post('/staff',             ...allowAdmin, createStaff);
 router.post('/customer',          ...allowAdmin, createCustomer);
 router.post('/orders',            ...allowAdmin, createOrderForCustomer);
@@ -26,10 +31,8 @@ router.get('/customers-list',              authenticate, getCustomersForStaff); 
 router.get('/customer-deliveries/:id',     authenticate, getCustomerDeliveryCalendar);  // staff + admin
 router.get('/customer-deliveries/:id/day', authenticate, getCustomerDayDeliveries);     // staff + admin
 
-
 router.get('/firebase/status',    ...allowAdmin, getFirebaseStatus);
 router.post('/firebase/upload',   ...allowAdmin, uploadCredentials);
 router.post('/firebase/reload',   ...allowAdmin, reloadCredentials);
 
 export default router;
-

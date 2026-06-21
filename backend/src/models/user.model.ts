@@ -13,12 +13,13 @@ export interface User {
   status: Status;
   jar_rate: number;
   profile_photo?: string | null;
+  deleted_at?: Date | null;
   created_at: Date;
 }
 
 export const findByPhone = async (phone: string): Promise<User | null> => {
   const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT * FROM users WHERE phone = ?',
+    'SELECT * FROM users WHERE phone = ? AND deleted_at IS NULL',
     [phone]
   );
   return rows.length ? (rows[0] as User) : null;
@@ -55,7 +56,7 @@ export const createUser = async (
 
 export const getAllUsers = async (): Promise<Omit<User, 'password'>[]> => {
   const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT id, name, phone, role, status, jar_rate, prepaid_balance, advance_access, created_at FROM users'
+    'SELECT id, name, phone, role, status, jar_rate, prepaid_balance, advance_access, created_at FROM users WHERE deleted_at IS NULL'
   );
   return rows as Omit<User, 'password'>[];
 };
@@ -75,4 +76,3 @@ export const updatePassword = async (id: number, hashedPassword: string): Promis
 export const updateName = async (id: number, name: string): Promise<void> => {
   await pool.query('UPDATE users SET name = ? WHERE id = ?', [name, id]);
 };
-

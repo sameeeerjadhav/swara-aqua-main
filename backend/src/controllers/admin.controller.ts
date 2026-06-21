@@ -642,3 +642,101 @@ export const getCustomerDayDeliveries = async (req: AuthRequest, res: Response):
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };
+
+// ── Admin: Edit any user's profile ───────────────────────────────────────────
+export const updateUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const targetId = Number(req.params.id);
+    const { name, phone, jar_rate, newPassword } = req.body as {
+      name?: string; phone?: string; jar_rate?: number; newPassword?: string;
+    };
+
+    // Fetch target user
+    const [userRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, role FROM users WHERE id = ? AND deleted_at IS NULL', [targetId]
+    );
+    if (!userRows.length) { res.status(404).json({ message: 'User not found' }); return; }
+
+    const updates: string[] = [];
+    const params: any[]     = [];
+
+    if (name && name.trim()) {
+      updates.push('name = ?');
+      params.push(name.trim());
+    }
+
+    if (phone && phone.trim()) {
+      const cleanPhone = String(phone).replace(/[\s\-]/g, '');
+      if (!/^[6-9][0-9]{9}$/.test(cleanPhone)) {
+        res.status(400).json({ message: 'Invalid phone number' }); return;
+      }
+      // Check for duplicate (excluding self)
+      const [dup] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM users WHERE phone = ? AND id != ? AND deleted_at IS NULL', [cleanPhone, targetId]
+      );
+      if (dup.length) { res.status(409).json({ message: 'Phone number already in use by another account' }); return; }
+      updates.push('phone = ?');
+      params.push(cleanPhone);
+    }
+
+    if (jar_rate != null && Number(jar_rate) >= 0) {
+      updates.push('jar_rate = ?');
+      params.push(Number(jar_rate));
+    }
+
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        res.status(400).json({ message: 'Password must be at least 6 characters' }); return;
+      }
+      const hashed = await bcrypt.hash(newPassword, 12);
+      updates.push('password = ?');
+      params.push(hashed);
+    }
+
+    if (!updates.length) {
+      res.status(400).json({ message: 'No fields to update' }); return;
+    }
+
+    params.push(targetId);
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+
+    res.json({ message: 'Profile updated successfully' });
+  } catch (err) {
+    console.error('updateUserProfile error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── Admin: Soft-delete a user ─────────────────────────────────────────────────
+export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const targetId = Number(req.params.id);
+
+    // Safety: cannot delete an admin account
+    const [userRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, role, deleted_at FROM users WHERE id = ?', [targetId]
+    );
+    if (!userRows.length) { res.status(404).json({ message: 'User not found' }); return; }
+    const target = userRows[0];
+    if (target.role === 'admin') {
+      res.status(403).json({ message: 'Cannot delete an admin account' }); return;
+    }
+    if (target.deleted_at) {
+      res.status(409).json({ message: 'User already deleted' }); return;
+    }
+
+    // Soft delete — preserves all orders, deliveries, bills, transactions
+    await pool.query(
+      'UPDATE users SET deleted_at = NOW(), status = ? WHERE id = ?',
+      ['rejected', targetId]
+    );
+
+    // Invalidate all refresh tokens by nullifying (optional: add a revoked_at field)
+    // For now the user simply cannot login because findByPhone checks deleted_at IS NULL
+
+    res.json({ message: 'User account deactivated. All records preserved.' });
+  } catch (err) {
+    console.error('deleteUser error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};

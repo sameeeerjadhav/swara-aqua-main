@@ -12,7 +12,7 @@ import { subscriptionApi, CancelRequest } from '../../api/subscription';
 
 interface CustomerOption { id: number; name: string; phone: string; jar_rate: number; }
 
-const STATUS_FILTERS = ['all', 'pending', 'assigned', 'delivered', 'completed', 'cancelled'];
+const STATUS_FILTERS = ['all', 'pending', 'delivered', 'cancelled'];
 
 // Returns YYYY-MM-DD for today
 const todayStr = () => new Date().toISOString().split('T')[0];

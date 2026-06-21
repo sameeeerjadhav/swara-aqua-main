@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users, Package, TrendingUp, Clock, ChevronRight,
-  Droplets, IndianRupee, AlertCircle,
+  XCircle, IndianRupee, AlertCircle,
   BarChart3, Bell, UserRound, Wallet,
 
 } from 'lucide-react';
@@ -17,7 +17,7 @@ import { useSSE } from '../../hooks/useSSE';
 
 interface UserStats  { total: number; pending: number; active: number; customers: number; staff: number; advance_requests: number; }
 
-interface OrderStats { total: number; pending: number; assigned: number; completed: number; total_revenue: number; }
+interface OrderStats { total: number; pending: number; assigned: number; completed: number; cancelled: number; total_revenue: number; }
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: 'easeOut' as const } } };
@@ -162,11 +162,11 @@ export const AdminHome = () => {
             gradient="from-green-500 to-teal-400"
             to="/admin/orders"
             icon={<TrendingUp className="w-5 h-5 text-white" />} />
-          <MetricCard loading={loading} label="In Transit"
-            value={orderStats?.assigned ?? '—'}
-            gradient="from-purple-500 to-indigo-400"
+          <MetricCard loading={loading} label="Cancelled"
+            value={orderStats?.cancelled ?? '—'}
+            gradient="from-red-500 to-rose-400"
             to="/admin/orders"
-            icon={<Droplets className="w-5 h-5 text-white" />} />
+            icon={<XCircle className="w-5 h-5 text-white" />} />
         </motion.div>
       </div>
 

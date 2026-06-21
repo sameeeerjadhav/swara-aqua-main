@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle, Check, XCircle } from 'lucide-react';
+import { Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle, Check, XCircle, Pencil, Minus, ChevronRight, Clock } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { ordersApi, Order, CancelRequest } from '../../api/orders';
+import { ordersApi, Order, CancelRequest, Delivery, TimelineEntry } from '../../api/orders';
 import { useSSE } from '../../hooks/useSSE';
 import api from '../../api/axios';
 
@@ -42,6 +42,17 @@ export const AdminOrders = () => {
   const [crLoading, setCrLoading]           = useState(false);
   const [showCancelRequests, setShowCancelRequests] = useState(true);
 
+  // Order detail modal
+  const [detailOrder,    setDetailOrder]    = useState<Order | null>(null);
+  const [detailDelivery, setDetailDelivery] = useState<Delivery | null>(null);
+  const [detailTimeline, setDetailTimeline] = useState<TimelineEntry[]>([]);
+  const [detailLoading,  setDetailLoading]  = useState(false);
+  // Edit delivery state
+  const [editQty,    setEditQty]    = useState(0);
+  const [editAmount, setEditAmount] = useState(0);
+  const [editReason, setEditReason] = useState('');
+  const [adjusting,  setAdjusting]  = useState(false);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -70,16 +81,16 @@ export const AdminOrders = () => {
   });
 
   // Cancel requests
-  const loadCancelRequests = async () => {
+  const loadCancelRequests = useCallback(async () => {
     setCrLoading(true);
     try {
       const { data } = await ordersApi.getCancelRequests('pending');
       setCancelRequests(data.requests);
     } catch { /* silent */ }
     finally { setCrLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { loadCancelRequests(); }, []);
+  useEffect(() => { loadCancelRequests(); }, [loadCancelRequests]);
 
   const handleReview = async (id: number, action: 'approved' | 'rejected') => {
     try {
@@ -89,6 +100,43 @@ export const AdminOrders = () => {
       await load();
     } catch { toast('Failed to update', 'error'); }
   };
+
+  // Order detail modal
+  const openDetail = async (order: Order) => {
+    setDetailOrder(order);
+    setDetailDelivery(null);
+    setDetailTimeline([]);
+    setEditReason('');
+    setDetailLoading(true);
+    try {
+      const { data } = await ordersApi.get(order.id);
+      setDetailDelivery(data.delivery || null);
+      setDetailTimeline(data.timeline || []);
+      setEditQty(data.delivery?.delivered_quantity ?? order.quantity);
+      setEditAmount(data.delivery?.collected_amount ?? order.total_amount);
+    } catch { /* silent */ }
+    finally { setDetailLoading(false); }
+  };
+
+  const closeDetail = () => { setDetailOrder(null); setDetailDelivery(null); setDetailTimeline([]); };
+
+  const handleAdjust = async () => {
+    if (!detailDelivery) return;
+    setAdjusting(true);
+    try {
+      await ordersApi.adjustDelivery(detailDelivery.id, {
+        deliveredQuantity: editQty,
+        collectedAmount:   editAmount,
+        reason:            editReason || undefined,
+      });
+      toast('Delivery corrected successfully!', 'success');
+      closeDetail();
+      await load();
+    } catch (err: any) {
+      toast(err?.response?.data?.message || 'Failed to save correction', 'error');
+    } finally { setAdjusting(false); }
+  };
+
 
   // Load customer list when modal opens
   useEffect(() => {
@@ -362,10 +410,11 @@ export const AdminOrders = () => {
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No orders found</td></tr>
               ) : orders.map((o, i) => (
                 <motion.tr key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                  onClick={() => o.status !== 'cancelled' && openDetail(o)}
                   className={`transition-colors ${
                     o.status === 'cancelled'
                       ? 'opacity-40 blur-[0.3px] pointer-events-none bg-slate-50/60'
-                      : 'hover:bg-slate-50/50'
+                      : 'hover:bg-brand-50/40 cursor-pointer'
                   }`}>
                   <td className="px-4 py-3.5 text-xs font-bold text-slate-400">#{o.id}</td>
                   <td className="px-4 py-3.5">
@@ -403,10 +452,11 @@ export const AdminOrders = () => {
             <div className="py-12 text-center text-slate-400 text-sm">No orders found</div>
           ) : orders.map(o => (
             <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              onClick={() => o.status !== 'cancelled' && openDetail(o)}
               className={`flex items-center gap-3 px-4 py-3 transition-colors ${
                 o.status === 'cancelled'
                   ? 'opacity-40 blur-[0.3px] pointer-events-none'
-                  : 'hover:bg-slate-50/60'
+                  : 'hover:bg-brand-50/40 cursor-pointer'
               }`}>
 
               {/* Customer info */}
@@ -424,10 +474,198 @@ export const AdminOrders = () => {
                 <OrderStatusBadge status={o.status} />
                 <span className="text-xs font-bold text-brand-600">₹{o.total_amount}</span>
               </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
             </motion.div>
           ))}
         </div>
       </div>
+
+      {/* ─── Order Detail + Delivery Edit Modal ─── */}
+      <AnimatePresence>
+        {detailOrder && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={closeDetail}>
+            <motion.div
+              initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+
+              {/* Drag handle (mobile) */}
+              <div className="flex justify-center pt-3 pb-1 sm:hidden">
+                <div className="w-10 h-1 rounded-full bg-slate-300" />
+              </div>
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Order #{detailOrder.id}</h3>
+                  <p className="text-xs text-slate-400 mt-0.5 capitalize">{detailOrder.type} · {detailOrder.customer_name}</p>
+                </div>
+                <button onClick={closeDetail}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-6 py-5 space-y-5">
+
+                {/* Order summary chips */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-50 rounded-xl p-3 text-center">
+                    <p className="text-[10px] text-slate-400 mb-0.5">Ordered Jars</p>
+                    <p className="text-xl font-extrabold text-slate-800">{detailOrder.quantity}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 text-center">
+                    <p className="text-[10px] text-slate-400 mb-0.5">Total</p>
+                    <p className="text-xl font-extrabold text-brand-600">₹{detailOrder.total_amount}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 text-center">
+                    <p className="text-[10px] text-slate-400 mb-0.5">Status</p>
+                    <div className="mt-0.5 flex justify-center">
+                      <OrderStatusBadge status={detailOrder.status} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Staff + Date row */}
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>👤 {detailOrder.staff_name || 'Unassigned'}</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {new Date(detailOrder.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+
+                {/* Loading skeleton */}
+                {detailLoading && (
+                  <div className="space-y-3 animate-pulse">
+                    <div className="h-20 bg-slate-100 rounded-xl" />
+                    <div className="h-32 bg-slate-100 rounded-xl" />
+                  </div>
+                )}
+
+                {/* ── Delivery Edit Section ── */}
+                {!detailLoading && detailDelivery && ['completed', 'delivered'].includes(detailOrder.status) && (
+                  <div className="bg-gradient-to-br from-brand-50 to-aqua-400/10 border border-brand-100 rounded-2xl p-4 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center shrink-0">
+                        <Pencil className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-brand-900">Correct Delivery</p>
+                        <p className="text-[11px] text-brand-600">Adjust if staff entered wrong values</p>
+                      </div>
+                    </div>
+
+                    {/* Jar quantity stepper */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Delivered Jars</label>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setEditQty(q => Math.max(0, q - 1))}
+                          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-red-50 hover:border-red-300 text-slate-600 hover:text-red-600 transition-all active:scale-95">
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <div className="flex-1 text-center">
+                          <p className="text-3xl font-extrabold text-slate-800">{editQty}</p>
+                          {editQty !== detailDelivery.delivered_quantity && (
+                            <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
+                              Was: {detailDelivery.delivered_quantity} · Change: {editQty - detailDelivery.delivered_quantity > 0 ? '+' : ''}{editQty - detailDelivery.delivered_quantity}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setEditQty(q => q + 1)}
+                          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-green-50 hover:border-green-300 text-slate-600 hover:text-green-600 transition-all active:scale-95">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Amount */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Collected Amount (₹)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                        <input
+                          type="number" min={0} value={editAmount}
+                          onChange={e => setEditAmount(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                      </div>
+                      {editAmount !== detailDelivery.collected_amount && (
+                        <p className="text-[10px] text-amber-600 font-semibold mt-1">
+                          Was: ₹{detailDelivery.collected_amount} · Change: {editAmount - detailDelivery.collected_amount > 0 ? '+' : ''}₹{editAmount - detailDelivery.collected_amount}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Reason */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Reason (optional)</label>
+                      <input
+                        value={editReason}
+                        onChange={e => setEditReason(e.target.value)}
+                        placeholder="e.g. Staff entered 3 jars but delivered 2"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                    </div>
+
+                    {/* Save button */}
+                    {(editQty !== detailDelivery.delivered_quantity || editAmount !== detailDelivery.collected_amount) ? (
+                      <Button size="md" className="w-full" loading={adjusting} onClick={handleAdjust}
+                        icon={<Check className="w-4 h-4" />}>
+                        Save Correction
+                      </Button>
+                    ) : (
+                      <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
+                        <Check className="w-3.5 h-3.5 text-green-600" />
+                        <span className="text-xs font-bold text-green-700">Values match — no changes needed</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* No delivery yet */}
+                {!detailLoading && !detailDelivery && ['pending', 'assigned'].includes(detailOrder.status) && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700 font-semibold text-center">
+                    ⏳ Delivery not yet recorded
+                  </div>
+                )}
+
+                {/* Timeline */}
+                {!detailLoading && detailTimeline.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Order Timeline</p>
+                    <div className="space-y-0">
+                      {detailTimeline.map((t, i) => (
+                        <div key={t.id} className="flex items-start gap-3">
+                          <div className="flex flex-col items-center">
+                            <span className="text-base leading-none">
+                              {t.status === 'adjustment' ? '🛠️' : t.status === 'completed' ? '✅' : t.status === 'cancelled' ? '❌' : t.status === 'assigned' ? '📦' : '🔵'}
+                            </span>
+                            {i < detailTimeline.length - 1 && (
+                              <div className="w-px flex-1 bg-slate-200 my-1 min-h-[16px]" />
+                            )}
+                          </div>
+                          <div className="flex-1 pb-3">
+                            <p className="text-xs font-bold text-slate-700 capitalize">{t.status.replace(/_/g, ' ')}</p>
+                            {t.note && <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{t.note}</p>}
+                            <p className="text-[10px] text-slate-300 mt-0.5">
+                              {new Date(t.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── New Order Modal (with customer picker) ─── */}
       <AnimatePresence>

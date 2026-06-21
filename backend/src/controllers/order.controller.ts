@@ -480,6 +480,102 @@ export const getStaffList = async (_req: AuthRequest, res: Response): Promise<vo
 
 // ── Deliveries ────────────────────────────────────────────────────────────────
 
+// ── Admin: Adjust Delivery (correct wrong jar/amount entries) ─────────────────
+export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const deliveryId = Number(req.params.deliveryId);
+    const { deliveredQuantity, collectedAmount, reason } = req.body as {
+      deliveredQuantity: number;
+      collectedAmount: number;
+      reason?: string;
+    };
+
+    if (isNaN(deliveryId) || deliveredQuantity == null || collectedAmount == null) {
+      res.status(400).json({ message: 'deliveryId, deliveredQuantity and collectedAmount are required' });
+      return;
+    }
+    if (deliveredQuantity < 0 || collectedAmount < 0) {
+      res.status(400).json({ message: 'Values cannot be negative' });
+      return;
+    }
+
+    // Fetch existing delivery + order
+    const [delRows] = await pool.query<RowDataPacket[]>(
+      `SELECT d.*, o.customer_id, o.id AS order_id, o.price_per_jar, u.name AS admin_name
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       JOIN users  u ON u.id = ?
+       WHERE d.id = ?`,
+      [req.user!.id, deliveryId]
+    );
+    if (!delRows.length) { res.status(404).json({ message: 'Delivery not found' }); return; }
+    const del = delRows[0];
+
+    const oldQty    = Number(del.delivered_quantity);
+    const newQty    = Number(deliveredQuantity);
+    const oldAmount = Number(del.collected_amount);
+    const newAmount = Number(collectedAmount);
+    const qtyDiff   = newQty - oldQty;
+    const amtDiff   = newAmount - oldAmount;
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // 1. Update delivery row
+      await conn.query(
+        `UPDATE deliveries SET delivered_quantity = ?, collected_amount = ?, updated_at = NOW() WHERE id = ?`,
+        [newQty, newAmount, deliveryId]
+      );
+
+      // 2. If pay_later: adjust customer pending_balance by amount difference
+      if (del.payment_mode === 'pay_later' && amtDiff !== 0) {
+        await conn.query(
+          `UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?`,
+          [amtDiff, del.customer_id]
+        );
+      }
+
+      // 3. Adjust inventory: update staff's jars_delivered by qtyDiff
+      if (qtyDiff !== 0) {
+        await conn.query(
+          `UPDATE inventory SET jars_delivered = GREATEST(0, jars_delivered + ?) WHERE staff_id = ? AND DATE(date) = CURDATE()`,
+          [qtyDiff, del.staff_id]
+        );
+      }
+
+      // 4. Timeline entry
+      const noteText = [
+        `Admin correction by ${del.admin_name}:`,
+        qtyDiff !== 0 ? `Jars ${oldQty}→${newQty} (${qtyDiff > 0 ? '+' : ''}${qtyDiff})` : null,
+        amtDiff !== 0 ? `Amount ₹${oldAmount}→₹${newAmount}` : null,
+        reason ? `Reason: ${reason}` : null,
+      ].filter(Boolean).join(' · ');
+
+      await conn.query(
+        `INSERT INTO order_timeline (order_id, status, note, actor_id, created_at)
+         VALUES (?, 'adjustment', ?, ?, NOW())`,
+        [del.order_id, noteText, req.user!.id]
+      );
+
+      await conn.commit();
+    } catch (e) { await conn.rollback(); throw e; }
+    finally { conn.release(); }
+
+    // SSE notify admin
+    SSE.broadcastToRole('admin', 'order_updated', { orderId: del.order_id });
+
+    res.json({
+      message: 'Delivery adjusted successfully',
+      deliveryId,
+      oldQty, newQty, oldAmount, newAmount,
+    });
+  } catch (err) {
+    console.error('adjustDelivery error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
 // ── Staff Direct Delivery (staff visits customer without prior order) ─────────
 // Creates an instant order for the customer + immediately completes it atomically.
 export const staffDirectDelivery = async (req: AuthRequest, res: Response): Promise<void> => {

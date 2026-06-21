@@ -149,6 +149,15 @@ export const ordersApi = {
 
   reviewCancelRequest: (requestId: number, action: 'approved' | 'rejected') =>
     api.patch(`/orders/cancel-requests/${requestId}`, { action }),
+
+  // ── Delivery Adjustment (Admin) ────────────────────────────────────────────
+  adjustDelivery: (deliveryId: number, data: {
+    deliveredQuantity: number;
+    collectedAmount: number;
+    reason?: string;
+  }) => api.patch<{ message: string; oldQty: number; newQty: number; oldAmount: number; newAmount: number }>(
+    `/orders/deliveries/${deliveryId}`, data
+  ),
 };
 
 export interface CustomerForStaff {

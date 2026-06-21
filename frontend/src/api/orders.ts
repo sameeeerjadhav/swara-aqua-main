@@ -20,27 +20,6 @@ export interface Order {
   customer_phone?: string;
   staff_name?: string;
   paid_online?: boolean; // true if a completed online payment exists
-  // Cancel request (pending only — from LEFT JOIN)
-  cancel_request_id?: number | null;
-  cancel_request_status?: 'pending' | 'approved' | 'rejected' | null;
-  cancel_request_reason?: string | null;
-  cancel_requested_at?: string | null;
-}
-
-export interface CancelRequest {
-  request_id: number;
-  order_id: number;
-  customer_id: number;
-  reason: string;
-  request_status: 'pending' | 'approved' | 'rejected';
-  requested_at: string;
-  quantity: number;
-  order_type: string;
-  total_amount: number;
-  order_status: string;
-  order_created_at: string;
-  customer_name: string;
-  customer_phone: string;
 }
 
 export interface Delivery {
@@ -49,7 +28,7 @@ export interface Delivery {
   staff_id: number;
   delivered_quantity: number;
   collected_amount: number;
-  payment_mode: 'cash' | 'online' | 'advance' | 'pay_later';
+  payment_mode: 'cash' | 'online' | 'advance';
   status: string;
   notes: string | null;
   delivered_at: string | null;
@@ -142,22 +121,6 @@ export const ordersApi = {
     amount: number;
     mode: string;
   }>('/orders/staff-direct', data),
-
-  // ── Cancel Requests (Admin) ───────────────────────────────────────────────
-  getCancelRequests: (status = 'pending') =>
-    api.get<{ requests: CancelRequest[] }>('/orders/cancel-requests', { params: { status } }),
-
-  reviewCancelRequest: (requestId: number, action: 'approved' | 'rejected') =>
-    api.patch(`/orders/cancel-requests/${requestId}`, { action }),
-
-  // ── Delivery Adjustment (Admin) ────────────────────────────────────────────
-  adjustDelivery: (deliveryId: number, data: {
-    deliveredQuantity: number;
-    collectedAmount: number;
-    reason?: string;
-  }) => api.patch<{ message: string; oldQty: number; newQty: number; oldAmount: number; newAmount: number }>(
-    `/orders/deliveries/${deliveryId}`, data
-  ),
 };
 
 export interface CustomerForStaff {

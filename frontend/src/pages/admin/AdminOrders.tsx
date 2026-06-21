@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle, Check, XCircle, Pencil, Minus, ChevronRight, Clock } from 'lucide-react';
+import { Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle, Check, XCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { ordersApi, Order, CancelRequest, Delivery, TimelineEntry } from '../../api/orders';
+import { ordersApi, Order } from '../../api/orders';
 import { useSSE } from '../../hooks/useSSE';
 import api from '../../api/axios';
+import { subscriptionApi, CancelRequest } from '../../api/subscription';
 
 interface CustomerOption { id: number; name: string; phone: string; jar_rate: number; }
 
@@ -20,13 +21,13 @@ const thisMonthStr = () => new Date().toISOString().slice(0, 7);
 
 export const AdminOrders = () => {
   const { toast } = useToast();
-  const [orders,       setOrders]       = useState<Order[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [search,       setSearch]       = useState('');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter,   setDateFilter]   = useState('');   // YYYY-MM-DD
-  const [monthFilter,  setMonthFilter]  = useState('');   // YYYY-MM
-  const [dateMode,     setDateMode]     = useState<'date' | 'month' | null>(null);
+  const [dateFilter, setDateFilter] = useState('');   // YYYY-MM-DD
+  const [monthFilter, setMonthFilter] = useState('');   // YYYY-MM
+  const [dateMode, setDateMode] = useState<'date' | 'month' | null>(null);
 
   // New Order modal
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -39,27 +40,16 @@ export const AdminOrders = () => {
 
   // Cancel requests
   const [cancelRequests, setCancelRequests] = useState<CancelRequest[]>([]);
-  const [crLoading, setCrLoading]           = useState(false);
+  const [crLoading, setCrLoading] = useState(false);
   const [showCancelRequests, setShowCancelRequests] = useState(true);
-
-  // Order detail modal
-  const [detailOrder,    setDetailOrder]    = useState<Order | null>(null);
-  const [detailDelivery, setDetailDelivery] = useState<Delivery | null>(null);
-  const [detailTimeline, setDetailTimeline] = useState<TimelineEntry[]>([]);
-  const [detailLoading,  setDetailLoading]  = useState(false);
-  // Edit delivery state
-  const [editQty,    setEditQty]    = useState(0);
-  const [editAmount, setEditAmount] = useState(0);
-  const [editReason, setEditReason] = useState('');
-  const [adjusting,  setAdjusting]  = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
       if (statusFilter !== 'all') params.status = statusFilter;
-      if (search)      params.search = search;
-      if (dateFilter)  params.date   = dateFilter;
+      if (search) params.search = search;
+      if (dateFilter) params.date = dateFilter;
       else if (monthFilter) params.month = monthFilter;
       const res = await ordersApi.list(params);
       setOrders(res.data.orders);
@@ -75,76 +65,31 @@ export const AdminOrders = () => {
 
   // SSE: auto-refresh when orders change
   useSSE({
-    order_created:      () => load(),
-    order_updated:      () => load(),
+    order_created: () => load(),
+    order_updated: () => load(),
     delivery_completed: () => load(),
   });
 
   // Cancel requests
-  const loadCancelRequests = useCallback(async () => {
+  const loadCancelRequests = async () => {
     setCrLoading(true);
     try {
-      const { data } = await ordersApi.getCancelRequests('pending');
+      const { data } = await subscriptionApi.getCancelRequests();
       setCancelRequests(data.requests);
     } catch { /* silent */ }
     finally { setCrLoading(false); }
-  }, []);
+  };
 
-  useEffect(() => { loadCancelRequests(); }, [loadCancelRequests]);
+  useEffect(() => { loadCancelRequests(); }, []);
 
   const handleReview = async (id: number, action: 'approved' | 'rejected') => {
     try {
-      await ordersApi.reviewCancelRequest(id, action);
+      await subscriptionApi.reviewCancelRequest(id, action);
       toast(`Cancel request ${action}`, action === 'approved' ? 'success' : 'warning');
       await loadCancelRequests();
       await load();
     } catch { toast('Failed to update', 'error'); }
   };
-
-  // Order detail modal
-  const openDetail = async (order: Order) => {
-    setDetailOrder(order);
-    setDetailDelivery(null);
-    setDetailTimeline([]);
-    setEditReason('');
-    setDetailLoading(true);
-    try {
-      const { data } = await ordersApi.get(order.id);
-      const delivery = data.delivery || null;
-      setDetailDelivery(delivery);
-      setDetailTimeline(data.timeline || []);
-      const qty = delivery?.delivered_quantity ?? order.quantity;
-      setEditQty(qty);
-      // For pay_later: amount = qty × price_per_jar (that's what was added to balance)
-      // For cash/online: amount = what was actually collected
-      if (delivery?.payment_mode === 'pay_later') {
-        setEditAmount(qty * Number(order.price_per_jar));
-      } else {
-        setEditAmount(delivery?.collected_amount ?? Number(order.total_amount));
-      }
-    } catch { /* silent */ }
-    finally { setDetailLoading(false); }
-  };
-
-  const closeDetail = () => { setDetailOrder(null); setDetailDelivery(null); setDetailTimeline([]); };
-
-  const handleAdjust = async () => {
-    if (!detailDelivery) return;
-    setAdjusting(true);
-    try {
-      await ordersApi.adjustDelivery(detailDelivery.id, {
-        deliveredQuantity: editQty,
-        collectedAmount:   editAmount,
-        reason:            editReason || undefined,
-      });
-      toast('Delivery corrected successfully!', 'success');
-      closeDetail();
-      await load();
-    } catch (err: any) {
-      toast(err?.response?.data?.message || 'Failed to save correction', 'error');
-    } finally { setAdjusting(false); }
-  };
-
 
   // Load customer list when modal opens
   useEffect(() => {
@@ -152,7 +97,7 @@ export const AdminOrders = () => {
       api.get('/admin/users').then(res => {
         const custs = (res.data.users as any[]).filter(u => u.role === 'customer' && u.status === 'active');
         setCustomerList(custs);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [showNewOrder]);
 
@@ -188,8 +133,8 @@ export const AdminOrders = () => {
   const activeDateLabel = dateFilter
     ? new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
     : monthFilter
-    ? new Date(monthFilter + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
-    : null;
+      ? new Date(monthFilter + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+      : null;
 
   return (
     <div className="max-w-5xl space-y-4">
@@ -207,13 +152,13 @@ export const AdminOrders = () => {
                 <AlertTriangle className="w-4 h-4 text-white" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-bold text-amber-900">Order Cancellation Requests</p>
+                <p className="text-sm font-bold text-amber-900">Cancellation Requests</p>
                 <p className="text-[11px] text-amber-600 mt-0.5">Customers waiting for your decision</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">
-                {cancelRequests.length} pending
+                {cancelRequests.filter(r => r.status === 'pending').length} pending
               </span>
             </div>
           </button>
@@ -228,13 +173,12 @@ export const AdminOrders = () => {
                   {crLoading ? (
                     <div className="px-5 py-4">
                       <div className="animate-pulse space-y-3">
-                        {[0,1].map(i => <div key={i} className="h-16 bg-amber-100 rounded-xl" />)}
+                        {[0, 1].map(i => <div key={i} className="h-16 bg-amber-100 rounded-xl" />)}
                       </div>
                     </div>
                   ) : cancelRequests.map(cr => (
-                    <div key={cr.request_id} className={`px-5 py-4 ${
-                      cr.request_status !== 'pending' ? 'opacity-60' : ''
-                    }`}>
+                    <div key={cr.id} className={`px-5 py-4 ${cr.status !== 'pending' ? 'opacity-60' : ''
+                      }`}>
                       <div className="flex items-start gap-3">
                         {/* Avatar */}
                         <div className="w-9 h-9 rounded-xl bg-amber-200 flex items-center justify-center shrink-0 font-bold text-amber-700 text-sm">
@@ -263,27 +207,26 @@ export const AdminOrders = () => {
                           {/* Time + Actions */}
                           <div className="flex items-center justify-between mt-2.5">
                             <p className="text-[10px] text-slate-400">
-                              {new Date(cr.requested_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              {new Date(cr.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </p>
 
-                            {cr.request_status === 'pending' ? (
+                            {cr.status === 'pending' ? (
                               <div className="flex gap-2">
-                                <button onClick={() => handleReview(cr.request_id, 'rejected')}
+                                <button onClick={() => handleReview(cr.id, 'rejected')}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-xs font-semibold transition-colors">
                                   <XCircle className="w-3.5 h-3.5" /> Reject
                                 </button>
-                                <button onClick={() => handleReview(cr.request_id, 'approved')}
+                                <button onClick={() => handleReview(cr.id, 'approved')}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors shadow-sm">
-                                  <Check className="w-3.5 h-3.5" /> Approve & Cancel
+                                  <Check className="w-3.5 h-3.5" /> Approve
                                 </button>
                               </div>
                             ) : (
-                              <span className={`text-xs font-bold px-2.5 py-1 rounded-lg capitalize ${
-                                cr.request_status === 'approved'
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-lg capitalize ${cr.status === 'approved'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'bg-red-50 text-red-600 border border-red-200'
-                              }`}>
-                                {cr.request_status === 'approved' ? '\u2705' : '\u274c'} {cr.request_status}
+                                }`}>
+                                {cr.status === 'approved' ? '\u2705' : '\u274c'} {cr.status}
                               </span>
                             )}
                           </div>
@@ -409,8 +352,8 @@ export const AdminOrders = () => {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                [0,1,2,3].map(i => (
-                  <tr key={i}>{[0,1,2,3,4,5,6,7].map(j => (
+                [0, 1, 2, 3].map(i => (
+                  <tr key={i}>{[0, 1, 2, 3, 4, 5, 6, 7].map(j => (
                     <td key={j} className="px-4 py-4"><Skeleton className="h-4 w-16" /></td>
                   ))}</tr>
                 ))
@@ -418,12 +361,7 @@ export const AdminOrders = () => {
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No orders found</td></tr>
               ) : orders.map((o, i) => (
                 <motion.tr key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                  onClick={() => o.status !== 'cancelled' && openDetail(o)}
-                  className={`transition-colors ${
-                    o.status === 'cancelled'
-                      ? 'opacity-40 blur-[0.3px] pointer-events-none bg-slate-50/60'
-                      : 'hover:bg-brand-50/40 cursor-pointer'
-                  }`}>
+                  className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3.5 text-xs font-bold text-slate-400">#{o.id}</td>
                   <td className="px-4 py-3.5">
                     <p className="text-sm font-semibold text-slate-800">{o.customer_name}</p>
@@ -446,7 +384,7 @@ export const AdminOrders = () => {
         {/* Mobile — compact list rows */}
         <div className="md:hidden divide-y divide-slate-100">
           {loading ? (
-            [0,1,2,3,4].map(i => (
+            [0, 1, 2, 3, 4].map(i => (
               <div key={i} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 space-y-1.5">
                   <Skeleton className="h-3.5 w-32" />
@@ -460,12 +398,7 @@ export const AdminOrders = () => {
             <div className="py-12 text-center text-slate-400 text-sm">No orders found</div>
           ) : orders.map(o => (
             <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              onClick={() => o.status !== 'cancelled' && openDetail(o)}
-              className={`flex items-center gap-3 px-4 py-3 transition-colors ${
-                o.status === 'cancelled'
-                  ? 'opacity-40 blur-[0.3px] pointer-events-none'
-                  : 'hover:bg-brand-50/40 cursor-pointer'
-              }`}>
+              className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/60 transition-colors">
 
               {/* Customer info */}
               <div className="flex-1 min-w-0">
@@ -482,242 +415,10 @@ export const AdminOrders = () => {
                 <OrderStatusBadge status={o.status} />
                 <span className="text-xs font-bold text-brand-600">₹{o.total_amount}</span>
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
             </motion.div>
           ))}
         </div>
       </div>
-
-      {/* ─── Order Detail + Delivery Edit Modal ─── */}
-      <AnimatePresence>
-        {detailOrder && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-            onClick={closeDetail}>
-            <motion.div
-              initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-
-              {/* Drag handle (mobile) */}
-              <div className="flex justify-center pt-3 pb-1 sm:hidden">
-                <div className="w-10 h-1 rounded-full bg-slate-300" />
-              </div>
-
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Order #{detailOrder.id}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5 capitalize">{detailOrder.type} · {detailOrder.customer_name}</p>
-                </div>
-                <button onClick={closeDetail}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="px-6 py-5 space-y-5">
-
-                {/* Order summary chips */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-slate-50 rounded-xl p-3 text-center">
-                    <p className="text-[10px] text-slate-400 mb-0.5">Ordered Jars</p>
-                    <p className="text-xl font-extrabold text-slate-800">{detailOrder.quantity}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-3 text-center">
-                    <p className="text-[10px] text-slate-400 mb-0.5">Total</p>
-                    <p className="text-xl font-extrabold text-brand-600">₹{detailOrder.total_amount}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-3 text-center">
-                    <p className="text-[10px] text-slate-400 mb-0.5">Status</p>
-                    <div className="mt-0.5 flex justify-center">
-                      <OrderStatusBadge status={detailOrder.status} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Staff + Date row */}
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>👤 {detailOrder.staff_name || 'Unassigned'}</span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(detailOrder.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-
-                {/* Loading skeleton */}
-                {detailLoading && (
-                  <div className="space-y-3 animate-pulse">
-                    <div className="h-20 bg-slate-100 rounded-xl" />
-                    <div className="h-32 bg-slate-100 rounded-xl" />
-                  </div>
-                )}
-
-                {/* ── Delivery Edit Section ── */}
-                {!detailLoading && detailDelivery && ['completed', 'delivered'].includes(detailOrder.status) && (() => {
-                  const isPayLater = detailDelivery.payment_mode === 'pay_later';
-                  const pricePerJar = Number(detailOrder.price_per_jar);
-
-                  // Payment mode badge config
-                  const modeConfig = {
-                    cash:      { label: '💵 Cash',              bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700' },
-                    online:    { label: '💳 Online (Already Paid)', bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-700' },
-                    advance:   { label: '🏦 Advance',            bg: 'bg-purple-50',  border: 'border-purple-200',  text: 'text-purple-700' },
-                    pay_later: { label: '⏳ Pay Later (Outstanding)', bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700' },
-                  }[detailDelivery.payment_mode] ?? { label: detailDelivery.payment_mode, bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' };
-
-                  return (
-                    <div className="bg-gradient-to-br from-brand-50 to-blue-50/30 border border-brand-100 rounded-2xl p-4 space-y-4">
-                      {/* Header */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center shrink-0">
-                            <Pencil className="w-4 h-4 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-brand-900">Correct Delivery</p>
-                            <p className="text-[11px] text-brand-600">Adjust if staff entered wrong values</p>
-                          </div>
-                        </div>
-                        {/* Payment mode badge */}
-                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${modeConfig.bg} ${modeConfig.border} ${modeConfig.text}`}>
-                          {modeConfig.label}
-                        </span>
-                      </div>
-
-                      {/* Jar quantity stepper */}
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Delivered Jars</label>
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => {
-                              const newQ = Math.max(0, editQty - 1);
-                              setEditQty(newQ);
-                              if (isPayLater) setEditAmount(newQ * pricePerJar);
-                            }}
-                            className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-red-50 hover:border-red-300 text-slate-600 hover:text-red-600 transition-all active:scale-95">
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <div className="flex-1 text-center">
-                            <p className="text-3xl font-extrabold text-slate-800">{editQty}</p>
-                            {editQty !== detailDelivery.delivered_quantity && (
-                              <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                                Was: {detailDelivery.delivered_quantity} · Change: {editQty - detailDelivery.delivered_quantity > 0 ? '+' : ''}{editQty - detailDelivery.delivered_quantity}
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => {
-                              const newQ = editQty + 1;
-                              setEditQty(newQ);
-                              if (isPayLater) setEditAmount(newQ * pricePerJar);
-                            }}
-                            className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-green-50 hover:border-green-300 text-slate-600 hover:text-green-600 transition-all active:scale-95">
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Amount — auto-calculated for pay_later, editable for cash/online */}
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                          {isPayLater ? 'Outstanding Balance (Auto-calculated)' : 'Collected Amount (₹)'}
-                        </label>
-                        {isPayLater ? (
-                          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-lg font-extrabold text-amber-800">₹{editAmount}</p>
-                              <p className="text-[11px] text-amber-600 mt-0.5">{editQty} jars × ₹{pricePerJar}/jar</p>
-                            </div>
-                            {editQty !== detailDelivery.delivered_quantity && (
-                              <p className="text-[11px] text-amber-700 font-bold">
-                                Balance change: {editAmount - (detailDelivery.delivered_quantity * pricePerJar) > 0 ? '+' : ''}₹{editAmount - (detailDelivery.delivered_quantity * pricePerJar)}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                            <input
-                              type="number" min={0} value={editAmount}
-                              onChange={e => setEditAmount(Number(e.target.value))}
-                              className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
-                          </div>
-                        )}
-                        {!isPayLater && editAmount !== detailDelivery.collected_amount && (
-                          <p className="text-[10px] text-amber-600 font-semibold mt-1">
-                            Was: ₹{detailDelivery.collected_amount} · Change: {editAmount - detailDelivery.collected_amount > 0 ? '+' : ''}₹{editAmount - detailDelivery.collected_amount}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Reason */}
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Reason (optional)</label>
-                        <input
-                          value={editReason}
-                          onChange={e => setEditReason(e.target.value)}
-                          placeholder="e.g. Staff entered 3 jars but delivered 2"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
-                      </div>
-
-                      {/* Save button */}
-                      {(editQty !== detailDelivery.delivered_quantity || (!isPayLater && editAmount !== detailDelivery.collected_amount)) ? (
-                        <Button size="md" className="w-full" loading={adjusting} onClick={handleAdjust}
-                          icon={<Check className="w-4 h-4" />}>
-                          Save Correction
-                        </Button>
-                      ) : (
-                        <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
-                          <Check className="w-3.5 h-3.5 text-green-600" />
-                          <span className="text-xs font-bold text-green-700">Values match — no changes needed</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* No delivery yet */}
-                {!detailLoading && !detailDelivery && ['pending', 'assigned'].includes(detailOrder.status) && (
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700 font-semibold text-center">
-                    ⏳ Delivery not yet recorded
-                  </div>
-                )}
-
-                {/* Timeline */}
-                {!detailLoading && detailTimeline.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Order Timeline</p>
-                    <div className="space-y-0">
-                      {detailTimeline.map((t, i) => (
-                        <div key={t.id} className="flex items-start gap-3">
-                          <div className="flex flex-col items-center">
-                            <span className="text-base leading-none">
-                              {t.status === 'adjustment' ? '🛠️' : t.status === 'completed' ? '✅' : t.status === 'cancelled' ? '❌' : t.status === 'assigned' ? '📦' : '🔵'}
-                            </span>
-                            {i < detailTimeline.length - 1 && (
-                              <div className="w-px flex-1 bg-slate-200 my-1 min-h-[16px]" />
-                            )}
-                          </div>
-                          <div className="flex-1 pb-3">
-                            <p className="text-xs font-bold text-slate-700 capitalize">{t.status.replace(/_/g, ' ')}</p>
-                            {t.note && <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{t.note}</p>}
-                            <p className="text-[10px] text-slate-300 mt-0.5">
-                              {new Date(t.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ─── New Order Modal (with customer picker) ─── */}
       <AnimatePresence>
@@ -871,5 +572,59 @@ export const AdminOrders = () => {
       </AnimatePresence>
 
     </div>
+  );
+};
+<div className="bg-gradient-to-br from-brand-50 to-aqua-400/10 border border-brand-100 rounded-xl px-3 py-2.5 text-center">
+  <p className="text-[10px] text-brand-500 font-medium">Total</p>
+  <p className="text-lg font-bold text-brand-700">₹{newOrder.quantity * (selectedCustomer?.jar_rate || 50)}</p>
+</div>
+                  </div >
+                </div >
+
+  {/* Delivery date (preorder only) */ }
+{
+  newOrder.type === 'preorder' && (
+    <div>
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Delivery Date & Time</label>
+      <input type="datetime-local" value={newOrder.deliveryDate}
+        onChange={e => setNewOrder(f => ({ ...f, deliveryDate: e.target.value }))}
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+    </div>
+  )
+}
+
+{/* Address */ }
+<div>
+  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Address (optional)</label>
+  <textarea value={newOrder.address} onChange={e => setNewOrder(f => ({ ...f, address: e.target.value }))}
+    placeholder="Delivery address…" rows={2}
+    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all resize-none" />
+</div>
+
+{/* Notes */ }
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Notes (optional)</label>
+                  <input value={newOrder.notes} onChange={e => setNewOrder(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Any instructions…"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <Button type="button" variant="secondary" size="md" className="flex-1"
+                    onClick={() => setShowNewOrder(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="md" className="flex-1" loading={submittingOrder} onClick={handlePlaceOrder}
+                    icon={<Package className="w-4 h-4" />}>
+                    Place Order
+                  </Button>
+                </div>
+              </div >
+            </motion.div >
+          </motion.div >
+        )}
+      </AnimatePresence >
+
+    </div >
   );
 };

@@ -9,32 +9,31 @@ import {
   adjustDelivery,
 } from '../controllers/order.controller';
 
-
 const router = Router();
 
 // ── Static routes FIRST (before /:id to avoid param conflicts) ────────────────
-router.get('/stats',       ...allowAdmin, getOrderStats);    // admin
-router.get('/staff-list',  ...allowAdmin, getStaffList);     // admin
-router.get('/deliveries',  authenticate, getDeliveries);     // staff + admin
-router.post('/deliveries', authenticate, completeDelivery);  // staff
-router.get('/calendar',      authenticate, getCalendarData);      // customer + admin
-router.get('/calendar/day',  authenticate, getCalendarDayDetail);  // customer + admin (day breakdown)
-router.get('/daily-summary', authenticate, getDailySummary);   // staff + admin
-router.post('/staff-direct', authenticate, staffDirectDelivery); // staff direct delivery
-router.get('/cancel-requests',       ...allowAdmin, getOrderCancelRequests);    // admin
-router.patch('/cancel-requests/:id',  ...allowAdmin, reviewOrderCancelRequest); // admin
-router.patch('/deliveries/:deliveryId', ...allowAdmin, adjustDelivery);         // admin correction
+router.get('/stats',         ...allowAdmin, getOrderStats);            // admin
+router.get('/staff-list',    ...allowAdmin, getStaffList);             // admin
+router.get('/deliveries',    authenticate,  getDeliveries);            // staff + admin
+router.post('/deliveries',   authenticate,  completeDelivery);         // staff
+router.get('/calendar',      authenticate,  getCalendarData);          // customer + admin
+router.get('/calendar/day',  authenticate,  getCalendarDayDetail);     // customer + admin (day breakdown)
+router.get('/daily-summary', authenticate,  getDailySummary);          // staff + admin
+router.post('/staff-direct', authenticate,  staffDirectDelivery);      // staff direct delivery
+router.get('/cancel-requests',          ...allowAdmin, getOrderCancelRequests);   // admin
+router.patch('/cancel-requests/:id',    ...allowAdmin, reviewOrderCancelRequest); // admin
+router.patch('/deliveries/:deliveryId', ...allowAdmin, adjustDelivery);           // admin correction
 
 // ── Orders ────────────────────────────────────────────────────────────────────
-router.post('/',           authenticate,  createOrder);       // customer
-router.get('/',            authenticate,  getOrders);         // role-aware
-router.get('/:id',         authenticate,  getOrderById);      // all roles
-router.put('/:id/assign',  ...allowAdmin, assignOrder);       // admin
-router.put('/:id/status',  authenticate,  updateOrderStatus); // staff + admin
-router.delete('/:id',      authenticate,  cancelOrder);       // customer
+router.post('/',           authenticate,  createOrder);            // customer
+router.get('/',            authenticate,  getOrders);              // role-aware
+router.get('/:id',         authenticate,  getOrderById);           // all roles
+router.put('/:id/assign',  ...allowAdmin, assignOrder);            // admin
+router.put('/:id/status',  authenticate,  updateOrderStatus);      // staff + admin
+router.delete('/:id',      authenticate,  cancelOrder);            // customer
 
 // Razorpay payment for an order (customer)
-router.post('/:id/pay/create',  authenticate, createOrderPayment);
-router.post('/:id/pay/verify',  authenticate, verifyOrderPayment);
+router.post('/:id/pay/create', authenticate, createOrderPayment);
+router.post('/:id/pay/verify', authenticate, verifyOrderPayment);
 
 export default router;

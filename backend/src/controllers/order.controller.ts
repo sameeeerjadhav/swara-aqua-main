@@ -74,13 +74,13 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 
     const orderId = await OrderModel.createOrder(req.user!.id, {
       type,
-      quantity:     Number(quantity),
-      pricePerJar:  price,
-      deliveryDate: deliveryDate  || undefined,
-      notes:        notes         || undefined,
-      address:      address       || undefined,
-      latitude:     latitude      ? Number(latitude)  : undefined,
-      longitude:    longitude     ? Number(longitude) : undefined,
+      quantity: Number(quantity),
+      pricePerJar: price,
+      deliveryDate: deliveryDate || undefined,
+      notes: notes || undefined,
+      address: address || undefined,
+      latitude: latitude ? Number(latitude) : undefined,
+      longitude: longitude ? Number(longitude) : undefined,
     });
 
     // ── Auto-assign to all active staff (broadcast model) ─────────────────────
@@ -113,10 +113,10 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
       notify(() =>
         NotifService.sendToUser({
           userId: assignedStaff.id,
-          title:  'New Delivery Assigned! 📦',
-          body:   `Order #${orderId} — ${quantity} jars from ${customerName}`,
-          type:   'delivery',
-          data:   { orderId: String(orderId) },
+          title: 'New Delivery Assigned! 📦',
+          body: `Order #${orderId} — ${quantity} jars from ${customerName}`,
+          type: 'delivery',
+          data: { orderId: String(orderId) },
         })
       );
 
@@ -150,12 +150,12 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
     try {
       await NotifService.sendToUser({
         userId: req.user!.id,
-        title:  scheduledForTomorrow ? 'Order Scheduled 📅' : 'Order Placed ✅',
-        body:   scheduledForTomorrow
+        title: scheduledForTomorrow ? 'Order Scheduled 📅' : 'Order Placed ✅',
+        body: scheduledForTomorrow
           ? `Your ${quantity} jar order is scheduled for tomorrow.`
           : `Your order #${orderId} for ${quantity} jars has been placed successfully.`,
-        type:   'order',
-        data:   { orderId: String(orderId) },
+        type: 'order',
+        data: { orderId: String(orderId) },
       });
     } catch (err) {
       console.warn('Customer order notification failed (non-fatal):', (err as Error).message);
@@ -329,7 +329,6 @@ export const reviewOrderCancelRequest = async (req: AuthRequest, res: Response):
       return;
     }
 
-    // Fetch the request
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT cr.*, o.customer_id FROM cancel_requests cr JOIN orders o ON o.id = cr.order_id WHERE cr.id = ?`,
       [Number(id)]
@@ -345,15 +344,12 @@ export const reviewOrderCancelRequest = async (req: AuthRequest, res: Response):
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
-      // Update the cancel request
       await conn.query(
         `UPDATE cancel_requests SET status = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?`,
         [action, req.user!.id, Number(id)]
       );
       if (action === 'approved') {
-        // Actually cancel the order
         await OrderModel.cancelOrder(cr.order_id, req.user!.id);
-        // Refund advance if applicable
         await refundAdvanceOnCancel(conn, cr.order_id, cr.customer_id);
       }
       await conn.commit();
@@ -396,10 +392,10 @@ export const assignOrder = async (req: AuthRequest, res: Response): Promise<void
     notify(() =>
       NotifService.sendToUser({
         userId: Number(staffId),
-        title:  'New Delivery Assigned 📦',
-        body:   `Order #${order.id} — ${order.quantity} jars for ${order.customer_name}`,
-        type:   'delivery',
-        data:   { orderId: String(order.id) },
+        title: 'New Delivery Assigned 📦',
+        body: `Order #${order.id} — ${order.quantity} jars for ${order.customer_name}`,
+        type: 'delivery',
+        data: { orderId: String(order.id) },
       })
     );
 
@@ -427,7 +423,7 @@ export const assignOrder = async (req: AuthRequest, res: Response): Promise<void
 export const updateOrderStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { status } = req.body;
-    const valid = ['pending','assigned','delivered','completed','cancelled'];
+    const valid = ['pending', 'assigned', 'delivered', 'completed', 'cancelled'];
     if (!valid.includes(status)) {
       res.status(400).json({ message: 'Invalid status' }); return;
     }
@@ -517,21 +513,29 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
     const newAmount = Number(collectedAmount);
     const qtyDiff   = newQty - oldQty;
     const amtDiff   = newAmount - oldAmount;
+    const newTotal  = newQty * Number(del.price_per_jar);
 
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
-      // 1. Update delivery row (deliveries has no updated_at column)
+      // 1. Update delivery record
       await conn.query(
         `UPDATE deliveries SET delivered_quantity = ?, collected_amount = ? WHERE id = ?`,
         [newQty, newAmount, deliveryId]
       );
 
-      // 2. Balance adjustment
-      //    - pay_later: pending_balance was added as price_per_jar × qty.
-      //      collected_amount stays 0, so we must use qtyDiff × price_per_jar.
-      //    - other modes: adjust by amtDiff (collected_amount change).
+      // 2. Update orders.quantity + orders.total_amount so customer & staff see corrected values
+      if (qtyDiff !== 0) {
+        await conn.query(
+          `UPDATE orders SET quantity = ?, total_amount = ? WHERE id = ?`,
+          [newQty, newTotal, del.order_id]
+        );
+      }
+
+      // 3. Balance adjustment
+      //    - pay_later: pending_balance charged as price_per_jar × qty; use qtyDiff × price
+      //    - cash/online: adjust by amtDiff
       if (del.payment_mode === 'pay_later') {
         if (qtyDiff !== 0) {
           const balanceAdjust = qtyDiff * Number(del.price_per_jar); // negative = reduction
@@ -541,14 +545,13 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
           );
         }
       } else if (amtDiff !== 0) {
-        // For cash/online adjustments, reflect the difference in pending_balance if needed
         await conn.query(
           `UPDATE users SET pending_balance = GREATEST(0, pending_balance + ?) WHERE id = ?`,
           [amtDiff, del.customer_id]
         );
       }
 
-      // 3. Timeline entry
+      // 4. Timeline entry
       const payLaterBalanceNote = del.payment_mode === 'pay_later' && qtyDiff !== 0
         ? `Balance \u20b9${qtyDiff * Number(del.price_per_jar) > 0 ? '+' : ''}\u20b9${qtyDiff * Number(del.price_per_jar)}`
         : null;
@@ -571,7 +574,9 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
     } catch (e) { await conn.rollback(); throw e; }
     finally { conn.release(); }
 
-    // SSE notify admin
+    // SSE: notify customer, staff, and admin so all views auto-refresh
+    SSE.sendToUser(del.customer_id, 'order_updated', { orderId: del.order_id });
+    SSE.broadcastToRole('staff', 'order_updated', { orderId: del.order_id });
     SSE.broadcastToRole('admin', 'order_updated', { orderId: del.order_id });
 
     res.json({
@@ -618,11 +623,11 @@ export const staffDirectDelivery = async (req: AuthRequest, res: Response): Prom
 
     // 1. Create a direct order on behalf of the customer
     const orderId = await OrderModel.createOrder(Number(customerId), {
-      type:        'instant',
-      quantity:    Number(quantity),
+      type: 'instant',
+      quantity: Number(quantity),
       pricePerJar,
-      notes:       notes ? `[Staff Direct] ${notes}` : '[Staff Direct Delivery]',
-      address:     customer.address || undefined,
+      notes: notes ? `[Staff Direct] ${notes}` : '[Staff Direct Delivery]',
+      address: customer.address || undefined,
     });
 
     // 2. Assign immediately to the delivering staff member
@@ -634,9 +639,9 @@ export const staffDirectDelivery = async (req: AuthRequest, res: Response): Prom
     // 3. Create the delivery record
     await OrderModel.createDelivery({
       orderId,
-      staffId:           req.user!.id,
+      staffId: req.user!.id,
       deliveredQuantity: Number(quantity),
-      collectedAmount:   Number(collectedAmount),
+      collectedAmount: Number(collectedAmount),
       paymentMode,
       notes: notes || undefined,
     });
@@ -650,11 +655,11 @@ export const staffDirectDelivery = async (req: AuthRequest, res: Response): Prom
     // 6. Financial transaction
     if (paymentMode !== 'pay_later') {
       await Inv.createTransaction({
-        customerId:  Number(customerId),
+        customerId: Number(customerId),
         orderId,
-        amount:      Number(collectedAmount),
-        mode:        paymentMode,
-        type:        'credit',
+        amount: Number(collectedAmount),
+        mode: paymentMode,
+        type: 'credit',
         collectedBy: req.user!.id,
       });
     } else {
@@ -676,10 +681,10 @@ export const staffDirectDelivery = async (req: AuthRequest, res: Response): Prom
     notify(() =>
       NotifService.sendToUser({
         userId: Number(customerId),
-        title:  paymentMode === 'pay_later' ? 'Jars Delivered — Payment Pending 💳' : 'Jars Delivered! 🎉',
-        body:   notifBody,
-        type:   'delivery',
-        data:   { orderId: String(orderId) },
+        title: paymentMode === 'pay_later' ? 'Jars Delivered — Payment Pending 💳' : 'Jars Delivered! 🎉',
+        body: notifBody,
+        type: 'delivery',
+        data: { orderId: String(orderId) },
       })
     );
 
@@ -698,8 +703,8 @@ export const staffDirectDelivery = async (req: AuthRequest, res: Response): Prom
       orderId,
       customer: customer.name,
       quantity: Number(quantity),
-      amount:   Number(collectedAmount),
-      mode:     paymentMode,
+      amount: Number(collectedAmount),
+      mode: paymentMode,
     });
   } catch (err) {
     console.error('staffDirectDelivery error:', err);
@@ -715,7 +720,7 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
       res.status(400).json({ message: 'orderId, deliveredQuantity, collectedAmount and paymentMode are required' });
       return;
     }
-    if (!['cash','online','advance','pay_later'].includes(paymentMode)) {
+    if (!['cash', 'online', 'advance', 'pay_later'].includes(paymentMode)) {
       res.status(400).json({ message: 'Invalid paymentMode' }); return;
     }
 
@@ -734,12 +739,12 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
     if (existing) { res.status(409).json({ message: 'Delivery already recorded for this order' }); return; }
 
     await OrderModel.createDelivery({
-      orderId:           order.id,
-      staffId:           req.user!.id,
+      orderId: order.id,
+      staffId: req.user!.id,
       deliveredQuantity: Number(deliveredQuantity),
-      collectedAmount:   Number(collectedAmount),
+      collectedAmount: Number(collectedAmount),
       paymentMode,
-      notes:             notes || undefined,
+      notes: notes || undefined,
     });
 
     await OrderModel.updateOrderStatus(order.id, 'completed', req.user!.id);
@@ -750,11 +755,11 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
     // Record financial transaction (skip for pay_later — balance not collected yet)
     if (paymentMode !== 'pay_later') {
       await Inv.createTransaction({
-        customerId:  order.customer_id,
-        orderId:     order.id,
-        amount:      Number(collectedAmount),
-        mode:        paymentMode,
-        type:        'credit',
+        customerId: order.customer_id,
+        orderId: order.id,
+        amount: Number(collectedAmount),
+        mode: paymentMode,
+        type: 'credit',
         collectedBy: req.user!.id,
       });
     } else {
@@ -778,10 +783,10 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
     notify(() =>
       NotifService.sendToUser({
         userId: order.customer_id,
-        title:  paymentMode === 'pay_later' ? 'Order Delivered — Payment Pending 💳' : 'Order Delivered! 🎉',
-        body:   notifBody,
-        type:   'order',
-        data:   { orderId: String(order.id) },
+        title: paymentMode === 'pay_later' ? 'Order Delivered — Payment Pending 💳' : 'Order Delivered! 🎉',
+        body: notifBody,
+        type: 'order',
+        data: { orderId: String(order.id) },
       })
     );
 
@@ -802,7 +807,7 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
 
     // Sync delivery payment to bill (if bill exists for this month)
     const deliveryMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-    const syncAmount    = paymentMode === 'pay_later' ? Number(order.total_amount) : Number(collectedAmount);
+    const syncAmount = paymentMode === 'pay_later' ? Number(order.total_amount) : Number(collectedAmount);
     BillingModel.syncDeliveryToBill(
       order.customer_id,
       deliveryMonth,
@@ -926,9 +931,9 @@ export const getCalendarDayDetail = async (req: AuthRequest, res: Response): Pro
       const h = Number(r.hour);
       const period = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
       return {
-        id:         r.id,
-        jars:       Number(r.jars),
-        time:       r.time_str,
+        id: r.id,
+        jars: Number(r.jars),
+        time: r.time_str,
         period,
         staff_name: r.staff_name || 'Unknown',
       };
@@ -981,13 +986,13 @@ export const getDailySummary = async (req: AuthRequest, res: Response): Promise<
 
     res.json({
       today,
-      deliveries_done:  Number(deliveryRows[0].deliveries_done),
-      jars_delivered:   Number(deliveryRows[0].jars_delivered),
-      cash_collected:   Number(deliveryRows[0].cash_collected),
-      pending_orders:   Number(pendingRows[0].pending_orders),
-      assigned_jars:    Number(invRows[0]?.assigned_jars   ?? 0),
-      empty_collected:  Number(invRows[0]?.empty_collected ?? 0),
-      cash_in_hand:     Number(cashRows[0]?.cash_in_hand   ?? 0),
+      deliveries_done: Number(deliveryRows[0].deliveries_done),
+      jars_delivered: Number(deliveryRows[0].jars_delivered),
+      cash_collected: Number(deliveryRows[0].cash_collected),
+      pending_orders: Number(pendingRows[0].pending_orders),
+      assigned_jars: Number(invRows[0]?.assigned_jars ?? 0),
+      empty_collected: Number(invRows[0]?.empty_collected ?? 0),
+      cash_in_hand: Number(cashRows[0]?.cash_in_hand ?? 0),
     });
   } catch (err) {
     console.error('getDailySummary error:', err);
@@ -1001,7 +1006,7 @@ export const getDailySummary = async (req: AuthRequest, res: Response): Promise<
 let _razorpay: Razorpay | null = null;
 const getRazorpay = () => {
   if (!_razorpay) {
-    const key_id     = process.env.RAZORPAY_KEY_ID     || '';
+    const key_id = process.env.RAZORPAY_KEY_ID || '';
     const key_secret = process.env.RAZORPAY_KEY_SECRET || '';
     if (!key_id || !key_secret) throw new Error('Razorpay keys not configured');
     _razorpay = new Razorpay({ key_id, key_secret });
@@ -1024,18 +1029,18 @@ export const createOrderPayment = async (req: AuthRequest, res: Response): Promi
     const { fee: platformFee, total: chargeAmount } = await withPlatformFee(baseAmount);
 
     const rzpOrder = await getRazorpay().orders.create({
-      amount:   Math.round(chargeAmount * 100), // paise — base + platform fee
+      amount: Math.round(chargeAmount * 100), // paise — base + platform fee
       currency: 'INR',
-      receipt:  `order_${orderId}_${Date.now()}`,
-      notes:    { userId: String(req.user!.id), orderId: String(orderId), purpose: 'order_payment', platformFee: String(platformFee) },
+      receipt: `order_${orderId}_${Date.now()}`,
+      notes: { userId: String(req.user!.id), orderId: String(orderId), purpose: 'order_payment', platformFee: String(platformFee) },
     });
 
     res.json({
-      rzpOrderId:   rzpOrder.id,
-      amount:       rzpOrder.amount,          // total in paise (base + fee)
-      currency:     rzpOrder.currency,
-      keyId:        process.env.RAZORPAY_KEY_ID,
-      orderAmount:  baseAmount,               // base order amount (what gets credited)
+      rzpOrderId: rzpOrder.id,
+      amount: rzpOrder.amount,          // total in paise (base + fee)
+      currency: rzpOrder.currency,
+      keyId: process.env.RAZORPAY_KEY_ID,
+      orderAmount: baseAmount,               // base order amount (what gets credited)
       platformFee,                            // fee amount in rupees
     });
   } catch (err) {
@@ -1084,9 +1089,9 @@ export const verifyOrderPayment = async (req: AuthRequest, res: Response): Promi
       NotifService.sendToUser({
         userId,
         title: '✅ Payment Successful!',
-        body:  `₹${amount} paid for Order #${orderId} via Razorpay.`,
-        type:  'payment',
-        data:  { orderId: String(orderId) },
+        body: `₹${amount} paid for Order #${orderId} via Razorpay.`,
+        type: 'payment',
+        data: { orderId: String(orderId) },
       })
     );
 

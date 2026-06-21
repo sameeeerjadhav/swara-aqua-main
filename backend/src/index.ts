@@ -1,3 +1,6 @@
+// ── MUST be first — sets IST before any module loads ──────────────────────────
+process.env.TZ = 'Asia/Kolkata';
+
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
@@ -9,9 +12,6 @@ import dotenv from 'dotenv';
 // Load .env relative to this file's location, not process.cwd()
 // This is critical for Hostinger Passenger which changes cwd
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
-
-// Ensure IST timezone
-process.env.TZ = 'Asia/Kolkata';
 
 import authRoutes from './routes/auth.routes';
 import adminRoutes from './routes/admin.routes';

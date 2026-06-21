@@ -110,10 +110,18 @@ export const AdminOrders = () => {
     setDetailLoading(true);
     try {
       const { data } = await ordersApi.get(order.id);
-      setDetailDelivery(data.delivery || null);
+      const delivery = data.delivery || null;
+      setDetailDelivery(delivery);
       setDetailTimeline(data.timeline || []);
-      setEditQty(data.delivery?.delivered_quantity ?? order.quantity);
-      setEditAmount(data.delivery?.collected_amount ?? order.total_amount);
+      const qty = delivery?.delivered_quantity ?? order.quantity;
+      setEditQty(qty);
+      // For pay_later: amount = qty × price_per_jar (that's what was added to balance)
+      // For cash/online: amount = what was actually collected
+      if (delivery?.payment_mode === 'pay_later') {
+        setEditAmount(qty * Number(order.price_per_jar));
+      } else {
+        setEditAmount(delivery?.collected_amount ?? Number(order.total_amount));
+      }
     } catch { /* silent */ }
     finally { setDetailLoading(false); }
   };
@@ -547,84 +555,128 @@ export const AdminOrders = () => {
                 )}
 
                 {/* ── Delivery Edit Section ── */}
-                {!detailLoading && detailDelivery && ['completed', 'delivered'].includes(detailOrder.status) && (
-                  <div className="bg-gradient-to-br from-brand-50 to-aqua-400/10 border border-brand-100 rounded-2xl p-4 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center shrink-0">
-                        <Pencil className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-brand-900">Correct Delivery</p>
-                        <p className="text-[11px] text-brand-600">Adjust if staff entered wrong values</p>
-                      </div>
-                    </div>
+                {!detailLoading && detailDelivery && ['completed', 'delivered'].includes(detailOrder.status) && (() => {
+                  const isPayLater = detailDelivery.payment_mode === 'pay_later';
+                  const pricePerJar = Number(detailOrder.price_per_jar);
 
-                    {/* Jar quantity stepper */}
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Delivered Jars</label>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setEditQty(q => Math.max(0, q - 1))}
-                          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-red-50 hover:border-red-300 text-slate-600 hover:text-red-600 transition-all active:scale-95">
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <div className="flex-1 text-center">
-                          <p className="text-3xl font-extrabold text-slate-800">{editQty}</p>
-                          {editQty !== detailDelivery.delivered_quantity && (
-                            <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                              Was: {detailDelivery.delivered_quantity} · Change: {editQty - detailDelivery.delivered_quantity > 0 ? '+' : ''}{editQty - detailDelivery.delivered_quantity}
-                            </p>
-                          )}
+                  // Payment mode badge config
+                  const modeConfig = {
+                    cash:      { label: '💵 Cash',              bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700' },
+                    online:    { label: '💳 Online (Already Paid)', bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-700' },
+                    advance:   { label: '🏦 Advance',            bg: 'bg-purple-50',  border: 'border-purple-200',  text: 'text-purple-700' },
+                    pay_later: { label: '⏳ Pay Later (Outstanding)', bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700' },
+                  }[detailDelivery.payment_mode] ?? { label: detailDelivery.payment_mode, bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' };
+
+                  return (
+                    <div className="bg-gradient-to-br from-brand-50 to-blue-50/30 border border-brand-100 rounded-2xl p-4 space-y-4">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center shrink-0">
+                            <Pencil className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-brand-900">Correct Delivery</p>
+                            <p className="text-[11px] text-brand-600">Adjust if staff entered wrong values</p>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => setEditQty(q => q + 1)}
-                          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-green-50 hover:border-green-300 text-slate-600 hover:text-green-600 transition-all active:scale-95">
-                          <Plus className="w-4 h-4" />
-                        </button>
+                        {/* Payment mode badge */}
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${modeConfig.bg} ${modeConfig.border} ${modeConfig.text}`}>
+                          {modeConfig.label}
+                        </span>
                       </div>
-                    </div>
 
-                    {/* Amount */}
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Collected Amount (₹)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                        <input
-                          type="number" min={0} value={editAmount}
-                          onChange={e => setEditAmount(Number(e.target.value))}
-                          className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                      {/* Jar quantity stepper */}
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Delivered Jars</label>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => {
+                              const newQ = Math.max(0, editQty - 1);
+                              setEditQty(newQ);
+                              if (isPayLater) setEditAmount(newQ * pricePerJar);
+                            }}
+                            className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-red-50 hover:border-red-300 text-slate-600 hover:text-red-600 transition-all active:scale-95">
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <div className="flex-1 text-center">
+                            <p className="text-3xl font-extrabold text-slate-800">{editQty}</p>
+                            {editQty !== detailDelivery.delivered_quantity && (
+                              <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
+                                Was: {detailDelivery.delivered_quantity} · Change: {editQty - detailDelivery.delivered_quantity > 0 ? '+' : ''}{editQty - detailDelivery.delivered_quantity}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => {
+                              const newQ = editQty + 1;
+                              setEditQty(newQ);
+                              if (isPayLater) setEditAmount(newQ * pricePerJar);
+                            }}
+                            className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:bg-green-50 hover:border-green-300 text-slate-600 hover:text-green-600 transition-all active:scale-95">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      {editAmount !== detailDelivery.collected_amount && (
-                        <p className="text-[10px] text-amber-600 font-semibold mt-1">
-                          Was: ₹{detailDelivery.collected_amount} · Change: {editAmount - detailDelivery.collected_amount > 0 ? '+' : ''}₹{editAmount - detailDelivery.collected_amount}
-                        </p>
+
+                      {/* Amount — auto-calculated for pay_later, editable for cash/online */}
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                          {isPayLater ? 'Outstanding Balance (Auto-calculated)' : 'Collected Amount (₹)'}
+                        </label>
+                        {isPayLater ? (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-lg font-extrabold text-amber-800">₹{editAmount}</p>
+                              <p className="text-[11px] text-amber-600 mt-0.5">{editQty} jars × ₹{pricePerJar}/jar</p>
+                            </div>
+                            {editQty !== detailDelivery.delivered_quantity && (
+                              <p className="text-[11px] text-amber-700 font-bold">
+                                Balance change: {editAmount - (detailDelivery.delivered_quantity * pricePerJar) > 0 ? '+' : ''}₹{editAmount - (detailDelivery.delivered_quantity * pricePerJar)}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                            <input
+                              type="number" min={0} value={editAmount}
+                              onChange={e => setEditAmount(Number(e.target.value))}
+                              className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                          </div>
+                        )}
+                        {!isPayLater && editAmount !== detailDelivery.collected_amount && (
+                          <p className="text-[10px] text-amber-600 font-semibold mt-1">
+                            Was: ₹{detailDelivery.collected_amount} · Change: {editAmount - detailDelivery.collected_amount > 0 ? '+' : ''}₹{editAmount - detailDelivery.collected_amount}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Reason */}
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Reason (optional)</label>
+                        <input
+                          value={editReason}
+                          onChange={e => setEditReason(e.target.value)}
+                          placeholder="e.g. Staff entered 3 jars but delivered 2"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                      </div>
+
+                      {/* Save button */}
+                      {(editQty !== detailDelivery.delivered_quantity || (!isPayLater && editAmount !== detailDelivery.collected_amount)) ? (
+                        <Button size="md" className="w-full" loading={adjusting} onClick={handleAdjust}
+                          icon={<Check className="w-4 h-4" />}>
+                          Save Correction
+                        </Button>
+                      ) : (
+                        <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-xs font-bold text-green-700">Values match — no changes needed</span>
+                        </div>
                       )}
                     </div>
-
-                    {/* Reason */}
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Reason (optional)</label>
-                      <input
-                        value={editReason}
-                        onChange={e => setEditReason(e.target.value)}
-                        placeholder="e.g. Staff entered 3 jars but delivered 2"
-                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
-                    </div>
-
-                    {/* Save button */}
-                    {(editQty !== detailDelivery.delivered_quantity || editAmount !== detailDelivery.collected_amount) ? (
-                      <Button size="md" className="w-full" loading={adjusting} onClick={handleAdjust}
-                        icon={<Check className="w-4 h-4" />}>
-                        Save Correction
-                      </Button>
-                    ) : (
-                      <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-50 border border-green-200">
-                        <Check className="w-3.5 h-3.5 text-green-600" />
-                        <span className="text-xs font-bold text-green-700">Values match — no changes needed</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* No delivery yet */}
                 {!detailLoading && !detailDelivery && ['pending', 'assigned'].includes(detailOrder.status) && (

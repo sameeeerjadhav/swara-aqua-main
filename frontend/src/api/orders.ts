@@ -49,7 +49,7 @@ export interface Delivery {
   staff_id: number;
   delivered_quantity: number;
   collected_amount: number;
-  payment_mode: 'cash' | 'online' | 'advance';
+  payment_mode: 'cash' | 'online' | 'advance' | 'pay_later';
   status: string;
   notes: string | null;
   delivered_at: string | null;

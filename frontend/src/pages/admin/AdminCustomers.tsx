@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -47,6 +47,10 @@ export const AdminCustomers = () => {
 
   // Mobile modal
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
+
+  // Delete
+  const [deleteTarget,  setDeleteTarget]  = useState<CustomerRow | null>(null);
+  const [deleting,      setDeleting]      = useState(false);
 
   // Pending customer registration detail modal
   const [pendingDetail, setPendingDetail] = useState<PendingDetail | null>(null);
@@ -128,6 +132,21 @@ export const AdminCustomers = () => {
     } catch { toast('Action failed', 'error'); }
     finally { setActionId(null); }
   };
+
+  const handleDeleteCustomer = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/admin/users/${deleteTarget.id}`);
+      toast(`${deleteTarget.name} deleted. All records preserved.`, 'success');
+      setCustomers(prev => prev.filter(c => c.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      setSelectedCustomer(null);
+    } catch (err: any) {
+      toast(err?.response?.data?.message || 'Failed to delete', 'error');
+    } finally { setDeleting(false); }
+  };
+
 
   const handleJarRate = async () => {
     if (!editingRate) return;
@@ -412,6 +431,12 @@ export const AdminCustomers = () => {
                             Reject
                           </Button>
                         )}
+                        <Button variant="ghost" size="sm"
+                          icon={<Trash2 className="w-3.5 h-3.5 text-red-500" />}
+                          onClick={() => setDeleteTarget(u)}
+                          className="text-red-600 hover:bg-red-50">
+                          Delete
+                        </Button>
                       </div>
                     </td>
                   </motion.tr>
@@ -669,8 +694,46 @@ export const AdminCustomers = () => {
                         <XCircle className="w-4 h-4" /> Reject Customer
                       </button>
                     )}
+                    {/* Delete */}
+                    <button
+                      onClick={() => { setDeleteTarget(selectedCustomer); setSelectedCustomer(null); }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white text-sm font-semibold rounded-2xl hover:bg-red-700 transition-colors">
+                      <Trash2 className="w-4 h-4" /> Delete Customer
+                    </button>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Delete Customer Confirmation ── */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteTarget(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 16 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Delete Customer</h3>
+                  <p className="text-xs text-slate-400">This cannot be undone</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 mb-5">
+                <strong>{deleteTarget.name}</strong>'s login will be disabled. All orders, bills and delivery records are preserved.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="md" className="flex-1" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+                <Button variant="danger" size="md" className="flex-1" loading={deleting} onClick={handleDeleteCustomer}>Delete</Button>
               </div>
             </motion.div>
           </motion.div>

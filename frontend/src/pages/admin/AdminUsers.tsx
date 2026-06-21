@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, CheckCircle, XCircle, RefreshCw, UserPlus, X, Phone, Lock, User, Eye } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, UserPlus, X, Phone, Lock, User, Eye, Trash2, AlertTriangle } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -21,6 +21,8 @@ export const AdminUsers = () => {
   const [showModal, setShowModal] = useState(false);
   const [submitting,setSubmitting]= useState(false);
   const [form, setForm] = useState({ name: '', phone: '', password: '' });
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [deleting,     setDeleting]     = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -57,6 +59,19 @@ export const AdminUsers = () => {
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Failed to create staff', 'error');
     } finally { setSubmitting(false); }
+  };
+
+  const handleDeleteStaff = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/admin/users/${deleteTarget.id}`);
+      toast(`${deleteTarget.name} deleted. All records preserved.`, 'success');
+      setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      toast(err?.response?.data?.message || 'Failed to delete', 'error');
+    } finally { setDeleting(false); }
   };
 
   const filtered = users.filter(u =>
@@ -145,6 +160,12 @@ export const AdminUsers = () => {
                           Deactivate
                         </Button>
                       )}
+                      <Button variant="ghost" size="sm"
+                        icon={<Trash2 className="w-3.5 h-3.5 text-red-500" />}
+                        onClick={() => setDeleteTarget(u)}
+                        className="text-red-600 hover:bg-red-50">
+                        Delete
+                      </Button>
                     </div>
                   </td>
                 </motion.tr>
@@ -191,6 +212,11 @@ export const AdminUsers = () => {
                     Deactivate
                   </Button>
                 )}
+                <Button variant="danger" size="sm"
+                  icon={<Trash2 className="w-3.5 h-3.5" />}
+                  onClick={() => setDeleteTarget(u)}>
+                  Delete
+                </Button>
               </div>
             </div>
           ))}
@@ -253,6 +279,38 @@ export const AdminUsers = () => {
                   </Button>
                 </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Delete Staff Confirmation ── */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteTarget(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 16 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Delete Staff Account</h3>
+                  <p className="text-xs text-slate-400">This cannot be undone</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 mb-5">
+                <strong>{deleteTarget.name}</strong>'s login will be disabled. All delivery records are preserved.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="md" className="flex-1" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+                <Button variant="danger" size="md" className="flex-1" loading={deleting} onClick={handleDeleteStaff}>Delete</Button>
+              </div>
             </motion.div>
           </motion.div>
         )}

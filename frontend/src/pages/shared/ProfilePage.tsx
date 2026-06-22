@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Phone, LogOut, Edit3, Key, MapPin,
   Check, ChevronRight, Eye, EyeOff, Plus, Trash2,
-  Home, Briefcase, Star, Monitor, Smartphone, Camera, Pencil,
+  Home, Briefcase, Star, Monitor, Smartphone, Camera, Pencil, Bell,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { Avatar } from '../../components/ui/Avatar';
 import { EditProfileModal } from '../../components/ui/EditProfileModal';
+import { useNotificationCenter } from '../../context/NotificationContext';
 import api from '../../api/axios';
 // import { useNavigate } from 'react-router-dom'; // kept for wallet restore
 
@@ -36,11 +37,13 @@ type Section = 'name' | 'password' | null;
 export const ProfilePage = () => {
   const { user, logout, refreshUser } = useAuth();
   const { toast } = useToast();
+  const { permission, pushEnabled, enablePush, unregisterPush } = useNotificationCenter();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [localName, setLocalName] = useState(user?.name || '');
   const [localPhone, setLocalPhone] = useState(user?.phone || '');
+  const [togglingNotif, setTogglingNotif] = useState(false);
 
   useEffect(() => {
     setLocalName(user?.name || '');
@@ -337,7 +340,7 @@ export const ProfilePage = () => {
         </div>
         {/* Display Mode Toggle */}
         <button onClick={toggleViewport}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors text-left">
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors text-left border-b border-slate-50">
           <div className="w-9 h-9 bg-slate-50 rounded-xl flex items-center justify-center shrink-0">
             {viewportMode === 'mobile'
               ? <Smartphone className="w-4 h-4 text-brand-500" />
@@ -360,6 +363,55 @@ export const ProfilePage = () => {
             }`} />
           </div>
         </button>
+
+        {/* Notifications Toggle */}
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <div className="w-9 h-9 bg-slate-50 rounded-xl flex items-center justify-center shrink-0">
+            <Bell className={`w-4 h-4 ${pushEnabled ? 'text-brand-500' : 'text-slate-400'}`} />
+          </div>
+          <div className="flex-1">
+            <p className="text-[11px] text-slate-400 font-medium">Push Notifications</p>
+            <p className="text-sm font-semibold text-slate-800 mt-0.5">
+              {permission === 'denied'
+                ? '🚫 Blocked in browser'
+                : pushEnabled
+                  ? '✅ Enabled'
+                  : '🔕 Disabled'}
+            </p>
+            {permission === 'denied' && (
+              <p className="text-[10px] text-amber-600 mt-0.5">Tap the lock icon in address bar → allow notifications</p>
+            )}
+          </div>
+          {permission !== 'denied' && permission !== 'unsupported' && (
+            <button
+              onClick={async () => {
+                setTogglingNotif(true);
+                if (pushEnabled) {
+                  await unregisterPush();
+                  toast('Push notifications disabled', 'warning');
+                } else {
+                  const ok = await enablePush();
+                  if (ok) {
+                    // Clear the banner dismissed flag so it can re-check state
+                    localStorage.removeItem('notif-banner-dismissed-v2');
+                    toast('Push notifications enabled!', 'success');
+                  } else {
+                    toast('Could not enable — check browser settings', 'error');
+                  }
+                }
+                setTogglingNotif(false);
+              }}
+              disabled={togglingNotif}
+              className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${
+                pushEnabled ? 'bg-brand-500' : 'bg-slate-300'
+              } disabled:opacity-50`}
+            >
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
+                pushEnabled ? 'translate-x-5' : 'translate-x-0.5'
+              }`} />
+            </button>
+          )}
+        </div>
       </motion.div>
 
       {/* ── Sign out ── */}

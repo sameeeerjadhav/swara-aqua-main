@@ -1,29 +1,40 @@
-import { Bell, BellRing, X } from 'lucide-react';
+import { Bell, BellOff, BellRing, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNotificationCenter } from '../context/NotificationContext';
+
+const BANNER_KEY = 'notif-banner-dismissed-v2';
 
 export const NotificationEnableBanner = () => {
   const { permission, pushEnabled, enablePush, sseConnected } = useNotificationCenter();
   const [dismissed, setDismissed] = useState(
-    () => sessionStorage.getItem('notif-banner-dismissed') === '1'
+    () => localStorage.getItem(BANNER_KEY) === '1'
   );
   const [enabling, setEnabling] = useState(false);
 
+  // If permission is already granted and push works, permanently record it and hide
+  if (permission === 'granted' && pushEnabled) {
+    if (localStorage.getItem(BANNER_KEY) !== '1') {
+      localStorage.setItem(BANNER_KEY, '1');
+    }
+    return null;
+  }
+
   if (dismissed || permission === 'unsupported') return null;
-  if (permission === 'granted' && pushEnabled) return null;
 
   const handleEnable = async () => {
     setEnabling(true);
     const ok = await enablePush();
     setEnabling(false);
-    if (ok || Notification.permission === 'granted') {
-      sessionStorage.setItem('notif-banner-dismissed', '1');
-      setDismissed(true);
+    // Always dismiss after the user interacts — they made their choice
+    localStorage.setItem(BANNER_KEY, '1');
+    setDismissed(true);
+    if (!ok && Notification.permission === 'denied') {
+      // Let user know they need to go to browser settings
     }
   };
 
   const dismiss = () => {
-    sessionStorage.setItem('notif-banner-dismissed', '1');
+    localStorage.setItem(BANNER_KEY, '1');
     setDismissed(true);
   };
 
@@ -35,8 +46,7 @@ export const NotificationEnableBanner = () => {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-slate-800">Enable real-time alerts</p>
         <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-          Required for alerts when the app is closed or not running (admin, staff, and customer).
-          Install the app to home screen for best results on mobile.
+          Get notified for new orders, deliveries, and updates even when the app is closed.
           {sseConnected ? ' Live updates are on.' : ''}
         </p>
         <button
@@ -50,7 +60,7 @@ export const NotificationEnableBanner = () => {
         </button>
         {permission === 'denied' && (
           <p className="text-[10px] text-amber-700 mt-1">
-            Notifications were blocked. Allow them in your browser site settings.
+            Blocked in browser. Tap the lock icon in the address bar → allow notifications.
           </p>
         )}
       </div>

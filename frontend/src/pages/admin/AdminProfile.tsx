@@ -6,22 +6,25 @@ import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { EditProfileModal } from '../../components/ui/EditProfileModal';
+import { useNotificationCenter } from '../../context/NotificationContext';
 import api from '../../api/axios';
 
 export const AdminProfile = () => {
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const { permission, pushEnabled, enablePush, unregisterPush } = useNotificationCenter();
 
-  const [showPwModal, setShowPwModal] = useState(false);
-  const [currentPw, setCurrentPw]     = useState('');
-  const [newPw, setNewPw]             = useState('');
-  const [confirmPw, setConfirmPw]     = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew]         = useState(false);
-  const [submitting, setSubmitting]   = useState(false);
+  const [showPwModal, setShowPwModal]     = useState(false);
+  const [currentPw, setCurrentPw]         = useState('');
+  const [newPw, setNewPw]                 = useState('');
+  const [confirmPw, setConfirmPw]         = useState('');
+  const [showCurrent, setShowCurrent]     = useState(false);
+  const [showNew, setShowNew]             = useState(false);
+  const [submitting, setSubmitting]       = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [localName, setLocalName]     = useState(user?.name || '');
-  const [localPhone, setLocalPhone]   = useState(user?.phone || '');
+  const [localName, setLocalName]         = useState(user?.name || '');
+  const [localPhone, setLocalPhone]       = useState(user?.phone || '');
+  const [togglingNotif, setTogglingNotif] = useState(false);
 
   useEffect(() => {
     setLocalName(user?.name || '');
@@ -308,6 +311,61 @@ export const AdminProfile = () => {
               Change
             </Button>
           </div>
+        </div>
+      </motion.div>
+
+      {/* Notifications Settings */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.4 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-50">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <Bell className="w-4 h-4 text-brand-500" />
+            Notifications
+          </h3>
+        </div>
+        <div className="flex items-center gap-4 px-5 py-4">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-slate-700">
+              {permission === 'denied'
+                ? '🚫 Blocked in browser'
+                : pushEnabled
+                  ? '✅ Push notifications enabled'
+                  : '🔕 Push notifications disabled'}
+            </p>
+            {permission === 'denied' ? (
+              <p className="text-xs text-amber-600 mt-1">Tap the lock icon in the address bar → allow notifications, then reload.</p>
+            ) : (
+              <p className="text-xs text-slate-400 mt-0.5">Receive alerts for orders and deliveries even when the app is closed.</p>
+            )}
+          </div>
+          {permission !== 'denied' && permission !== 'unsupported' && (
+            <button
+              onClick={async () => {
+                setTogglingNotif(true);
+                if (pushEnabled) {
+                  await unregisterPush();
+                  toast('Push notifications disabled', 'warning');
+                } else {
+                  const ok = await enablePush();
+                  if (ok) {
+                    localStorage.removeItem('notif-banner-dismissed-v2');
+                    toast('Push notifications enabled!', 'success');
+                  } else {
+                    toast('Could not enable — check browser settings', 'error');
+                  }
+                }
+                setTogglingNotif(false);
+              }}
+              disabled={togglingNotif}
+              className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${
+                pushEnabled ? 'bg-brand-500' : 'bg-slate-300'
+              } disabled:opacity-50`}
+            >
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
+                pushEnabled ? 'translate-x-5' : 'translate-x-0.5'
+              }`} />
+            </button>
+          )}
         </div>
       </motion.div>
 

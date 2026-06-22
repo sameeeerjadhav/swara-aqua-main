@@ -129,7 +129,7 @@ export const generateBillPDF = async (bill: Bill, res: Response): Promise<void> 
   const M  = 36;
   const IW = W - M * 2;
 
-  const logoPath = getAssetPath('swaralogo.png');
+  const logoPath = getAssetPath('swaralogocorrected.png');
   const sigPath  = getAssetPath('signature.png');
 
   const dailyData = await getDailyDeliveries(bill.customer_id, bill.month);
@@ -452,7 +452,7 @@ export const generateReportPDF = async (data: ReportData, res: Response): Promis
   const M  = 36;
   const IW = W - M * 2;
 
-  const logoPath = getAssetPath('swaralogo.png');
+  const logoPath = getAssetPath('swaralogocorrected.png');
   const sigPath  = getAssetPath('signature.png');
 
   const dailyMap = new Map<string, number>();
@@ -720,7 +720,7 @@ export const generateSummaryBillPDF = async (
   const M  = 36;
   const IW = W - M * 2;
 
-  const logoPath = getAssetPath('swaralogo.png');
+  const logoPath = getAssetPath('swaralogocorrected.png');
   const sigPath  = getAssetPath('signature.png');
 
   const today = new Date().toLocaleDateString('en-IN',

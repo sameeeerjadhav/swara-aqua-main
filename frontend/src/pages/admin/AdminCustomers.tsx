@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -10,6 +10,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import api from '../../api/axios';
 import { subscriptionApi } from '../../api/subscription';
 import { pendingApi } from '../../api/pending';
+import { customerOrderApi, applyOrder } from '../../api/customerOrder';
 
 interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; profile_photo?: string | null; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
@@ -51,6 +52,16 @@ export const AdminCustomers = () => {
   // Delete
   const [deleteTarget,  setDeleteTarget]  = useState<CustomerRow | null>(null);
   const [deleting,      setDeleting]      = useState(false);
+
+  // Rearrange mode
+  const [reorderMode,    setReorderMode]    = useState(false);
+  const [reorderedList,  setReorderedList]  = useState<CustomerRow[]>([]);
+  const [savingOrder,    setSavingOrder]    = useState(false);
+  const dragIndex = useRef<number | null>(null);
+  const dragOverIndex = useRef<number | null>(null);
+  // touch drag
+  const touchStartY = useRef<number>(0);
+  const touchDragIdx = useRef<number | null>(null);
 
   // Pending customer registration detail modal
   const [pendingDetail, setPendingDetail] = useState<PendingDetail | null>(null);
@@ -101,14 +112,17 @@ export const AdminCustomers = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const [usersRes, balRes, payLaterRes] = await Promise.all([
+      const [usersRes, balRes, payLaterRes, orderRes] = await Promise.all([
         api.get('/admin/users'),
         api.get('/admin/customer-balances'),
         pendingApi.adminSummary(),
+        customerOrderApi.getAdmin().catch(() => ({ data: { ordered_ids: [] } })),
       ]);
-      setCustomers(usersRes.data.users.filter((u: CustomerRow) => u.role === 'customer'));
+      const rawCustomers = usersRes.data.users.filter((u: CustomerRow) => u.role === 'customer');
+      const orderedCustomers = applyOrder(rawCustomers, orderRes.data.ordered_ids ?? []);
+      setCustomers(orderedCustomers);
+      setReorderedList(orderedCustomers);
       setBalances(balRes.data.balances || {});
-      // Build a map: customer_id -> pending_balance
       const map: Record<number, number> = {};
       for (const row of payLaterRes.data.customers) {
         map[row.id] = row.pending_balance;
@@ -140,12 +154,81 @@ export const AdminCustomers = () => {
       await api.delete(`/admin/users/${deleteTarget.id}`);
       toast(`${deleteTarget.name} deleted. All records preserved.`, 'success');
       setCustomers(prev => prev.filter(c => c.id !== deleteTarget.id));
+      setReorderedList(prev => prev.filter(c => c.id !== deleteTarget.id));
       setDeleteTarget(null);
       setSelectedCustomer(null);
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Failed to delete', 'error');
     } finally { setDeleting(false); }
   };
+
+  // ── Drag-to-reorder helpers ─────────────────────────────────────────────────
+  const moveItem = useCallback((from: number, to: number) => {
+    if (from === to) return;
+    setReorderedList(prev => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  }, []);
+
+  // Mouse drag
+  const onDragStart = (i: number) => { dragIndex.current = i; };
+  const onDragEnter = (i: number) => {
+    if (dragIndex.current === null || dragIndex.current === i) return;
+    moveItem(dragIndex.current, i);
+    dragIndex.current = i;
+  };
+  const onDragEnd = () => { dragIndex.current = null; dragOverIndex.current = null; };
+
+  // Touch drag
+  const onTouchStart = (e: React.TouchEvent, i: number) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchDragIdx.current = i;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchDragIdx.current === null) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    const step = 72; // approx card height
+    if (Math.abs(dy) > step / 2) {
+      const delta = dy > 0 ? 1 : -1;
+      const newIdx = Math.max(0, Math.min(reorderedList.length - 1, touchDragIdx.current + delta));
+      moveItem(touchDragIdx.current, newIdx);
+      touchDragIdx.current = newIdx;
+      touchStartY.current = e.touches[0].clientY;
+    }
+  };
+  const onTouchEnd = () => { touchDragIdx.current = null; };
+
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await customerOrderApi.saveAdmin(reorderedList.map(c => c.id));
+      setCustomers(reorderedList);
+      setReorderMode(false);
+      toast('Customer order saved!', 'success');
+    } catch { toast('Failed to save order', 'error'); }
+    finally { setSavingOrder(false); }
+  };
+
+  const cancelReorder = () => {
+    setReorderedList([...customers]);
+    setReorderMode(false);
+  };
+
+  /** Jump a customer to a given 1-based position */
+  const setCustomerPosition = useCallback((customerId: number, pos1based: number) => {
+    setReorderedList(prev => {
+      const arr = [...prev];
+      const from = arr.findIndex(c => c.id === customerId);
+      if (from === -1) return prev;
+      const to = Math.max(0, Math.min(arr.length - 1, pos1based - 1));
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  }, []);
 
 
   const handleJarRate = async () => {
@@ -271,9 +354,40 @@ export const AdminCustomers = () => {
   return (
     <div className="max-w-4xl space-y-5">
 
+      {/* Reorder mode banner */}
+      <AnimatePresence>
+        {reorderMode && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="flex items-center justify-between bg-brand-600 text-white rounded-2xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              <GripVertical className="w-4 h-4 opacity-70" />
+              <p className="text-sm font-semibold">Drag cards to reorder • Changes save when you click Save</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={cancelReorder}
+                className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-xl transition-colors">
+                Cancel
+              </button>
+              <button onClick={saveOrder} disabled={savingOrder}
+                className="px-3 py-1.5 bg-white text-brand-700 text-xs font-bold rounded-xl hover:bg-white/90 transition-colors disabled:opacity-60">
+                {savingOrder ? 'Saving…' : 'Save Order'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-center justify-end gap-2">
         <Button size="sm" icon={<UserPlus className="w-3.5 h-3.5" />} onClick={() => setShowAddCustomer(true)}>
           Add Customer
+        </Button>
+        <Button variant={reorderMode ? 'danger' : 'secondary'} size="sm"
+          icon={<ListOrdered className="w-3.5 h-3.5" />}
+          onClick={() => {
+            if (reorderMode) { cancelReorder(); }
+            else { setReorderedList([...customers]); setReorderMode(true); }
+          }}>
+          {reorderMode ? 'Cancel' : 'Reorder'}
         </Button>
         <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
           Refresh
@@ -294,6 +408,69 @@ export const AdminCustomers = () => {
         </div>
       )}
 
+      {/* ─── REORDER MODE: Spotify-style drag list ─── */}
+      {reorderMode && (
+        <div className="space-y-2">
+          {reorderedList.map((u, i) => (
+            <div
+              key={u.id}
+              draggable
+              onDragStart={() => onDragStart(i)}
+              onDragEnter={() => onDragEnter(i)}
+              onDragEnd={onDragEnd}
+              onDragOver={e => e.preventDefault()}
+              onTouchStart={e => onTouchStart(e, i)}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-3 py-3 cursor-grab active:cursor-grabbing active:border-brand-400 active:shadow-md transition-all select-none"
+              style={{ touchAction: 'none' }}
+            >
+              {/* Position number */}
+              <span className="w-6 text-center text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
+              {/* Drag handle */}
+              <GripVertical className="w-5 h-5 text-slate-300 shrink-0" />
+              {/* Avatar + Name */}
+              <Avatar name={u.name} photo={u.profile_photo} size="sm" className="w-9 h-9 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
+                <p className="text-xs text-slate-400">{u.phone}</p>
+              </div>
+              {/* Quick move to position */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  title="Move up"
+                  onClick={() => moveItem(i, Math.max(0, i - 1))}
+                  disabled={i === 0}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 12V4M4 8l4-4 4 4" /></svg>
+                </button>
+                <button
+                  title="Move down"
+                  onClick={() => moveItem(i, Math.min(reorderedList.length - 1, i + 1))}
+                  disabled={i === reorderedList.length - 1}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 4v8M4 8l4 4 4-4" /></svg>
+                </button>
+              </div>
+            </div>
+          ))}
+          {/* Save bar at bottom */}
+          <div className="flex gap-2 pt-2">
+            <button onClick={cancelReorder}
+              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-2xl transition-colors">
+              Cancel
+            </button>
+            <button onClick={saveOrder} disabled={savingOrder}
+              className="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold rounded-2xl transition-colors disabled:opacity-60">
+              {savingOrder ? 'Saving…' : '💾 Save Order'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── NORMAL MODE: Filters + Search + Table ─── */}
+      {!reorderMode && (
+        <>
       {/* Status filter tabs */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
         {STATUS_FILTERS.map(s => (
@@ -503,6 +680,8 @@ export const AdminCustomers = () => {
           })}
         </div>
       </div>
+        </>
+      )}
 
       {/* ─── Mobile Customer Detail Modal (bottom sheet) ─── */}
       <AnimatePresence>

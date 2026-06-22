@@ -422,6 +422,17 @@ export const runMigrations = async (): Promise<void> => {
       if (e.errno !== 1060) throw e; // 1060 = Duplicate column name
     }
 
+    // ── Customer list order ───────────────────────────────────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS customer_list_order (
+        owner_id   INT NOT NULL DEFAULT 0,
+        owner_role ENUM('admin','staff') NOT NULL DEFAULT 'admin',
+        ordered_ids JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (owner_id, owner_role)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
     console.log('✅ Migrations complete');  } catch (err) {
     console.error('❌ Migration error:', (err as Error).message);
     // Don't crash the server — log and continue

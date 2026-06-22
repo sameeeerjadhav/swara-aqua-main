@@ -12,6 +12,8 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { EditProfileModal } from '../../components/ui/EditProfileModal';
 import { calendarApi, CalendarDay, DayDelivery, CustomerProfile, CustomerProfileStats } from '../../api/calendar';
+import { customerOrderApi } from '../../api/customerOrder';
+import api from '../../api/axios';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES = [
@@ -46,6 +48,12 @@ export const AdminCustomerProfile = () => {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting,   setDeleting]   = useState(false);
 
+  // Set position
+  const [posInput,   setPosInput]   = useState('');
+  const [posTotal,   setPosTotal]   = useState(0);
+  const [posSaving,  setPosSaving]  = useState(false);
+  const [posOrder,   setPosOrder]   = useState<number[]>([]);
+
   // Calendar state
   const now = new Date();
   const [calYear, setCalYear]   = useState(now.getFullYear());
@@ -64,12 +72,26 @@ export const AdminCustomerProfile = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    calendarApi.getCustomerProfile(Number(id))
-      .then(({ data }) => {
-        setProfile(data.customer);
-        setStats(data.stats);
-        setBills(data.bills);
-        setOrders(data.orders);
+    Promise.all([
+      calendarApi.getCustomerProfile(Number(id)),
+      api.get('/admin/users'),
+      customerOrderApi.getAdmin().catch(() => ({ data: { ordered_ids: [] } })),
+    ]).then(([profileRes, usersRes, orderRes]) => {
+        setProfile(profileRes.data.customer);
+        setStats(profileRes.data.stats);
+        setBills(profileRes.data.bills);
+        setOrders(profileRes.data.orders);
+        const allCustomers = (usersRes.data.users as any[]).filter((u: any) => u.role === 'customer');
+        setPosTotal(allCustomers.length);
+        // Build order array: saved order, then append any not-in-order
+        const savedIds: number[] = orderRes.data.ordered_ids ?? [];
+        const inOrder  = savedIds.filter(sid => allCustomers.some((c: any) => c.id === sid));
+        const notIn    = allCustomers.filter((c: any) => !savedIds.includes(c.id)).map((c: any) => c.id);
+        const fullOrder = [...inOrder, ...notIn];
+        setPosOrder(fullOrder);
+        // Pre-fill position input with current position
+        const currentPos = fullOrder.indexOf(Number(id));
+        if (currentPos !== -1) setPosInput(String(currentPos + 1));
       })
       .catch(() => toast('Failed to load customer profile', 'error'))
       .finally(() => setLoading(false));
@@ -167,6 +189,23 @@ export const AdminCustomerProfile = () => {
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Failed to delete', 'error');
     } finally { setDeleting(false); setShowDelete(false); }
+  };
+
+  const handleSetPosition = async () => {
+    const pos = Number(posInput);
+    if (!pos || pos < 1 || pos > posTotal || !profile) return;
+    setPosSaving(true);
+    try {
+      // Move this customer to the desired 0-based index in the order array
+      const arr = [...posOrder];
+      const from = arr.indexOf(profile.id);
+      if (from !== -1) arr.splice(from, 1);
+      arr.splice(pos - 1, 0, profile.id);
+      await customerOrderApi.saveAdmin(arr);
+      setPosOrder(arr);
+      toast(`${profile.name} moved to position ${pos}`, 'success');
+    } catch { toast('Failed to update position', 'error'); }
+    finally { setPosSaving(false); }
   };
 
   return (
@@ -277,6 +316,39 @@ export const AdminCustomerProfile = () => {
           </motion.div>
         ))}
       </div>
+
+      {/* Set Position in List */}
+      {posTotal > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-7 h-7 flex items-center justify-center rounded-xl bg-brand-50 text-brand-600 text-sm font-bold shrink-0">
+              #{posOrder.indexOf(profile.id) + 1 || '—'}
+            </span>
+            <div>
+              <p className="text-sm font-bold text-slate-800">Position in Customer List</p>
+              <p className="text-xs text-slate-400">Change delivery order position (1 – {posTotal})</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={posTotal}
+              value={posInput}
+              onChange={e => setPosInput(e.target.value)}
+              placeholder={`1 – ${posTotal}`}
+              className="w-24 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 text-center outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all"
+            />
+            <span className="text-xs text-slate-400">out of {posTotal}</span>
+            <button
+              onClick={handleSetPosition}
+              disabled={posSaving || !posInput || Number(posInput) < 1 || Number(posInput) > posTotal}
+              className="ml-auto flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-colors">
+              {posSaving ? 'Saving…' : '✓ Set Position'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Address */}
       {profile.address && (

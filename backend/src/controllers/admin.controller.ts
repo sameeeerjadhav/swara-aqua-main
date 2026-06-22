@@ -534,7 +534,7 @@ export const updateSetting = async (req: AuthRequest, res: Response): Promise<vo
 };
 
 // ── Customer list for Staff (staff need to see all customers for direct delivery) ──
-export const getCustomersForStaff = async (_req: AuthRequest, res: Response): Promise<void> => {
+export const getCustomersForStaff = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const [rows] = await pool.query<RowDataPacket[]>(`
       SELECT
@@ -555,10 +555,43 @@ export const getCustomersForStaff = async (_req: AuthRequest, res: Response): Pr
             AND DATE(COALESCE(d.delivered_at, d.created_at)) = CURDATE()
         ), 0) AS today_jars
       FROM users u
-      WHERE u.role = 'customer' AND u.status = 'active'
+      WHERE u.role = 'customer' AND u.status = 'active' AND u.deleted_at IS NULL
       ORDER BY u.name ASC
     `);
-    res.json({ customers: rows });
+
+    // Apply saved order: staff-personal first, then admin global, then alpha
+    const callerId = req.user!.id;
+    const callerRole = req.user!.role;
+
+    let orderedIds: number[] | null = null;
+
+    // Try staff's personal order
+    if (callerRole === 'staff') {
+      const [staffOrder] = await pool.query<RowDataPacket[]>(
+        `SELECT ordered_ids FROM customer_list_order WHERE owner_id = ? AND owner_role = 'staff'`,
+        [callerId]
+      );
+      if (staffOrder.length) orderedIds = JSON.parse(staffOrder[0].ordered_ids as string) as number[];
+    }
+
+    // Fallback to admin global order
+    if (!orderedIds) {
+      const [adminOrder] = await pool.query<RowDataPacket[]>(
+        `SELECT ordered_ids FROM customer_list_order WHERE owner_id = 0 AND owner_role = 'admin'`
+      );
+      if (adminOrder.length) orderedIds = JSON.parse(adminOrder[0].ordered_ids as string) as number[];
+    }
+
+    if (orderedIds) {
+      const indexMap = new Map(orderedIds.map((id, i) => [id, i]));
+      const inOrder = rows
+        .filter(r => indexMap.has(r.id))
+        .sort((a, b) => (indexMap.get(a.id) ?? 999) - (indexMap.get(b.id) ?? 999));
+      const notInOrder = rows.filter(r => !indexMap.has(r.id));
+      res.json({ customers: [...inOrder, ...notInOrder] });
+    } else {
+      res.json({ customers: rows });
+    }
   } catch (err) {
     console.error('getCustomersForStaff error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
@@ -738,5 +771,97 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
   } catch (err) {
     console.error('deleteUser error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── Customer List Order ────────────────────────────────────────────────────────
+
+// GET /admin/customer-order  (admin)
+export const getCustomerOrder = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT ordered_ids FROM customer_list_order WHERE owner_id = 0 AND owner_role = 'admin'`
+    );
+    const ordered_ids: number[] = rows.length ? JSON.parse(rows[0].ordered_ids as string) : [];
+    res.json({ ordered_ids });
+  } catch (err) {
+    console.error('getCustomerOrder error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// PUT /admin/customer-order  (admin)
+export const saveCustomerOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ordered_ids } = req.body as { ordered_ids: number[] };
+    if (!Array.isArray(ordered_ids)) { res.status(400).json({ message: 'ordered_ids must be an array' }); return; }
+    await pool.query(
+      `INSERT INTO customer_list_order (owner_id, owner_role, ordered_ids)
+       VALUES (0, 'admin', ?)
+       ON DUPLICATE KEY UPDATE ordered_ids = VALUES(ordered_ids)`,
+      [JSON.stringify(ordered_ids)]
+    );
+    res.json({ message: 'Customer order saved' });
+  } catch (err) {
+    console.error('saveCustomerOrder error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// GET /staff/customer-order  (staff)
+export const getStaffCustomerOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const staffId = req.user!.id;
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT ordered_ids FROM customer_list_order WHERE owner_id = ? AND owner_role = 'staff'`,
+      [staffId]
+    );
+    if (rows.length) {
+      res.json({ ordered_ids: JSON.parse(rows[0].ordered_ids as string) as number[], source: 'staff' });
+      return;
+    }
+    // Fallback: return admin's global order
+    const [adminRows] = await pool.query<RowDataPacket[]>(
+      `SELECT ordered_ids FROM customer_list_order WHERE owner_id = 0 AND owner_role = 'admin'`
+    );
+    const ordered_ids: number[] = adminRows.length ? JSON.parse(adminRows[0].ordered_ids as string) : [];
+    res.json({ ordered_ids, source: 'admin' });
+  } catch (err) {
+    console.error('getStaffCustomerOrder error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// PUT /staff/customer-order  (staff)
+export const saveStaffCustomerOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const staffId = req.user!.id;
+    const { ordered_ids } = req.body as { ordered_ids: number[] };
+    if (!Array.isArray(ordered_ids)) { res.status(400).json({ message: 'ordered_ids must be an array' }); return; }
+    await pool.query(
+      `INSERT INTO customer_list_order (owner_id, owner_role, ordered_ids)
+       VALUES (?, 'staff', ?)
+       ON DUPLICATE KEY UPDATE ordered_ids = VALUES(ordered_ids)`,
+      [staffId, JSON.stringify(ordered_ids)]
+    );
+    res.json({ message: 'Staff customer order saved' });
+  } catch (err) {
+    console.error('saveStaffCustomerOrder error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// DELETE /staff/customer-order  (staff — reset to admin order)
+export const resetStaffCustomerOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const staffId = req.user!.id;
+    await pool.query(
+      `DELETE FROM customer_list_order WHERE owner_id = ? AND owner_role = 'staff'`,
+      [staffId]
+    );
+    res.json({ message: 'Reset to admin order' });
+  } catch (err) {
+    console.error('resetStaffCustomerOrder error:', err);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };

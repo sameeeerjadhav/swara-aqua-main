@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Users, Phone, MapPin, RefreshCw,
   Package, IndianRupee, CheckCircle2, X,
   Droplets, Clock, Navigation,
   ChevronRight, Eye, CalendarDays, ChevronLeft,
+  GripVertical, ListOrdered, RotateCcw,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -13,6 +14,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { ordersApi, staffApi, CustomerForStaff } from '../../api/orders';
 import { useLang } from '../../context/LanguageContext';
 import { t } from '../../i18n/staff';
+import { customerOrderApi, applyOrder } from '../../api/customerOrder';
 
 type PaymentMode = 'cash' | 'online' | 'pay_later';
 
@@ -645,18 +647,33 @@ export const StaffCustomers = () => {
   const [customers, setCustomers]   = useState<CustomerForStaff[]>([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
-  const [profiled, setProfiled]     = useState<CustomerForStaff | null>(null); // profile sheet
-  const [selected, setSelected]     = useState<CustomerForStaff | null>(null); // delivery sheet
+  const [profiled, setProfiled]     = useState<CustomerForStaff | null>(null);
+  const [selected, setSelected]     = useState<CustomerForStaff | null>(null);
   const [successData, setSuccessData] = useState<{
     customer: string; quantity: number; amount: number; mode: string; orderId: number;
   } | null>(null);
   const [calendarCustomer, setCalendarCustomer] = useState<CustomerForStaff | null>(null);
 
+  // Rearrange mode
+  const [reorderMode,   setReorderMode]   = useState(false);
+  const [reorderedList, setReorderedList] = useState<CustomerForStaff[]>([]);
+  const [savingOrder,   setSavingOrder]   = useState(false);
+  const [orderSource,   setOrderSource]   = useState<'staff' | 'admin'>('admin');
+  const dragIndex     = useRef<number | null>(null);
+  const touchStartY   = useRef<number>(0);
+  const touchDragIdx  = useRef<number | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await staffApi.getCustomersList();
-      setCustomers(data.customers);
+      const [{ data }, orderRes] = await Promise.all([
+        staffApi.getCustomersList(),
+        customerOrderApi.getStaff().catch(() => ({ data: { ordered_ids: [], source: 'admin' as const } })),
+      ]);
+      const orderedCustomers = applyOrder(data.customers, orderRes.data.ordered_ids ?? []);
+      setCustomers(orderedCustomers);
+      setReorderedList(orderedCustomers);
+      setOrderSource(orderRes.data.source ?? 'admin');
     } catch {
       toast('Failed to load customers', 'error');
     } finally {
@@ -665,6 +682,72 @@ export const StaffCustomers = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Drag helpers
+  const moveItem = useCallback((from: number, to: number) => {
+    if (from === to) return;
+    setReorderedList(prev => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  }, []);
+
+  const onDragStart = (i: number) => { dragIndex.current = i; };
+  const onDragEnter = (i: number) => {
+    if (dragIndex.current === null || dragIndex.current === i) return;
+    moveItem(dragIndex.current, i);
+    dragIndex.current = i;
+  };
+  const onDragEnd = () => { dragIndex.current = null; };
+
+  const onTouchStart = (e: React.TouchEvent, i: number) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchDragIdx.current = i;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchDragIdx.current === null) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    const step = 72;
+    if (Math.abs(dy) > step / 2) {
+      const delta = dy > 0 ? 1 : -1;
+      const newIdx = Math.max(0, Math.min(reorderedList.length - 1, touchDragIdx.current + delta));
+      moveItem(touchDragIdx.current, newIdx);
+      touchDragIdx.current = newIdx;
+      touchStartY.current = e.touches[0].clientY;
+    }
+  };
+  const onTouchEnd = () => { touchDragIdx.current = null; };
+
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await customerOrderApi.saveStaff(reorderedList.map(c => c.id));
+      setCustomers(reorderedList);
+      setOrderSource('staff');
+      setReorderMode(false);
+      toast('Your delivery order saved!', 'success');
+    } catch { toast('Failed to save order', 'error'); }
+    finally { setSavingOrder(false); }
+  };
+
+  const resetToAdmin = async () => {
+    setSavingOrder(true);
+    try {
+      await customerOrderApi.resetStaff();
+      setOrderSource('admin');
+      toast('Reset to admin order', 'success');
+      await load();
+      setReorderMode(false);
+    } catch { toast('Failed to reset', 'error'); }
+    finally { setSavingOrder(false); }
+  };
+
+  const cancelReorder = () => {
+    setReorderedList([...customers]);
+    setReorderMode(false);
+  };
 
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -681,19 +764,101 @@ export const StaffCustomers = () => {
   return (
     <div className="max-w-xl space-y-4">
 
-      {/* Search + Refresh */}
-      <div className="flex gap-2">
-        <div className="flex-1 flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-sm focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10 transition-all">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder={t('search', lang)}
-            className="flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none" />
+      {/* Search + Refresh + Reorder */}
+      {!reorderMode && (
+        <div className="flex gap-2">
+          <div className="flex-1 flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-sm focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10 transition-all">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder={t('search', lang)}
+              className="flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none" />
+          </div>
+          <Button variant="secondary" size="sm" icon={<ListOrdered className="w-3.5 h-3.5" />}
+            onClick={() => { setReorderedList([...customers]); setReorderMode(true); }}>
+            Reorder
+          </Button>
+          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
+            {t('refresh', lang)}
+          </Button>
         </div>
-        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
-          {t('refresh', lang)}
-        </Button>
-      </div>
+      )}
 
+      {/* ─── REORDER MODE ─── */}
+      {reorderMode && (
+        <div className="space-y-2">
+          {/* Reorder banner */}
+          <div className="flex items-center justify-between bg-brand-600 text-white rounded-2xl px-4 py-3">
+            <div>
+              <p className="text-sm font-bold">Rearrange Delivery Order</p>
+              <p className="text-xs opacity-70 mt-0.5">
+                {orderSource === 'staff' ? 'Your personal order' : 'Using admin’s default order'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {orderSource === 'staff' && (
+                <button onClick={resetToAdmin} disabled={savingOrder}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-xl transition-colors">
+                  <RotateCcw className="w-3 h-3" /> Reset
+                </button>
+              )}
+              <button onClick={cancelReorder}
+                className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-xl transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          {/* Drag list */}
+          {reorderedList.map((c, i) => (
+            <div
+              key={c.id}
+              draggable
+              onDragStart={() => onDragStart(i)}
+              onDragEnter={() => onDragEnter(i)}
+              onDragEnd={onDragEnd}
+              onDragOver={e => e.preventDefault()}
+              onTouchStart={e => onTouchStart(e, i)}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-3 py-3 cursor-grab active:cursor-grabbing active:border-brand-400 active:shadow-md transition-all select-none"
+              style={{ touchAction: 'none' }}
+            >
+              <span className="w-6 text-center text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
+              <GripVertical className="w-5 h-5 text-slate-300 shrink-0" />
+              <Avatar name={c.name} photo={c.profile_photo} size="sm" className="w-9 h-9 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 truncate">{c.name}</p>
+                <p className="text-xs text-slate-400">{c.phone}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => moveItem(i, Math.max(0, i - 1))} disabled={i === 0}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 12V4M4 8l4-4 4 4" /></svg>
+                </button>
+                <button onClick={() => moveItem(i, Math.min(reorderedList.length - 1, i + 1))} disabled={i === reorderedList.length - 1}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 4v8M4 8l4 4 4-4" /></svg>
+                </button>
+              </div>
+            </div>
+          ))}
+          {/* Save bar */}
+          <div className="flex gap-2 pt-1">
+            <button onClick={cancelReorder}
+              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-2xl transition-colors">
+              Cancel
+            </button>
+            <button onClick={saveOrder} disabled={savingOrder}
+              className="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold rounded-2xl transition-colors disabled:opacity-60">
+              {savingOrder ? 'Saving…' : '💾 Save My Order'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── NORMAL MODE ─── */}
+      {!reorderMode && (
+        <>
       {/* Count */}
       {!loading && (
         <p className="text-xs text-slate-400 font-medium">
@@ -774,6 +939,8 @@ export const StaffCustomers = () => {
             </motion.div>
           ))}
         </div>
+      )}
+        </>
       )}
 
       {/* Profile sheet */}

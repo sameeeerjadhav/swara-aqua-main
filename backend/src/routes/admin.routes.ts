@@ -5,6 +5,8 @@ import {
   createOrderForCustomer, getSettings, updateSetting,
   getCustomersForStaff, getCustomerDeliveryCalendar, getCustomerDayDeliveries,
   updateUserProfile, deleteUser,
+  getCustomerOrder, saveCustomerOrder,
+  getStaffCustomerOrder, saveStaffCustomerOrder, resetStaffCustomerOrder,
 } from '../controllers/admin.controller';
 import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
@@ -30,6 +32,12 @@ router.put('/settings/:key',      ...allowAdmin, updateSetting);
 router.get('/customers-list',              authenticate, getCustomersForStaff); // staff + admin
 router.get('/customer-deliveries/:id',     authenticate, getCustomerDeliveryCalendar);  // staff + admin
 router.get('/customer-deliveries/:id/day', authenticate, getCustomerDayDeliveries);     // staff + admin
+
+router.get('/customer-order',       ...allowAdmin,  getCustomerOrder);         // admin get order
+router.put('/customer-order',       ...allowAdmin,  saveCustomerOrder);        // admin save order
+router.get('/staff/customer-order',  authenticate, getStaffCustomerOrder);     // staff get order
+router.put('/staff/customer-order',  authenticate, saveStaffCustomerOrder);    // staff save order
+router.delete('/staff/customer-order', authenticate, resetStaffCustomerOrder); // staff reset order
 
 router.get('/firebase/status',    ...allowAdmin, getFirebaseStatus);
 router.post('/firebase/upload',   ...allowAdmin, uploadCredentials);

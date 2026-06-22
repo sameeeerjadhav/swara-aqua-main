@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered } from 'lucide-react';
 
@@ -35,6 +35,67 @@ const statusColor: Record<string, string> = {
   rejected: 'bg-red-50 text-red-600 border-red-200',
 };
 
+// ── Animated drag item for reorder mode ───────────────────────────────────────
+const DraggableAdminCustomerItem = ({
+  item, index, total, onMove,
+}: {
+  item: CustomerRow;
+  index: number;
+  total: number;
+  onMove: (from: number, to: number) => void;
+}) => {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={item}
+      dragListener={false}
+      dragControls={controls}
+      className="relative"
+      style={{ listStyle: 'none' }}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      whileDrag={{
+        scale: 1.03,
+        boxShadow: '0 16px 40px -8px rgba(0,0,0,0.18)',
+        zIndex: 50,
+        borderColor: 'rgb(99 102 241)',
+      }}
+    >
+      <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-3 py-3 select-none">
+        {/* Position number */}
+        <span className="w-6 text-center text-xs font-bold text-slate-400 shrink-0">{index + 1}</span>
+        {/* Drag handle — only this initiates the drag */}
+        <GripVertical
+          className="w-5 h-5 text-slate-300 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+          onPointerDown={e => controls.start(e)}
+        />
+        {/* Avatar + Name */}
+        <Avatar name={item.name} photo={item.profile_photo} size="sm" className="w-9 h-9 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800 truncate">{item.name}</p>
+          <p className="text-xs text-slate-400">{item.phone}</p>
+        </div>
+        {/* Arrow buttons */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onMove(index, Math.max(0, index - 1))}
+            disabled={index === 0}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 12V4M4 8l4-4 4 4" /></svg>
+          </button>
+          <button
+            onClick={() => onMove(index, Math.min(total - 1, index + 1))}
+            disabled={index === total - 1}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 4v8M4 8l4 4 4-4" /></svg>
+          </button>
+        </div>
+      </div>
+    </Reorder.Item>
+  );
+};
+
 export const AdminCustomers = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -57,11 +118,6 @@ export const AdminCustomers = () => {
   const [reorderMode,    setReorderMode]    = useState(false);
   const [reorderedList,  setReorderedList]  = useState<CustomerRow[]>([]);
   const [savingOrder,    setSavingOrder]    = useState(false);
-  const dragIndex = useRef<number | null>(null);
-  const dragOverIndex = useRef<number | null>(null);
-  // touch drag
-  const touchStartY = useRef<number>(0);
-  const touchDragIdx = useRef<number | null>(null);
 
   // Pending customer registration detail modal
   const [pendingDetail, setPendingDetail] = useState<PendingDetail | null>(null);
@@ -162,7 +218,7 @@ export const AdminCustomers = () => {
     } finally { setDeleting(false); }
   };
 
-  // ── Drag-to-reorder helpers ─────────────────────────────────────────────────
+  // ── Reorder helpers ─────────────────────────────────────────────────────────
   const moveItem = useCallback((from: number, to: number) => {
     if (from === to) return;
     setReorderedList(prev => {
@@ -172,34 +228,6 @@ export const AdminCustomers = () => {
       return arr;
     });
   }, []);
-
-  // Mouse drag
-  const onDragStart = (i: number) => { dragIndex.current = i; };
-  const onDragEnter = (i: number) => {
-    if (dragIndex.current === null || dragIndex.current === i) return;
-    moveItem(dragIndex.current, i);
-    dragIndex.current = i;
-  };
-  const onDragEnd = () => { dragIndex.current = null; dragOverIndex.current = null; };
-
-  // Touch drag
-  const onTouchStart = (e: React.TouchEvent, i: number) => {
-    touchStartY.current = e.touches[0].clientY;
-    touchDragIdx.current = i;
-  };
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (touchDragIdx.current === null) return;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    const step = 72; // approx card height
-    if (Math.abs(dy) > step / 2) {
-      const delta = dy > 0 ? 1 : -1;
-      const newIdx = Math.max(0, Math.min(reorderedList.length - 1, touchDragIdx.current + delta));
-      moveItem(touchDragIdx.current, newIdx);
-      touchDragIdx.current = newIdx;
-      touchStartY.current = e.touches[0].clientY;
-    }
-  };
-  const onTouchEnd = () => { touchDragIdx.current = null; };
 
   const saveOrder = async () => {
     setSavingOrder(true);
@@ -408,52 +436,25 @@ export const AdminCustomers = () => {
         </div>
       )}
 
-      {/* ─── REORDER MODE: Spotify-style drag list ─── */}
+      {/* ─── REORDER MODE: Framer Motion animated drag list ─── */}
       {reorderMode && (
         <div className="space-y-2">
-          {reorderedList.map((u, i) => (
-            <div
-              key={u.id}
-              draggable
-              onDragStart={() => onDragStart(i)}
-              onDragEnter={() => onDragEnter(i)}
-              onDragEnd={onDragEnd}
-              onDragOver={e => e.preventDefault()}
-              onTouchStart={e => onTouchStart(e, i)}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
-              className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-3 py-3 cursor-grab active:cursor-grabbing active:border-brand-400 active:shadow-md transition-all select-none"
-              style={{ touchAction: 'none' }}
-            >
-              {/* Position number */}
-              <span className="w-6 text-center text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
-              {/* Drag handle */}
-              <GripVertical className="w-5 h-5 text-slate-300 shrink-0" />
-              {/* Avatar + Name */}
-              <Avatar name={u.name} photo={u.profile_photo} size="sm" className="w-9 h-9 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
-                <p className="text-xs text-slate-400">{u.phone}</p>
-              </div>
-              {/* Quick move to position */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  title="Move up"
-                  onClick={() => moveItem(i, Math.max(0, i - 1))}
-                  disabled={i === 0}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 12V4M4 8l4-4 4 4" /></svg>
-                </button>
-                <button
-                  title="Move down"
-                  onClick={() => moveItem(i, Math.min(reorderedList.length - 1, i + 1))}
-                  disabled={i === reorderedList.length - 1}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 4v8M4 8l4 4 4-4" /></svg>
-                </button>
-              </div>
-            </div>
-          ))}
+          <Reorder.Group
+            axis="y"
+            values={reorderedList}
+            onReorder={setReorderedList}
+            className="space-y-2 outline-none"
+          >
+            {reorderedList.map((u, i) => (
+              <DraggableAdminCustomerItem
+                key={u.id}
+                item={u}
+                index={i}
+                total={reorderedList.length}
+                onMove={moveItem}
+              />
+            ))}
+          </Reorder.Group>
           {/* Save bar at bottom */}
           <div className="flex gap-2 pt-2">
             <button onClick={cancelReorder}

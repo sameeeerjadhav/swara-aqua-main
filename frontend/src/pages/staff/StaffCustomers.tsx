@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import {
   Search, Users, Phone, MapPin, RefreshCw,
   Package, IndianRupee, CheckCircle2, X,
@@ -640,6 +640,59 @@ const ProfileSheet = ({
   );
 };
 
+// ── Animated drag item for staff reorder mode ───────────────────────────────────
+const DraggableStaffCustomerItem = ({
+  item, index, total, onMove,
+}: {
+  item: CustomerForStaff;
+  index: number;
+  total: number;
+  onMove: (from: number, to: number) => void;
+}) => {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={item}
+      dragListener={false}
+      dragControls={controls}
+      className="relative"
+      style={{ listStyle: 'none' }}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      whileDrag={{
+        scale: 1.03,
+        boxShadow: '0 16px 40px -8px rgba(0,0,0,0.18)',
+        zIndex: 50,
+        borderColor: 'rgb(99 102 241)',
+      }}
+    >
+      <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-3 py-3 select-none">
+        <span className="w-6 text-center text-xs font-bold text-slate-400 shrink-0">{index + 1}</span>
+        <GripVertical
+          className="w-5 h-5 text-slate-300 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+          onPointerDown={e => controls.start(e)}
+        />
+        <Avatar name={item.name} photo={item.profile_photo} size="sm" className="w-9 h-9 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800 truncate">{item.name}</p>
+          <p className="text-xs text-slate-400">{item.phone}</p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => onMove(index, Math.max(0, index - 1))} disabled={index === 0}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 12V4M4 8l4-4 4 4" /></svg>
+          </button>
+          <button onClick={() => onMove(index, Math.min(total - 1, index + 1))} disabled={index === total - 1}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 4v8M4 8l4 4 4-4" /></svg>
+          </button>
+        </div>
+      </div>
+    </Reorder.Item>
+  );
+};
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export const StaffCustomers = () => {
   const { toast } = useToast();
@@ -659,11 +712,9 @@ export const StaffCustomers = () => {
   const [reorderedList, setReorderedList] = useState<CustomerForStaff[]>([]);
   const [savingOrder,   setSavingOrder]   = useState(false);
   const [orderSource,   setOrderSource]   = useState<'staff' | 'admin'>('admin');
-  const dragIndex     = useRef<number | null>(null);
-  const touchStartY   = useRef<number>(0);
-  const touchDragIdx  = useRef<number | null>(null);
 
   const load = useCallback(async () => {
+
     setLoading(true);
     try {
       const [{ data }, orderRes] = await Promise.all([
@@ -693,32 +744,6 @@ export const StaffCustomers = () => {
       return arr;
     });
   }, []);
-
-  const onDragStart = (i: number) => { dragIndex.current = i; };
-  const onDragEnter = (i: number) => {
-    if (dragIndex.current === null || dragIndex.current === i) return;
-    moveItem(dragIndex.current, i);
-    dragIndex.current = i;
-  };
-  const onDragEnd = () => { dragIndex.current = null; };
-
-  const onTouchStart = (e: React.TouchEvent, i: number) => {
-    touchStartY.current = e.touches[0].clientY;
-    touchDragIdx.current = i;
-  };
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (touchDragIdx.current === null) return;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    const step = 72;
-    if (Math.abs(dy) > step / 2) {
-      const delta = dy > 0 ? 1 : -1;
-      const newIdx = Math.max(0, Math.min(reorderedList.length - 1, touchDragIdx.current + delta));
-      moveItem(touchDragIdx.current, newIdx);
-      touchDragIdx.current = newIdx;
-      touchStartY.current = e.touches[0].clientY;
-    }
-  };
-  const onTouchEnd = () => { touchDragIdx.current = null; };
 
   const saveOrder = async () => {
     setSavingOrder(true);
@@ -786,12 +811,12 @@ export const StaffCustomers = () => {
       {/* ─── REORDER MODE ─── */}
       {reorderMode && (
         <div className="space-y-2">
-          {/* Reorder banner */}
+          {/* Banner */}
           <div className="flex items-center justify-between bg-brand-600 text-white rounded-2xl px-4 py-3">
             <div>
               <p className="text-sm font-bold">Rearrange Delivery Order</p>
               <p className="text-xs opacity-70 mt-0.5">
-                {orderSource === 'staff' ? 'Your personal order' : 'Using admin’s default order'}
+                {orderSource === 'staff' ? 'Your personal order' : "Using admin's default order"}
               </p>
             </div>
             <div className="flex gap-2">
@@ -808,40 +833,24 @@ export const StaffCustomers = () => {
             </div>
           </div>
 
-          {/* Drag list */}
-          {reorderedList.map((c, i) => (
-            <div
-              key={c.id}
-              draggable
-              onDragStart={() => onDragStart(i)}
-              onDragEnter={() => onDragEnter(i)}
-              onDragEnd={onDragEnd}
-              onDragOver={e => e.preventDefault()}
-              onTouchStart={e => onTouchStart(e, i)}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
-              className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-3 py-3 cursor-grab active:cursor-grabbing active:border-brand-400 active:shadow-md transition-all select-none"
-              style={{ touchAction: 'none' }}
-            >
-              <span className="w-6 text-center text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
-              <GripVertical className="w-5 h-5 text-slate-300 shrink-0" />
-              <Avatar name={c.name} photo={c.profile_photo} size="sm" className="w-9 h-9 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800 truncate">{c.name}</p>
-                <p className="text-xs text-slate-400">{c.phone}</p>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => moveItem(i, Math.max(0, i - 1))} disabled={i === 0}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 12V4M4 8l4-4 4 4" /></svg>
-                </button>
-                <button onClick={() => moveItem(i, Math.min(reorderedList.length - 1, i + 1))} disabled={i === reorderedList.length - 1}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-600 transition-colors">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8 4v8M4 8l4 4 4-4" /></svg>
-                </button>
-              </div>
-            </div>
-          ))}
+          {/* Animated drag list */}
+          <Reorder.Group
+            axis="y"
+            values={reorderedList}
+            onReorder={setReorderedList}
+            className="space-y-2 outline-none"
+          >
+            {reorderedList.map((c, i) => (
+              <DraggableStaffCustomerItem
+                key={c.id}
+                item={c}
+                index={i}
+                total={reorderedList.length}
+                onMove={moveItem}
+              />
+            ))}
+          </Reorder.Group>
+
           {/* Save bar */}
           <div className="flex gap-2 pt-1">
             <button onClick={cancelReorder}

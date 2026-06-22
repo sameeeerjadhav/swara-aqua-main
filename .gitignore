@@ -5,6 +5,7 @@ node_modules/
 # Environment files — NEVER commit real secrets
 backend/.env
 frontend/.env
+!frontend/.env.production
 backend/config/firebase-service-account.json
 **/firebase-service-account.json
 !**/firebase-service-account.json.example

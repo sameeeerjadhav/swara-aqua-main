@@ -798,13 +798,16 @@ export const StaffCustomers = () => {
               placeholder={t('search', lang)}
               className="flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none" />
           </div>
-          <Button variant="secondary" size="sm" icon={<ListOrdered className="w-3.5 h-3.5" />}
-            onClick={() => { setReorderedList([...customers]); setReorderMode(true); }}>
-            Reorder
-          </Button>
           <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
             {t('refresh', lang)}
           </Button>
+          <button
+            onClick={() => { setReorderedList([...customers]); setReorderMode(true); }}
+            title="Reorder customers"
+            className="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 rounded-2xl text-slate-500 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all shadow-sm shrink-0"
+          >
+            <ListOrdered className="w-4 h-4" />
+          </button>
         </div>
       )}
 

@@ -235,7 +235,7 @@ export const AdminHome = () => {
       >
         <div className="bg-white rounded-2xl p-2 shrink-0 shadow-md">
           <img
-            src="/swaraqr.png"
+            src="/permanentqr.png"
             alt="Swara Aqua QR Code"
             className="w-24 h-24 object-contain"
           />

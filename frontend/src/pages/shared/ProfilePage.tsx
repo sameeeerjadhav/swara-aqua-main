@@ -390,13 +390,12 @@ export const ProfilePage = () => {
                   await unregisterPush();
                   toast('Push notifications disabled', 'warning');
                 } else {
-                  const ok = await enablePush();
-                  if (ok) {
-                    // Clear the banner dismissed flag so it can re-check state
+                  const result = await enablePush();
+                  if (result.ok) {
                     localStorage.removeItem('notif-banner-dismissed-v2');
                     toast('Push notifications enabled!', 'success');
                   } else {
-                    toast('Could not enable — check browser settings', 'error');
+                    toast(result.reason || 'Could not enable notifications', 'error');
                   }
                 }
                 setTogglingNotif(false);

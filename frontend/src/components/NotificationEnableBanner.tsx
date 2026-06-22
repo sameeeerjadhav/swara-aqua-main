@@ -23,13 +23,13 @@ export const NotificationEnableBanner = () => {
 
   const handleEnable = async () => {
     setEnabling(true);
-    const ok = await enablePush();
+    const result = await enablePush();
     setEnabling(false);
     // Always dismiss after the user interacts — they made their choice
     localStorage.setItem(BANNER_KEY, '1');
     setDismissed(true);
-    if (!ok && Notification.permission === 'denied') {
-      // Let user know they need to go to browser settings
+    if (!result.ok && Notification.permission === 'denied') {
+      // Permission denied — browser settings message shown in UI
     }
   };
 

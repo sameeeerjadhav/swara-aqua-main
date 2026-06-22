@@ -32,7 +32,7 @@ interface NotificationContextValue {
   refresh: () => Promise<void>;
   markRead: (id: number) => Promise<void>;
   markAllRead: () => Promise<void>;
-  enablePush: () => Promise<boolean>;
+  enablePush: () => Promise<{ ok: boolean; reason?: string }>;
   unregisterPush: () => Promise<void>;
   showBrowserAlert: (title: string, body: string, type: string, orderId?: string) => void;
   /** Instant sound + system notification (e.g. right after placing an order). */
@@ -136,13 +136,13 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     prevUnread.current = 0;
   }, []);
 
-  const registerFcmToken = useCallback(async (askPermission = true): Promise<boolean> => {
-    if (!user) return false;
+  const registerFcmToken = useCallback(async (askPermission = true): Promise<{ ok: boolean; reason?: string }> => {
+    if (!user) return { ok: false, reason: 'Not logged in' };
 
     try {
       const result = await registerPushNotifications(askPermission);
       setPermission(result.permission);
-      if (!result.ok) return false;
+      if (!result.ok) return { ok: false, reason: result.reason };
 
       fcmRegistered.current = true;
       setPushEnabled(true);
@@ -164,10 +164,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         });
       }
 
-      return true;
-    } catch (err) {
+      return { ok: true };
+    } catch (err: any) {
       console.error('[FCM] registration failed:', err);
-      return false;
+      return { ok: false, reason: err?.message || 'Unexpected error' };
     }
   }, [user, handleIncoming, refresh]);
 

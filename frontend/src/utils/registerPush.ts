@@ -25,9 +25,9 @@ export const ensureMessagingServiceWorker = async (): Promise<ServiceWorkerRegis
  */
 export const registerPushNotifications = async (
   requestPermission = true
-): Promise<{ ok: boolean; token?: string; permission: NotificationPermission | 'unsupported' }> => {
+): Promise<{ ok: boolean; token?: string; permission: NotificationPermission | 'unsupported'; reason?: string }> => {
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-    return { ok: false, permission: 'unsupported' };
+    return { ok: false, permission: 'unsupported', reason: 'This browser does not support push notifications. Try Chrome or Edge.' };
   }
 
   try {
@@ -35,24 +35,37 @@ export const registerPushNotifications = async (
     if (requestPermission && permission === 'default') {
       permission = await Notification.requestPermission();
     }
+    if (permission === 'denied') {
+      return { ok: false, permission, reason: 'Notifications are blocked. Tap the lock icon in the address bar and allow notifications, then try again.' };
+    }
     if (permission !== 'granted') {
-      return { ok: false, permission };
+      return { ok: false, permission, reason: 'Notification permission was not granted.' };
     }
 
     const registration = await ensureMessagingServiceWorker();
-    if (!registration) return { ok: false, permission };
+    if (!registration) return { ok: false, permission, reason: 'Service worker could not be registered. Try refreshing the page.' };
 
     const messaging = await getFirebaseMessaging();
-    if (!messaging) return { ok: false, permission };
+    if (!messaging) return { ok: false, permission, reason: 'Push messaging is not supported in this browser. Try Chrome or Edge on Android/desktop.' };
 
-    const token = await getToken(messaging, {
-      vapidKey: VAPID_KEY,
-      serviceWorkerRegistration: registration,
-    });
+    let token: string;
+    try {
+      token = await getToken(messaging, {
+        vapidKey: VAPID_KEY,
+        serviceWorkerRegistration: registration,
+      });
+    } catch (tokenErr: any) {
+      const msg = tokenErr?.message || '';
+      if (msg.includes('permission') || msg.includes('denied')) {
+        return { ok: false, permission, reason: 'Notifications blocked. Allow them in browser settings and reload.' };
+      }
+      console.error('[FCM] getToken failed:', tokenErr);
+      return { ok: false, permission, reason: 'Could not get push token. Make sure you are on HTTPS and try refreshing.' };
+    }
 
     if (!token) {
       console.warn('[FCM] No token — check VAPID key and Firebase console');
-      return { ok: false, permission };
+      return { ok: false, permission, reason: 'No push token received. Check Firebase console VAPID key configuration.' };
     }
 
     // Always sync token to server (user may have re-logged in on same device)
@@ -61,8 +74,8 @@ export const registerPushNotifications = async (
     console.log('[FCM] Token registered for background push');
 
     return { ok: true, token, permission };
-  } catch (err) {
+  } catch (err: any) {
     console.error('[FCM] registerPushNotifications failed:', err);
-    return { ok: false, permission: Notification.permission };
+    return { ok: false, permission: Notification.permission, reason: err?.message || 'Unexpected error enabling notifications.' };
   }
 };

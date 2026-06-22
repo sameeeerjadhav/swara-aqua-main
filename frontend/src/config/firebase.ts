@@ -11,12 +11,34 @@ const firebaseConfig = {
   measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+/** True only when all required config values are present (env vars set on server). */
+const isConfigValid = !!(
+  firebaseConfig.projectId &&
+  firebaseConfig.apiKey &&
+  firebaseConfig.messagingSenderId &&
+  firebaseConfig.appId
+);
 
-export const getFirebaseMessaging = async () => {
-  const supported = await isSupported();
-  if (!supported) return null;
-  return getMessaging(app);
+const getApp = () => {
+  if (!isConfigValid) return null;
+  return getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 };
 
-export default app;
+export const getFirebaseMessaging = async () => {
+  if (!isConfigValid) {
+    console.warn('[Firebase] Missing config — push notifications disabled. Set VITE_FIREBASE_* env vars on the server.');
+    return null;
+  }
+  try {
+    const supported = await isSupported();
+    if (!supported) return null;
+    const app = getApp();
+    if (!app) return null;
+    return getMessaging(app);
+  } catch (err) {
+    console.warn('[Firebase] getFirebaseMessaging failed:', err);
+    return null;
+  }
+};
+
+export default getApp() ?? null;

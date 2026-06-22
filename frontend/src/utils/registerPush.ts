@@ -46,7 +46,18 @@ export const registerPushNotifications = async (
     if (!registration) return { ok: false, permission, reason: 'Service worker could not be registered. Try refreshing the page.' };
 
     const messaging = await getFirebaseMessaging();
-    if (!messaging) return { ok: false, permission, reason: 'Push messaging is not supported in this browser. Try Chrome or Edge on Android/desktop.' };
+    if (!messaging) {
+      const hasCfg = !!(
+        import.meta.env.VITE_FIREBASE_PROJECT_ID &&
+        import.meta.env.VITE_FIREBASE_API_KEY
+      );
+      return {
+        ok: false, permission,
+        reason: hasCfg
+          ? 'Push messaging is not supported in this browser. Try Chrome or Edge on Android/desktop.'
+          : 'Firebase is not configured on this server. Contact the admin to set VITE_FIREBASE_* environment variables.',
+      };
+    }
 
     let token: string;
     try {

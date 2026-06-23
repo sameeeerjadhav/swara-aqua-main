@@ -17,7 +17,7 @@ import { useSSE } from '../../hooks/useSSE';
 
 interface UserStats  { total: number; pending: number; active: number; customers: number; staff: number; advance_requests: number; }
 
-interface OrderStats { total: number; pending: number; assigned: number; completed: number; cancelled: number; total_revenue: number; }
+interface OrderStats { total: number; pending: number; assigned: number; completed: number; cancelled: number; total_revenue: number; stats_month: string; }
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: 'easeOut' as const } } };
@@ -93,11 +93,13 @@ export const AdminHome = () => {
 
           <div className="relative z-10 flex items-center justify-between">
             <div>
-              <p className="text-white/50 text-xs font-semibold uppercase tracking-widest mb-2">Total Revenue</p>
+              <p className="text-white/50 text-xs font-semibold uppercase tracking-widest mb-2">
+                {orderStats.stats_month ? `${orderStats.stats_month} Revenue` : 'Total Revenue'}
+              </p>
               <p className="text-white font-extrabold text-3xl">
                 ₹{Number(orderStats.total_revenue).toLocaleString('en-IN')}
               </p>
-              <p className="text-white/40 text-xs mt-1">{orderStats.total} orders processed</p>
+              <p className="text-white/40 text-xs mt-1">{orderStats.total} orders this month</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white/10 rounded-2xl px-3 py-2.5 text-center border border-white/10">
@@ -144,7 +146,9 @@ export const AdminHome = () => {
 
       {/* ── Order metrics ── */}
       <div>
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Orders</p>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+          Orders {orderStats?.stats_month ? `— ${orderStats.stats_month}` : ''}
+        </p>
         <motion.div variants={stagger} initial="hidden" animate="show"
           className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MetricCard loading={loading} label="Total Orders"

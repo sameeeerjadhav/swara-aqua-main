@@ -16,12 +16,15 @@ const ORIGIN = self.location.origin;
 const ICON = ORIGIN + '/icons/icon-192.png';
 const BADGE = ORIGIN + '/icons/icon-192.png';
 
+// NOTE: These are only used if the backend does NOT send data.path in the FCM payload.
+// The backend always sends the correct role-specific path, so these are last-resort fallbacks.
+// Using '/' lets the app's ProtectedRoute redirect to the correct role home.
 const DEFAULT_PATHS = {
-  order: '/customer/orders',
-  payment: '/customer/wallet',
-  delivery: '/staff/deliveries',
-  approval: '/admin/users',
-  stock: '/admin/inventory',
+  order: '/',
+  payment: '/',
+  delivery: '/',
+  approval: '/',
+  stock: '/',
   general: '/',
 };
 

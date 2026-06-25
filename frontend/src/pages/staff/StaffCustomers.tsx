@@ -713,9 +713,8 @@ export const StaffCustomers = () => {
   const [savingOrder,   setSavingOrder]   = useState(false);
   const [orderSource,   setOrderSource]   = useState<'staff' | 'admin'>('admin');
 
-  const load = useCallback(async () => {
-
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [{ data }, orderRes] = await Promise.all([
         staffApi.getCustomersList(),
@@ -728,7 +727,7 @@ export const StaffCustomers = () => {
     } catch {
       toast('Failed to load customers', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -780,10 +779,44 @@ export const StaffCustomers = () => {
   );
 
   const handleSuccess = (data: typeof successData) => {
+    const deliveredId = selected?.id;
     setSelected(null);
     setProfiled(null);
     setSuccessData(data);
-    load();
+
+    // Update the delivered customer's stats in-place so the list doesn't
+    // jump back to the top (no full reload = scroll position preserved).
+    if (deliveredId != null) {
+      setCustomers(prev => prev.map(c => {
+        if (c.id !== deliveredId) return c;
+        const qty = data?.quantity ?? 0;
+        const amt = data?.amount ?? 0;
+        const mode = data?.mode ?? '';
+        return {
+          ...c,
+          today_jars: c.today_jars + qty,
+          // For pay_later: increase pending balance; for cash/online: balance unchanged
+          pending_balance: mode === 'pay_later'
+            ? c.pending_balance + (c.jar_rate * qty)
+            : c.pending_balance,
+        };
+      }));
+      setReorderedList(prev => prev.map(c => {
+        if (c.id !== deliveredId) return c;
+        const qty = data?.quantity ?? 0;
+        const mode = data?.mode ?? '';
+        return {
+          ...c,
+          today_jars: c.today_jars + qty,
+          pending_balance: mode === 'pay_later'
+            ? c.pending_balance + (c.jar_rate * qty)
+            : c.pending_balance,
+        };
+      }));
+    }
+
+    // Silent background sync to catch any server-side changes (doesn't affect scroll)
+    load(true);
   };
 
   return (

@@ -3,8 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Users, Package, TrendingUp, Clock, ChevronRight,
   XCircle, IndianRupee, AlertCircle,
-  BarChart3, Bell, UserRound, Wallet,
-
+  BarChart3, Bell, UserRound, Wallet, Banknote,
 } from 'lucide-react';
 
 import { StatCardSkeleton } from '../../components/ui/Skeleton';
@@ -13,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
 import api from '../../api/axios';
 import { ordersApi } from '../../api/orders';
+import { inventoryApi } from '../../api/inventory';
 import { useSSE } from '../../hooks/useSSE';
 
 interface UserStats  { total: number; pending: number; active: number; customers: number; staff: number; advance_requests: number; }
@@ -61,13 +61,18 @@ export const AdminHome = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [userStats,  setUserStats]  = useState<UserStats | null>(null);
-  const [orderStats, setOrderStats] = useState<OrderStats | null>(null);
+  const [userStats,    setUserStats]    = useState<UserStats | null>(null);
+  const [orderStats,   setOrderStats]   = useState<OrderStats | null>(null);
+  const [pendingCash,  setPendingCash]  = useState(0);
   const loading = !userStats || !orderStats;
 
   const loadStats = () => {
     api.get('/admin/stats').then(({ data }) => setUserStats(data.stats)).catch(() => {});
     ordersApi.stats().then(({ data }) => setOrderStats(data.stats)).catch(() => {});
+    // Load pending cash submissions count
+    inventoryApi.getCashSubmissions()
+      .then(({ data }) => setPendingCash(data.submissions.filter((s: { status: string }) => s.status === 'pending').length))
+      .catch(() => {});
   };
 
   useEffect(() => { loadStats(); }, []);
@@ -77,12 +82,38 @@ export const AdminHome = () => {
     order_created:      () => loadStats(),
     order_updated:      () => loadStats(),
     delivery_completed: () => loadStats(),
+    // Real-time cash submission alert
+    cash_submitted: (data: { staffName?: string; amount?: number }) => {
+      setPendingCash(prev => prev + 1);
+      toast(
+        `💰 ${data.staffName || 'Staff'} submitted ₹${data.amount?.toLocaleString('en-IN') || '...'} — verify in Transactions`,
+        'success'
+      );
+    },
   });
-
 
   return (
     <div className="space-y-6 max-w-4xl">
 
+      {/* ── Pending Cash Alert Banner ── */}
+      {pendingCash > 0 && (
+        <motion.button
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          onClick={() => navigate('/admin/transactions')}
+          className="w-full flex items-center gap-3 bg-amber-50 border border-amber-300 rounded-2xl px-4 py-3 text-left hover:bg-amber-100 active:scale-[0.98] transition-all shadow-sm"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+            <Banknote className="w-5 h-5 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-amber-800">
+              {pendingCash} Cash Submission{pendingCash > 1 ? 's' : ''} Pending Verification
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">Tap to go to Transactions → Cash Submissions</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-amber-500 shrink-0" />
+        </motion.button>
+      )}
 
       {/* ── Revenue hero ── */}
       {orderStats && (

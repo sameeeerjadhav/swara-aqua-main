@@ -6,6 +6,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { inventoryApi, Transaction, TransactionStats, CashSubmission, CashHolding } from '../../api/inventory';
+import { useSSE } from '../../hooks/useSSE';
 
 const MODE_COLORS: Record<string, string> = {
   cash:    'bg-amber-50  text-amber-700  border-amber-200',
@@ -25,8 +26,8 @@ export const AdminTransactions = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [actionId,     setActionId]     = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const params: Record<string, string> = {};
       if (modeFilter)   params.mode   = modeFilter;
@@ -41,11 +42,23 @@ export const AdminTransactions = () => {
       setStats(txRes.data.stats);
       setSubmissions(cashRes.data.submissions);
       setHoldings(holdRes.data.holdings);
-    } catch { toast('Failed to load data', 'error'); }
-    finally { setLoading(false); }
+    } catch { if (!silent) toast('Failed to load data', 'error'); }
+    finally { if (!silent) setLoading(false); }
   }, [modeFilter, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-refresh when staff submits cash — switch to Cash tab + show alert
+  useSSE({
+    cash_submitted: (data: { staffName?: string; amount?: number }) => {
+      toast(
+        `💰 ${data.staffName || 'Staff'} submitted ₹${data.amount?.toLocaleString('en-IN') || '...'} — tap Cash Submissions to verify`,
+        'success'
+      );
+      setTab('cash');
+      load(true);
+    },
+  });
 
   const handleVerify = async (id: number, action: 'verified' | 'rejected') => {
     setActionId(id);

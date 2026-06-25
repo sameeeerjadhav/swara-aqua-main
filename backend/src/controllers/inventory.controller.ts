@@ -3,6 +3,7 @@ import { errDetail } from '../utils/errors';
 import { AuthRequest } from '../middleware/auth.middleware';
 import * as Inv from '../models/inventory.model';
 import * as NotifService from '../services/notification.service';
+import * as SSE from '../services/sse.service';
 
 const LOW_STOCK_THRESHOLD = 20;
 
@@ -188,11 +189,20 @@ export const submitCash = async (req: AuthRequest, res: Response): Promise<void>
       res.status(400).json({ message: 'totalCash is required' }); return;
     }
     const id = await Inv.submitCash(req.user!.id, Number(totalCash), note);
+    const staffName = req.user!.name || `Staff #${req.user!.id}`;
+
+    // Real-time SSE so admin's Cash Submissions tab auto-refreshes immediately
+    SSE.broadcastToRole('admin', 'cash_submitted', {
+      submissionId: id,
+      staffId: req.user!.id,
+      staffName,
+      amount: Number(totalCash),
+    });
 
     notify(() =>
       NotifService.sendToRole('admin',
-        '💰 Cash Submitted',
-        `Staff submitted ₹${totalCash} for verification.`,
+        '💰 Cash Submitted for Verification',
+        `${staffName} submitted ₹${totalCash} — please verify in Transactions → Cash Submissions.`,
         'payment'
       )
     );
@@ -234,6 +244,13 @@ export const verifyCash = async (req: AuthRequest, res: Response): Promise<void>
     const subs = await Inv.getCashSubmissions({ staffId: undefined, status: action });
     const sub = subs.find(s => s.id === Number(req.params.id));
     if (sub) {
+      // Real-time SSE to the staff member so they get instant in-app feedback
+      SSE.sendToUser(sub.staff_id, 'cash_verified', {
+        submissionId: sub.id,
+        action,
+        amount: sub.total_cash,
+      });
+
       notify(() =>
         NotifService.sendToUser({
           userId: sub.staff_id,

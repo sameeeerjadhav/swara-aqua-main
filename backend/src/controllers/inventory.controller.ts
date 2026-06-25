@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import * as Inv from '../models/inventory.model';
 import * as NotifService from '../services/notification.service';
 import * as SSE from '../services/sse.service';
+import pool from '../config/db';
 
 const LOW_STOCK_THRESHOLD = 20;
 
@@ -189,7 +190,10 @@ export const submitCash = async (req: AuthRequest, res: Response): Promise<void>
       res.status(400).json({ message: 'totalCash is required' }); return;
     }
     const id = await Inv.submitCash(req.user!.id, Number(totalCash), note);
-    const staffName = req.user!.name || `Staff #${req.user!.id}`;
+    const [nameRows] = await pool.query<import('mysql2').RowDataPacket[]>(
+      'SELECT name FROM users WHERE id = ?', [req.user!.id]
+    );
+    const staffName = (nameRows[0]?.name as string) || `Staff #${req.user!.id}`;
 
     // Real-time SSE so admin's Cash Submissions tab auto-refreshes immediately
     SSE.broadcastToRole('admin', 'cash_submitted', {

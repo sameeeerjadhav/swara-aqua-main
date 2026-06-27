@@ -107,12 +107,42 @@ self.addEventListener('notificationclick', function(event) {
           return client.focus();
         }
       }
-    )
+      if (clients.openWindow) return clients.openWindow(url);
+    })
   );
 });
 
-// Required to satisfy PWA install criteria on older Chrome/Android versions.
-// Without a fetch handler, beforeinstallprompt will never fire.
+// ── Offline Support for WebAPK Generation ─────────────────────────────
+// Google Play Services requires the start_url to be available offline to mint a true WebAPK instead of a shortcut.
+
+var CACHE_NAME = 'swara-aqua-cache-v1';
+var URLS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
+];
+
+self.addEventListener('install', function(event) {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(function(cache) {
+      return cache.addAll(URLS_TO_CACHE);
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', function(event) {
+  event.waitUntil(clients.claim());
+});
+
 self.addEventListener('fetch', function(event) {
-  // Empty pass-through: lets the browser handle all network requests normally
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(function() {
+        return caches.match('/');
+      })
+    );
+  }
 });

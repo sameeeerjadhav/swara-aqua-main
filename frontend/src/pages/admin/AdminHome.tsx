@@ -13,7 +13,7 @@ import { useToast } from '../../components/ui/Toast';
 import api from '../../api/axios';
 import { ordersApi } from '../../api/orders';
 import { inventoryApi } from '../../api/inventory';
-import { useSSE } from '../../hooks/useSSE';
+import { useSSE, useSSEEventOnly } from '../../hooks/useSSE';
 
 interface UserStats  { total: number; pending: number; active: number; customers: number; staff: number; advance_requests: number; }
 
@@ -77,12 +77,15 @@ export const AdminHome = () => {
 
   useEffect(() => { loadStats(); }, []);
 
-  // SSE: auto-refresh dashboard when orders change
+  // SSE: auto-refresh dashboard stats when orders change (safe to poll every 15s)
   useSSE({
     order_created:      () => loadStats(),
     order_updated:      () => loadStats(),
     delivery_completed: () => loadStats(),
-    // Real-time cash submission alert
+  });
+
+  // Event-only: cash submission toast must NOT fire on every poll cycle
+  useSSEEventOnly({
     cash_submitted: (data: { staffName?: string; amount?: number }) => {
       setPendingCash(prev => prev + 1);
       toast(

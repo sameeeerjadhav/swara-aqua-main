@@ -6,7 +6,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { inventoryApi, Transaction, TransactionStats, CashSubmission, CashHolding } from '../../api/inventory';
-import { useSSE } from '../../hooks/useSSE';
+import { useSSE, useSSEEventOnly } from '../../hooks/useSSE';
 
 const MODE_COLORS: Record<string, string> = {
   cash:    'bg-amber-50  text-amber-700  border-amber-200',
@@ -48,15 +48,19 @@ export const AdminTransactions = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh when staff submits cash — switch to Cash tab + show alert
+  // Silent refresh of the cash submissions list every poll cycle
   useSSE({
+    cash_submitted: () => load(true),
+  });
+
+  // Toast alert only on a REAL server push — never on poll cycles
+  useSSEEventOnly({
     cash_submitted: (data: { staffName?: string; amount?: number }) => {
       toast(
         `💰 ${data.staffName || 'Staff'} submitted ₹${data.amount?.toLocaleString('en-IN') || '...'} — tap Cash Submissions to verify`,
         'success'
       );
       setTab('cash');
-      load(true);
     },
   });
 

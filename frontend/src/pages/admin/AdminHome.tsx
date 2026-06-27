@@ -269,23 +269,34 @@ export const AdminHome = () => {
       {/* ── QR Code Promo ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-        className="bg-gradient-to-br from-brand-600 to-aqua-500 rounded-3xl p-5 flex items-center gap-4 shadow-lg"
+        className="bg-gradient-to-br from-brand-600 to-aqua-500 rounded-3xl p-5 shadow-lg"
       >
-        <div className="bg-white rounded-2xl p-2 shrink-0 shadow-md">
-          <img
-            src="/permanentqr.png"
-            alt="Swara Aqua QR Code"
-            className="w-24 h-24 object-contain"
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-white font-extrabold text-base leading-tight">Share &amp; Refer</p>
-          <p className="text-white/80 text-xs mt-1 leading-relaxed">
-            Know someone who needs pure water? Share this QR and help them join Swara Aqua!
-          </p>
-          <div className="mt-3 flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-white/60" />
-            <p className="text-white/70 text-[10px] font-semibold">Scan to register</p>
+        <p className="text-white font-extrabold text-base leading-tight mb-1">Share &amp; Refer</p>
+        <p className="text-white/75 text-xs mb-4">Know someone who needs pure water? Let them scan the right QR for their phone!</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* Android APK QR */}
+          <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md">
+            <div className="flex items-center gap-1 bg-green-100 rounded-full px-2 py-0.5">
+              <span className="text-green-700 text-[10px] font-bold">🤖 Android</span>
+            </div>
+            <img src="/swaraapkqr.png" alt="Android APK QR Code" className="w-24 h-24 object-contain" />
+            <div className="text-center">
+              <p className="text-[11px] font-bold text-slate-700">Android App</p>
+              <p className="text-[10px] text-slate-400 leading-tight">Scan to install APK</p>
+            </div>
+          </div>
+
+          {/* iOS / Web QR */}
+          <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md">
+            <div className="flex items-center gap-1 bg-blue-100 rounded-full px-2 py-0.5">
+              <span className="text-blue-700 text-[10px] font-bold"> iOS / Web</span>
+            </div>
+            <img src="/permanentqr.png" alt="iOS / Web QR Code" className="w-24 h-24 object-contain" />
+            <div className="text-center">
+              <p className="text-[11px] font-bold text-slate-700">iPhone &amp; Web</p>
+              <p className="text-[10px] text-slate-400 leading-tight">Scan to open app</p>
+            </div>
           </div>
         </div>
       </motion.div>

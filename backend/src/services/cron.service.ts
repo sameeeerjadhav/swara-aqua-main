@@ -161,18 +161,22 @@ export const startCronJobs = () => {
     }
   });
 
-  // ── End-of-month bill reminders — 25th, 27th and 29th at 10:00 AM ────────
-  // Sends a personalised reminder to every customer who has a pending
-  // (unpaid or partial) bill for the CURRENT calendar month.
-  const sendEndOfMonthReminders = async (urgency: 'early' | 'mid' | 'final') => {
+  // ── End-of-month bill reminders — daily from 25th to 31st at 09:30 IST ──
+  // Runs every day; the cron fires but the handler checks the date internally.
+  // Only customers with a pending/partial bill for the CURRENT month are notified.
+  // Continues daily until the customer pays — stops automatically once paid.
+  cron.schedule('0 4 25-31 * *', async () => {
     const now = new Date();
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
+    const dayOfMonth = now.getDate();
+    const lastDay    = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysLeft   = lastDay - dayOfMonth;
 
-    console.log(`[CRON] End-of-month reminders (${urgency}) for ${monthKey}…`);
+    console.log(`[CRON] End-of-month reminders (day ${dayOfMonth}, ${daysLeft} days left) for ${monthKey}…`);
     try {
       const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT b.customer_id, u.name, COALESCE(b.total_amount - b.paid_amount, 0) AS pending
+        `SELECT b.customer_id, u.name,
+                COALESCE(b.total_amount - b.paid_amount, 0) AS pending
          FROM bills b
          JOIN users u ON u.id = b.customer_id
          WHERE b.month = ?
@@ -181,23 +185,27 @@ export const startCronJobs = () => {
         [monthKey]
       );
 
-      const messages: Record<'early' | 'mid' | 'final', (name: string, amount: number) => { title: string; body: string }> = {
-        early:  (name, amt) => ({
-          title: `📋 Monthly Bill Reminder`,
-          body:  `Hi ${name}! You have ₹${amt.toLocaleString('en-IN')} pending for this month. Please pay before month-end.`,
-        }),
-        mid:    (name, amt) => ({
-          title: `⚠️ Bill Due Soon — ${daysLeft} days left`,
-          body:  `${name}, your ₹${amt.toLocaleString('en-IN')} bill is due in ${daysLeft} days. Pay now to stay up to date!`,
-        }),
-        final:  (name, amt) => ({
-          title: `🚨 Last Reminder — Bill Due Tomorrow`,
-          body:  `${name}, ₹${amt.toLocaleString('en-IN')} is still pending. Today is your last chance to pay before month-end!`,
-        }),
-      };
-
       for (const row of rows as RowDataPacket[]) {
-        const { title, body } = messages[urgency](row.name || 'Customer', Number(row.pending));
+        const name   = row.name || 'Customer';
+        const amount = Number(row.pending).toLocaleString('en-IN');
+
+        let title: string;
+        let body: string;
+
+        if (daysLeft >= 5) {
+          title = '📋 Monthly Bill Reminder';
+          body  = `Hi ${name}! ₹${amount} is pending for this month. Please pay before month-end.`;
+        } else if (daysLeft >= 3) {
+          title = `⚠️ Bill Due in ${daysLeft} Days`;
+          body  = `${name}, ₹${amount} is still unpaid. Only ${daysLeft} days left — please pay now!`;
+        } else if (daysLeft >= 1) {
+          title = `🚨 Bill Due in ${daysLeft} Day${daysLeft > 1 ? 's' : ''}!`;
+          body  = `${name}, ₹${amount} is still pending. Please pay today to avoid any interruption!`;
+        } else {
+          title = '🔴 Last Day — Bill Due Today!';
+          body  = `${name}, today is the last day of the month. Pay ₹${amount} now before your bill becomes overdue!`;
+        }
+
         notify(() =>
           NotifService.sendToUser({
             userId: row.customer_id,
@@ -212,10 +220,6 @@ export const startCronJobs = () => {
     } catch (err) {
       console.error('[CRON] End-of-month reminders failed:', err);
     }
-  };
-
-  cron.schedule('0 4 25 * *', () => notify(() => sendEndOfMonthReminders('early')));  // 25th at 09:30 IST (UTC+5:30 → 04:00 UTC)
-  cron.schedule('0 4 27 * *', () => notify(() => sendEndOfMonthReminders('mid')));    // 27th at 09:30 IST
-  cron.schedule('0 4 29 * *', () => notify(() => sendEndOfMonthReminders('final'))); // 29th at 09:30 IST
+  });
 
 };

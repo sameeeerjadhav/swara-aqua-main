@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "in.labxco.swaraaqua.twa",
+    "sha256_cert_fingerprints": ["C0:41:3B:DE:D7:34:90:BF:CE:10:12:7E:1C:DE:D2:7F:A8:84:AA:39:DB:13:5D:3D:9B:24:C6:38:B1:CB:7F:5E"]
+  }
+}]

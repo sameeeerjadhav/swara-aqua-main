@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle, Check, XCircle } from 'lucide-react';
+import {
+  Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle,
+  Check, XCircle, ChevronRight, User, Phone, MapPin, ClipboardList,
+  Banknote, CreditCard, Clock, Truck, Hash, FileText, CircleDot,
+} from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { ordersApi, Order } from '../../api/orders';
+import { ordersApi, Order, TimelineEntry, Delivery } from '../../api/orders';
 import { useSSE } from '../../hooks/useSSE';
 import api from '../../api/axios';
 import { subscriptionApi, CancelRequest } from '../../api/subscription';
@@ -19,6 +23,233 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 // Returns YYYY-MM for this month
 const thisMonthStr = () => new Date().toISOString().slice(0, 7);
 
+// ── Order Detail Modal ────────────────────────────────────────────────────────
+const OrderDetailModal = ({ orderId, onClose }: { orderId: number; onClose: () => void }) => {
+  const [order,    setOrder]    = useState<Order | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    ordersApi.get(orderId)
+      .then(({ data }) => {
+        setOrder(data.order);
+        setTimeline(data.timeline ?? []);
+        setDelivery(data.delivery ?? null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [orderId]);
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+
+  const STATUS_COLOR: Record<string, string> = {
+    pending:   'bg-amber-100 text-amber-700',
+    delivered: 'bg-emerald-100 text-emerald-700',
+    cancelled: 'bg-red-100 text-red-600',
+    assigned:  'bg-blue-100 text-blue-700',
+  };
+
+  const PAYMENT_ICON: Record<string, JSX.Element> = {
+    cash:    <Banknote className="w-3.5 h-3.5" />,
+    online:  <CreditCard className="w-3.5 h-3.5" />,
+    advance: <CircleDot className="w-3.5 h-3.5" />,
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={onClose}>
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-brand-50 rounded-xl flex items-center justify-center">
+              <Package className="w-4 h-4 text-brand-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">Order #{orderId}</p>
+              {order && <p className="text-[11px] text-slate-400 capitalize">{order.type} order</p>}
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        {loading ? (
+          <div className="px-6 py-6 space-y-3">
+            {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
+          </div>
+        ) : !order ? (
+          <div className="px-6 py-12 text-center text-slate-400 text-sm">Could not load order details</div>
+        ) : (
+          <div className="px-6 py-5 space-y-5">
+
+            {/* Status badge */}
+            <div className="flex items-center justify-between">
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-full capitalize ${STATUS_COLOR[order.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                {order.status}
+              </span>
+              {order.paid_online && (
+                <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                  <CreditCard className="w-3 h-3" /> Paid Online
+                </span>
+              )}
+            </div>
+
+            {/* Customer */}
+            <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer</p>
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-brand-100 flex items-center justify-center font-bold text-brand-600 text-sm shrink-0">
+                  {order.customer_name?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{order.customer_name}</p>
+                  <p className="text-xs text-slate-400 flex items-center gap-1">
+                    <Phone className="w-3 h-3" />{order.customer_phone}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Order meta grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-50 rounded-2xl p-3.5">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Quantity</p>
+                <p className="text-xl font-bold text-slate-800">{order.quantity} <span className="text-sm font-semibold text-slate-400">jars</span></p>
+              </div>
+              <div className="bg-brand-50 rounded-2xl p-3.5">
+                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-1">Total Amount</p>
+                <p className="text-xl font-bold text-brand-700">₹{order.total_amount}</p>
+                <p className="text-[10px] text-brand-400">₹{order.price_per_jar}/jar</p>
+              </div>
+            </div>
+
+            {/* Staff */}
+            {order.staff_name && (
+              <div className="flex items-center gap-2.5 bg-slate-50 rounded-2xl p-3.5">
+                <div className="w-8 h-8 rounded-xl bg-slate-200 flex items-center justify-center">
+                  <User className="w-4 h-4 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assigned Staff</p>
+                  <p className="text-sm font-semibold text-slate-700">{order.staff_name}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Dates */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-slate-500"><Clock className="w-3.5 h-3.5" />Ordered</span>
+                <span className="font-semibold text-slate-700">{fmt(order.created_at)}</span>
+              </div>
+              {order.delivery_date && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-slate-500"><Truck className="w-3.5 h-3.5" />Delivery Date</span>
+                  <span className="font-semibold text-slate-700">{fmt(order.delivery_date)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Delivery record */}
+            {delivery && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Delivery Record</p>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-white rounded-xl p-2.5">
+                    <p className="text-lg font-bold text-emerald-700">{delivery.delivered_quantity}</p>
+                    <p className="text-[10px] text-slate-400">Jars Delivered</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-2.5">
+                    <p className="text-lg font-bold text-emerald-700">₹{delivery.collected_amount}</p>
+                    <p className="text-[10px] text-slate-400">Collected</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-2.5 flex flex-col items-center justify-center gap-1">
+                    {PAYMENT_ICON[delivery.payment_mode] ?? <Banknote className="w-3.5 h-3.5" />}
+                    <p className="text-[10px] text-slate-400 capitalize">{delivery.payment_mode}</p>
+                  </div>
+                </div>
+                {delivery.delivered_at && (
+                  <p className="text-[10px] text-emerald-600 text-center">{fmt(delivery.delivered_at)}</p>
+                )}
+                {delivery.notes && (
+                  <p className="text-xs text-slate-500 text-center italic">{delivery.notes}</p>
+                )}
+              </div>
+            )}
+
+            {/* Address */}
+            {order.address && (
+              <div className="flex items-start gap-2.5 bg-slate-50 rounded-2xl p-3.5">
+                <MapPin className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Delivery Address</p>
+                  <p className="text-sm text-slate-700">{order.address}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {order.notes && (
+              <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-2xl p-3.5">
+                <FileText className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-0.5">Notes</p>
+                  <p className="text-sm text-slate-700">{order.notes}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Timeline */}
+            {timeline.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Timeline</p>
+                <div className="relative pl-4">
+                  <div className="absolute left-1.5 top-0 bottom-0 w-px bg-slate-200" />
+                  <div className="space-y-4">
+                    {timeline.map((t) => (
+                      <div key={t.id} className="relative flex items-start gap-3">
+                        <div className="absolute -left-2.5 top-1 w-2 h-2 rounded-full bg-brand-400 ring-2 ring-white" />
+                        <div className="pl-2">
+                          <p className="text-xs font-semibold text-slate-700 capitalize">{t.status.replace(/_/g, ' ')}</p>
+                          {t.note && <p className="text-[11px] text-slate-400 mt-0.5">{t.note}</p>}
+                          <p className="text-[10px] text-slate-300 mt-0.5">
+                            {t.actor_name && <span className="text-slate-400">{t.actor_name} · </span>}
+                            {fmt(t.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export const AdminOrders = () => {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -28,6 +259,7 @@ export const AdminOrders = () => {
   const [dateFilter, setDateFilter] = useState('');   // YYYY-MM-DD
   const [monthFilter, setMonthFilter] = useState('');   // YYYY-MM
   const [dateMode, setDateMode] = useState<'date' | 'month' | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
 
   // New Order modal
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -361,7 +593,8 @@ export const AdminOrders = () => {
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No orders found</td></tr>
               ) : orders.map((o, i) => (
                 <motion.tr key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                  className="hover:bg-slate-50/50 transition-colors">
+                  onClick={() => setSelectedOrderId(o.id)}
+                  className="hover:bg-brand-50/50 transition-colors cursor-pointer group">
                   <td className="px-4 py-3.5 text-xs font-bold text-slate-400">#{o.id}</td>
                   <td className="px-4 py-3.5">
                     <p className="text-sm font-semibold text-slate-800">{o.customer_name}</p>
@@ -373,7 +606,10 @@ export const AdminOrders = () => {
                   <td className="px-4 py-3.5"><OrderStatusBadge status={o.status} /></td>
                   <td className="px-4 py-3.5 text-xs text-slate-500">{o.staff_name || '—'}</td>
                   <td className="px-4 py-3.5 text-xs text-slate-400 whitespace-nowrap">
-                    {new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    <div className="flex items-center gap-1.5">
+                      {new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      <ChevronRight className="w-3.5 h-3.5 text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                   </td>
                 </motion.tr>
               ))}
@@ -398,7 +634,8 @@ export const AdminOrders = () => {
             <div className="py-12 text-center text-slate-400 text-sm">No orders found</div>
           ) : orders.map(o => (
             <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/60 transition-colors">
+              onClick={() => setSelectedOrderId(o.id)}
+              className="flex items-center gap-3 px-4 py-3 hover:bg-brand-50/50 active:bg-brand-100/60 transition-colors cursor-pointer">
 
               {/* Customer info */}
               <div className="flex-1 min-w-0">
@@ -410,11 +647,12 @@ export const AdminOrders = () => {
                 </p>
               </div>
 
-              {/* Right: status + amount stacked */}
+              {/* Right: status + amount + chevron */}
               <div className="shrink-0 text-right flex flex-col items-end gap-1">
                 <OrderStatusBadge status={o.status} />
                 <span className="text-xs font-bold text-brand-600">₹{o.total_amount}</span>
               </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
             </motion.div>
           ))}
         </div>
@@ -568,6 +806,16 @@ export const AdminOrders = () => {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Order Detail Modal ─── */}
+      <AnimatePresence>
+        {selectedOrderId !== null && (
+          <OrderDetailModal
+            orderId={selectedOrderId}
+            onClose={() => setSelectedOrderId(null)}
+          />
         )}
       </AnimatePresence>
 

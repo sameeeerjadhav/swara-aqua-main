@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Phone, MapPin, Droplets, Package, CreditCard, IndianRupee,
-  ChevronLeft, ChevronRight, FileText, CalendarDays, Pencil, Trash2, AlertTriangle,
+  ChevronLeft, ChevronRight, FileText, CalendarDays, Pencil, Trash2, AlertTriangle, Camera,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
+import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -280,8 +281,34 @@ export const AdminCustomerProfile = () => {
         </div>
         {/* Profile info */}
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br from-brand-500 to-aqua-500 shadow-sm shrink-0">
-            {profile.name.charAt(0).toUpperCase()}
+          <div className="relative shrink-0">
+            <Avatar name={profile.name} photo={profile.profile_photo} size="lg" className="w-14 h-14" />
+            <label
+              htmlFor="admin-profile-photo-upload"
+              className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer border border-slate-100 hover:bg-brand-50 transition-colors"
+              title="Upload photo"
+            >
+              <Camera className="w-3 h-3 text-brand-600" />
+            </label>
+            <input
+              id="admin-profile-photo-upload"
+              type="file" accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const fd = new FormData();
+                fd.append('photo', file);
+                try {
+                  const res = await api.post(`/admin/users/${id}/photo`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                  });
+                  setProfile(p => p ? { ...p, profile_photo: res.data.profile_photo } : p);
+                  toast('Photo updated!', 'success');
+                } catch { toast('Failed to upload photo', 'error'); }
+                e.target.value = '';
+              }}
+            />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-bold text-slate-900 truncate">{profile.name}</h2>

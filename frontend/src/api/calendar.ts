@@ -15,6 +15,7 @@ export interface CustomerProfile {
   status: string;
   jar_rate: number;
   advance_balance: number;
+  profile_photo?: string | null;
   address: string | null;
   latitude: number | null;
   longitude: number | null;

@@ -50,6 +50,22 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    if (status === 'rejected') {
+      // Hard delete the user from DB as requested
+      await pool.query('DELETE FROM users WHERE id = ?', [Number(id)]);
+
+      notify(() =>
+        NotifService.sendToUser({
+          userId: Number(id),
+          title: '❌ Account Rejected',
+          body: 'Your account registration was not approved. Please contact support.',
+          type: 'approval',
+        })
+      );
+      res.json({ message: 'User account rejected and deleted from database' });
+      return;
+    }
+
     await UserModel.updateUserStatus(Number(id), status);
 
     // Notify user of status change
@@ -59,15 +75,6 @@ export const updateStatus = async (req: AuthRequest, res: Response): Promise<voi
           userId: Number(id),
           title: '✅ Account Approved',
           body: 'Your account has been approved. You can now place orders.',
-          type: 'approval',
-        })
-      );
-    } else if (status === 'rejected') {
-      notify(() =>
-        NotifService.sendToUser({
-          userId: Number(id),
-          title: '❌ Account Rejected',
-          body: 'Your account registration was not approved. Please contact support.',
           type: 'approval',
         })
       );
@@ -758,16 +765,13 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       res.status(409).json({ message: 'User already deleted' }); return;
     }
 
-    // Soft delete — preserves all orders, deliveries, bills, transactions
-    await pool.query(
-      'UPDATE users SET deleted_at = NOW(), status = ? WHERE id = ?',
-      ['rejected', targetId]
-    );
+    // Hard delete from database as requested
+    await pool.query('DELETE FROM users WHERE id = ?', [targetId]);
 
     // Invalidate all refresh tokens by nullifying (optional: add a revoked_at field)
-    // For now the user simply cannot login because findByPhone checks deleted_at IS NULL
+    // For now the user simply cannot login because they no longer exist in DB
 
-    res.json({ message: 'User account deactivated. All records preserved.' });
+    res.json({ message: 'User account and all related records deleted permanently.' });
   } catch (err) {
     console.error('deleteUser error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });

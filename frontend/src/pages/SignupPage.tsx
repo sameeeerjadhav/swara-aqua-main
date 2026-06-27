@@ -35,7 +35,7 @@ export default function SignupPage() {
     setError('');
     const pErr = validatePhone(form.phone);
     if (pErr) { setPhoneError(pErr); return; }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
     setLoading(true);
     try {
       await api.post('/auth/signup', form);
@@ -160,7 +160,7 @@ export default function SignupPage() {
                 </p>
               )}
             </div>
-            <Input label="Password" type="password" placeholder="Min. 6 characters"
+            <Input label="Password" type="password" placeholder="Min. 8 characters"
               value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
               icon={<Lock className="w-4 h-4" />} required />
 

@@ -2,7 +2,7 @@
   "name": "Swara Aqua",
   "short_name": "Swara Aqua",
   "description": "Fresh water jar delivery at your doorstep. Order, track, and pay bills.",
-  "start_url": "/login",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

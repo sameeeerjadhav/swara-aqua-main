@@ -141,7 +141,15 @@ self.addEventListener('fetch', function(event) {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(function() {
-        return caches.match('/');
+        return caches.match('/').then(function(res) {
+          // If we have a cached response, return it.
+          // Otherwise, return a generic 503 Service Unavailable response
+          // to prevent respondWith from throwing a TypeError on undefined.
+          return res || new Response(
+            '<html><body><h1>Offline</h1><p>Please check your internet connection.</p></body></html>',
+            { status: 503, headers: { 'Content-Type': 'text/html' } }
+          );
+        });
       })
     );
   }

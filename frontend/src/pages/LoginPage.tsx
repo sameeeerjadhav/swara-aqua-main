@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Phone, Lock, Droplets, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (user) { navigate(`/${user.role}`, { replace: true }); return null; }
+  if (user) { return <Navigate to={`/${user.role}`} replace />; }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

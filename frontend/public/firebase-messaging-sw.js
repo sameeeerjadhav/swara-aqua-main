@@ -107,7 +107,12 @@ self.addEventListener('notificationclick', function(event) {
           return client.focus();
         }
       }
-      if (clients.openWindow) return clients.openWindow(url);
-    })
+    )
   );
+});
+
+// Required to satisfy PWA install criteria on older Chrome/Android versions.
+// Without a fetch handler, beforeinstallprompt will never fire.
+self.addEventListener('fetch', function(event) {
+  // Empty pass-through: lets the browser handle all network requests normally
 });

@@ -161,5 +161,61 @@ export const startCronJobs = () => {
     }
   });
 
-  console.log('✅ Cron jobs started');
+  // ── End-of-month bill reminders — 25th, 27th and 29th at 10:00 AM ────────
+  // Sends a personalised reminder to every customer who has a pending
+  // (unpaid or partial) bill for the CURRENT calendar month.
+  const sendEndOfMonthReminders = async (urgency: 'early' | 'mid' | 'final') => {
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
+
+    console.log(`[CRON] End-of-month reminders (${urgency}) for ${monthKey}…`);
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT b.customer_id, u.name, COALESCE(b.total_amount - b.paid_amount, 0) AS pending
+         FROM bills b
+         JOIN users u ON u.id = b.customer_id
+         WHERE b.month = ?
+           AND b.status IN ('unpaid', 'partial')
+           AND COALESCE(b.total_amount - b.paid_amount, 0) > 0`,
+        [monthKey]
+      );
+
+      const messages: Record<'early' | 'mid' | 'final', (name: string, amount: number) => { title: string; body: string }> = {
+        early:  (name, amt) => ({
+          title: `📋 Monthly Bill Reminder`,
+          body:  `Hi ${name}! You have ₹${amt.toLocaleString('en-IN')} pending for this month. Please pay before month-end.`,
+        }),
+        mid:    (name, amt) => ({
+          title: `⚠️ Bill Due Soon — ${daysLeft} days left`,
+          body:  `${name}, your ₹${amt.toLocaleString('en-IN')} bill is due in ${daysLeft} days. Pay now to stay up to date!`,
+        }),
+        final:  (name, amt) => ({
+          title: `🚨 Last Reminder — Bill Due Tomorrow`,
+          body:  `${name}, ₹${amt.toLocaleString('en-IN')} is still pending. Today is your last chance to pay before month-end!`,
+        }),
+      };
+
+      for (const row of rows as RowDataPacket[]) {
+        const { title, body } = messages[urgency](row.name || 'Customer', Number(row.pending));
+        notify(() =>
+          NotifService.sendToUser({
+            userId: row.customer_id,
+            title,
+            body,
+            type: 'payment',
+            data: { path: '/customer/transactions' },
+          })
+        );
+      }
+      console.log(`[CRON] End-of-month reminders sent to ${(rows as RowDataPacket[]).length} customers`);
+    } catch (err) {
+      console.error('[CRON] End-of-month reminders failed:', err);
+    }
+  };
+
+  cron.schedule('0 4 25 * *', () => notify(() => sendEndOfMonthReminders('early')));  // 25th at 09:30 IST (UTC+5:30 → 04:00 UTC)
+  cron.schedule('0 4 27 * *', () => notify(() => sendEndOfMonthReminders('mid')));    // 27th at 09:30 IST
+  cron.schedule('0 4 29 * *', () => notify(() => sendEndOfMonthReminders('final'))); // 29th at 09:30 IST
+
 };

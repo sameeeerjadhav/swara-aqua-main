@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Package, TrendingUp, Clock, ChevronRight,
   XCircle, IndianRupee, AlertCircle,
@@ -64,6 +64,7 @@ export const AdminHome = () => {
   const [userStats,    setUserStats]    = useState<UserStats | null>(null);
   const [orderStats,   setOrderStats]   = useState<OrderStats | null>(null);
   const [pendingCash,  setPendingCash]  = useState(0);
+  const [expandedQR,   setExpandedQR]   = useState<{ src: string; label: string } | null>(null);
   const loading = !userStats || !orderStats;
 
   const loadStats = () => {
@@ -276,30 +277,56 @@ export const AdminHome = () => {
 
         <div className="grid grid-cols-2 gap-3">
           {/* Android APK QR */}
-          <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md">
+          <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
+            onClick={() => setExpandedQR({ src: '/swaraapkqr.png', label: '🤖 Android App' })}>
             <div className="flex items-center gap-1 bg-green-100 rounded-full px-2 py-0.5">
               <span className="text-green-700 text-[10px] font-bold">🤖 Android</span>
             </div>
             <img src="/swaraapkqr.png" alt="Android APK QR Code" className="w-24 h-24 object-contain" />
             <div className="text-center">
               <p className="text-[11px] font-bold text-slate-700">Android App</p>
-              <p className="text-[10px] text-slate-400 leading-tight">Scan to install APK</p>
+              <p className="text-[10px] text-slate-400 leading-tight">Tap to enlarge &amp; scan</p>
             </div>
           </div>
 
           {/* iOS / Web QR */}
-          <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md">
+          <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
+            onClick={() => setExpandedQR({ src: '/permanentqr.png', label: ' iOS / Web' })}>
             <div className="flex items-center gap-1 bg-blue-100 rounded-full px-2 py-0.5">
               <span className="text-blue-700 text-[10px] font-bold"> iOS / Web</span>
             </div>
             <img src="/permanentqr.png" alt="iOS / Web QR Code" className="w-24 h-24 object-contain" />
             <div className="text-center">
               <p className="text-[11px] font-bold text-slate-700">iPhone &amp; Web</p>
-              <p className="text-[10px] text-slate-400 leading-tight">Scan to open app</p>
+              <p className="text-[10px] text-slate-400 leading-tight">Tap to enlarge &amp; scan</p>
             </div>
           </div>
         </div>
       </motion.div>
+
+      {/* ── Fullscreen QR overlay ── */}
+      <AnimatePresence>
+        {expandedQR && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-6"
+            onClick={() => setExpandedQR(null)}>
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl p-6 flex flex-col items-center gap-4 shadow-2xl max-w-xs w-full">
+              <p className="text-sm font-bold text-slate-700">{expandedQR.label}</p>
+              <img src={expandedQR.src} alt="QR Code" className="w-64 h-64 object-contain" />
+              <p className="text-xs text-slate-400 text-center">Point your phone camera at the QR code to scan</p>
+              <button onClick={() => setExpandedQR(null)}
+                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-slate-600 transition-colors">
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

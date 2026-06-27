@@ -14,6 +14,14 @@
         })();
       } catch (e) { /* ignore localStorage access errors in WebAPK sandbox */ }
     </script>
+    <script>
+      // Force SW registration inline so PWABuilder and WebAPK minters detect it immediately
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        });
+      }
+    </script>
 
     <title>Swara Aqua — Water Jar Delivery</title>
     <meta name="description" content="Fresh water jar delivery at your doorstep. Order instantly, track your delivery, manage your account." />

@@ -7,6 +7,20 @@ import { generateBillPDF, generateReportPDF, generateSummaryBillPDF, SummaryBill
 import pool from '../config/db';
 import { RowDataPacket } from 'mysql2/promise';
 import { z } from 'zod';
+import { withPlatformFee, getFeeModeFromDB, getPlatformFee } from '../utils/platformFee';
+
+// GET /api/billing/fee-config?amount=X  (authenticated — any role)
+// Returns live fee mode + calculated fee so customer UIs always show the correct charge.
+export const getFeeConfig = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const base = Math.max(0, parseFloat(String(req.query.amount)) || 0);
+    const mode = await getFeeModeFromDB();
+    const fee  = base > 0 ? getPlatformFee(base, mode) : 0;
+    res.json({ mode, fee, base, total: parseFloat((base + fee).toFixed(2)) });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch fee config' });
+  }
+};
 
 const notify = (fn: () => Promise<void>) =>
   fn().catch(err => console.warn('FCM (non-fatal):', err?.message));

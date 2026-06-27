@@ -3,7 +3,7 @@ import { authenticate, allowAdmin } from '../middleware/auth.middleware';
 import {
   generateBills, getBills, getBillById, downloadBillPDF, recordPayment, payBillWithAdvance,
   getDeliveryReport, getDeliveryReportPDF, getBillingSummary, getSummaryBillPDF,
-  clearDuesAdvance, clearDuesOrder, clearDuesVerify,
+  clearDuesAdvance, clearDuesOrder, clearDuesVerify, getFeeConfig,
 } from '../controllers/billing.controller';
 import {
   getRevenue, getPendingPayments, getStaffPerformance, getCustomerGrowth,
@@ -24,6 +24,7 @@ router.get('/reports/top-customers',     ...allowAdmin, getTopCustomers);
 router.get('/reports/order-volume',      ...allowAdmin, getOrderVolume);
 router.get('/summary',                   ...allowAdmin, getBillingSummary);
 router.get('/summary-bill/pdf',          ...allowAdmin, getSummaryBillPDF);
+router.get('/fee-config',                authenticate, getFeeConfig);   // any role — returns live fee mode + fee for given amount
 
 // ── Clear All Dues (customer) ─────────────────────────────────────────────────
 router.post('/clear-dues/advance',       authenticate, clearDuesAdvance);

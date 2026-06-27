@@ -13,6 +13,7 @@ import { billingApi, Bill, Transaction, ClearDuesBill, ClearDuesOrderResponse } 
 import { advanceApi } from '../../api/advance';
 import { eachDateInRange } from '../../utils/date';
 import { loadRazorpay } from '../../utils/razorpay';
+import { usePlatformFee } from '../../hooks/usePlatformFee';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -70,15 +71,10 @@ const ClearDuesModal = ({ dueBills, totalDue, advanceBalance, onClose, onSuccess
   );
   const [paying, setPaying] = useState(false);
 
-  // Platform fee helper (mirrors backend slab)
-  const getPlatformFee = (base: number) => {
-    if (base < 100)  return 5;
-    if (base < 300)  return 10;
-    if (base < 500)  return 15;
-    return 20;
-  };
-  const platformFee  = getPlatformFee(totalDue);
-  const totalCharged = mode === 'razorpay' ? totalDue + platformFee : totalDue;
+  // Live platform fee from backend (reflects admin toggle: fixed slab or 2%)
+  const feeInfo      = usePlatformFee(mode === 'razorpay' ? totalDue : 0);
+  const platformFee  = feeInfo.fee;
+  const totalCharged = mode === 'razorpay' ? feeInfo.total : totalDue;
 
   const handlePay = async () => {
     setPaying(true);
@@ -239,7 +235,8 @@ const ClearDuesModal = ({ dueBills, totalDue, advanceBalance, onClose, onSuccess
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
               <CreditCard className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <p className="text-[11px] text-amber-700 font-medium">
-                ₹{platformFee} platform fee applies · you pay ₹{totalCharged.toFixed(0)} total
+                ₹{platformFee} platform fee applies · you pay ₹{Math.round(totalCharged)} total
+                {feeInfo.mode === 'percent' && <span className="ml-1 text-[10px] text-amber-500">(2%)</span>}
               </p>
             </div>
           )}

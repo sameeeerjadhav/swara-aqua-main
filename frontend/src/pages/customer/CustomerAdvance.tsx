@@ -10,15 +10,8 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { advanceApi, AdvanceAccess, AdvanceTransaction } from '../../api/advance';
 import { loadRazorpay } from '../../utils/razorpay';
-import { withPlatformFee } from '../../utils/platformFee';
+import { usePlatformFee } from '../../hooks/usePlatformFee';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const getPlatformFee = (base: number) => {
-  if (base < 100)  return 2;
-  if (base < 300)  return 10;
-  if (base < 500)  return 15;
-  return 20;
-};
 
 const formatDate = (iso: string) => {
   const d = new Date(iso);
@@ -50,8 +43,9 @@ const AddCreditModal = ({ onClose, onSuccess }: { onClose: () => void; onSuccess
   const [paying, setPaying] = useState(false);
 
   const base       = parseFloat(amount) || 0;
-  const fee        = base > 0 ? getPlatformFee(base) : 0;
-  const total      = base + fee;
+  const feeInfo    = usePlatformFee(base);
+  const fee        = feeInfo.fee;
+  const total      = feeInfo.total;
   const isValid    = base >= 1;
 
   const handlePay = async () => {

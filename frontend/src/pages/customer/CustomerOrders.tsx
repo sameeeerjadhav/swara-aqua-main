@@ -15,6 +15,7 @@ import { addressApi, UserAddress } from '../../api/address';
 import { MapPicker } from '../../components/ui/MapPicker';
 import { loadRazorpay } from '../../utils/razorpay';
 import { advanceApi, AdvanceAccess } from '../../api/advance';
+import { usePlatformFee } from '../../hooks/usePlatformFee';
 
 
 
@@ -308,15 +309,10 @@ export const CustomerOrders = () => {
   const totalAmount = form.quantity * PRICE_PER_JAR;
   const canUseAdvance = advanceAccess === 'approved' && advanceBalance >= totalAmount;
 
-  // Platform fee helper (mirrors backend slab table)
-  const getPlatformFee = (base: number) => {
-    if (base < 100)  return 2;
-    if (base < 300)  return 10;
-    if (base < 500)  return 15;
-    return 20;
-  };
-  const platformFee  = getPlatformFee(totalAmount);
-  const totalCharged = totalAmount + platformFee;
+  // Live platform fee — reflects admin toggle (fixed slab or 2%)
+  const feeInfo      = usePlatformFee(paymentMode === 'online' ? totalAmount : 0);
+  const platformFee  = feeInfo.fee;
+  const totalCharged = paymentMode === 'online' ? feeInfo.total : totalAmount;
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -598,7 +594,7 @@ export const CustomerOrders = () => {
                       <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                         <CreditCard className="w-3 h-3 text-amber-600 shrink-0" />
                         <p className="text-[11px] text-amber-700 font-medium">
-                          Includes ₹{platformFee} platform fee · You pay ₹{totalCharged} total
+                          Includes ₹{platformFee} platform fee{feeInfo.mode === 'percent' ? ' (2%)' : ''} · You pay ₹{Math.round(totalCharged)} total
                         </p>
                       </div>
                     )}

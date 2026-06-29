@@ -157,8 +157,15 @@ export const getAllOrders = async (filters: {
   const params: unknown[] = [];
 
   if (filters.status) {
-    conditions.push('o.status = ?');
-    params.push(filters.status);
+    // Support comma-separated statuses e.g. 'pending,assigned' for combined 'active' filter
+    const statuses = filters.status.split(',').map(s => s.trim()).filter(Boolean);
+    if (statuses.length === 1) {
+      conditions.push('o.status = ?');
+      params.push(statuses[0]);
+    } else if (statuses.length > 1) {
+      conditions.push(`o.status IN (${statuses.map(() => '?').join(',')})`);
+      params.push(...statuses);
+    }
   }
   if (filters.date) {
     conditions.push('DATE(o.created_at) = ?');

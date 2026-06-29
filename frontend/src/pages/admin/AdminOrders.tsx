@@ -40,7 +40,7 @@ const PhoneLink = ({ phone, className = '' }: { phone: string; className?: strin
   );
 };
 
-const STATUS_FILTERS = ['all', 'pending', 'delivered', 'cancelled'];
+const STATUS_FILTERS = ['all', 'active', 'pending', 'assigned', 'delivered', 'cancelled'];
 
 // Returns YYYY-MM-DD for today
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -280,7 +280,7 @@ export const AdminOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [dateFilter, setDateFilter] = useState('');   // YYYY-MM-DD
   const [monthFilter, setMonthFilter] = useState('');   // YYYY-MM
   const [dateMode, setDateMode] = useState<'date' | 'month' | null>(null);
@@ -304,7 +304,11 @@ export const AdminOrders = () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
-      if (statusFilter !== 'all') params.status = statusFilter;
+      if (statusFilter === 'active') {
+        params.status = 'pending,assigned'; // combined active filter
+      } else if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
       if (search) params.search = search;
       if (dateFilter) params.date = dateFilter;
       else if (monthFilter) params.month = monthFilter;
@@ -588,7 +592,7 @@ export const AdminOrders = () => {
             <button key={s} onClick={() => setStatusFilter(s)}
               className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all capitalize
                 ${statusFilter === s ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
-              {s === 'all' ? 'All' : s}
+              {s === 'all' ? 'All Time' : s === 'active' ? '⚡ Active' : s}
             </button>
           ))}
         </div>

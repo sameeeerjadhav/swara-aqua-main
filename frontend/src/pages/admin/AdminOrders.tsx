@@ -41,7 +41,7 @@ const PhoneLink = ({ phone, className = '' }: { phone: string; className?: strin
   );
 };
 
-const STATUS_FILTERS = ['all', 'pending', 'assigned', 'delivered', 'cancelled'];
+const STATUS_FILTERS = ['all', 'pending', 'completed', 'cancelled'];
 
 // Returns YYYY-MM-DD for today
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -285,7 +285,11 @@ export const AdminOrders = () => {
   // Pre-apply filter from URL query param e.g. ?status=pending
   const [statusFilter, setStatusFilter] = useState(() => {
     const s = new URLSearchParams(window.location.search).get('status');
-    return s && STATUS_FILTERS.includes(s) ? s : 'all';
+    if (!s) return 'all';
+    // Map legacy/backend values to UI filter names
+    if (s === 'assigned') return 'pending';      // assigned = still undelivered
+    if (s === 'delivered') return 'completed';   // delivered = same as completed in UI
+    return STATUS_FILTERS.includes(s) ? s : 'all';
   });
   const [dateFilter, setDateFilter] = useState('');   // YYYY-MM-DD
   const [monthFilter, setMonthFilter] = useState('');   // YYYY-MM
@@ -310,7 +314,15 @@ export const AdminOrders = () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
-      if (statusFilter !== 'all') params.status = statusFilter;
+      // 'pending' from admin's view = pending + assigned (both undelivered)
+      // 'completed' from admin's view = completed + delivered (both finished)
+      if (statusFilter === 'pending') {
+        params.status = 'pending,assigned';
+      } else if (statusFilter === 'completed') {
+        params.status = 'completed,delivered';
+      } else if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
       if (search) params.search = search;
       if (dateFilter) params.date = dateFilter;
       else if (monthFilter) params.month = monthFilter;
@@ -594,7 +606,7 @@ export const AdminOrders = () => {
             <button key={s} onClick={() => setStatusFilter(s)}
               className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all capitalize
                 ${statusFilter === s ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
-              {s === 'all' ? 'All' : s}
+              {s === 'all' ? 'All' : s === 'completed' ? 'Completed' : s === 'cancelled' ? 'Cancelled' : 'Pending'}
             </button>
           ))}
         </div>

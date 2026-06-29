@@ -20,6 +20,24 @@ interface PendingDetail { id: number; name: string; phone: string; status: strin
 
 const LOW_BAL_THRESHOLD = 60;
 const STATUS_FILTERS = ['all', 'low_balance', 'pay_later', 'active', 'pending', 'rejected'];
+
+// ── Clickable phone — opens dialer on click, copy button on hover ──
+const PhoneLink = ({ phone, className = '' }: { phone: string; className?: string }) => {
+  const handleDial = (e: React.MouseEvent) => { e.stopPropagation(); window.location.href = `tel:${phone}`; };
+  const handleCopy = (e: React.MouseEvent) => { e.stopPropagation(); navigator.clipboard.writeText(phone).catch(() => {}); };
+  return (
+    <span className={`inline-flex items-center gap-1 group/ph ${className}`}>
+      <a href={`tel:${phone}`} onClick={handleDial}
+        className="text-brand-600 hover:text-brand-700 hover:underline transition-colors font-medium">
+        {phone}
+      </a>
+      <button onClick={handleCopy} title="Copy number"
+        className="opacity-0 group-hover/ph:opacity-100 transition-opacity p-0.5 rounded hover:bg-slate-100">
+        <Copy className="w-3 h-3 text-slate-400" />
+      </button>
+    </span>
+  );
+};
 const MONTH_LABELS: Record<string, string> = {};
 const getMonthLabel = (m: string) => {
   if (MONTH_LABELS[m]) return MONTH_LABELS[m];
@@ -74,7 +92,7 @@ const DraggableAdminCustomerItem = ({
         <Avatar name={item.name} photo={item.profile_photo} size="sm" className="w-9 h-9 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-800 truncate">{item.name}</p>
-          <p className="text-xs text-slate-400">{item.phone}</p>
+          <PhoneLink phone={item.phone} className="text-xs text-slate-400" />
         </div>
         {/* Arrow buttons */}
         <div className="flex items-center gap-1 shrink-0">
@@ -550,7 +568,9 @@ export const AdminCustomers = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-500">{u.phone}</td>
+                    <td className="px-5 py-4 text-sm text-slate-500">
+                      <PhoneLink phone={u.phone} />
+                    </td>
                     <td className="px-5 py-4">
                       <button
                         onClick={() => { setEditingRate(u); setRateValue(String(u.jar_rate || 50)); }}
@@ -655,7 +675,7 @@ export const AdminCustomers = () => {
                 {/* Name + phone */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{u.phone}</p>
+                  <PhoneLink phone={u.phone} className="text-[11px] text-slate-400 mt-0.5" />
                   {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-1">
                       ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
@@ -743,7 +763,7 @@ export const AdminCustomers = () => {
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-slate-900">{selectedCustomer.name}</h3>
-                      <p className="text-xs text-slate-400">{selectedCustomer.phone}</p>
+                      <PhoneLink phone={selectedCustomer.phone} className="text-xs text-slate-400" />
                     </div>
                   </div>
                   <button onClick={() => setSelectedCustomer(null)}
@@ -956,7 +976,10 @@ export const AdminCustomers = () => {
                     </div>
                     <div>
                       <h3 className="text-lg font-extrabold text-white">{pendingDetail.name}</h3>
-                      <p className="text-white/75 text-sm">+91 {pendingDetail.phone}</p>
+                      <a href={`tel:${pendingDetail.phone}`}
+                        className="text-white/75 text-sm hover:text-white transition-colors">
+                        +91 {pendingDetail.phone}
+                      </a>
                     </div>
                   </div>
                 )}
@@ -971,7 +994,10 @@ export const AdminCustomers = () => {
                     <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3">
                       <p className="text-[10px] text-blue-400 uppercase tracking-wider mb-1">Phone</p>
                       <div className="flex items-center justify-between gap-1">
-                        <p className="text-sm font-bold text-slate-800">{pendingDetail.phone}</p>
+                        <a href={`tel:${pendingDetail.phone}`}
+                          className="text-sm font-bold text-slate-800 hover:text-brand-600 hover:underline transition-colors">
+                          {pendingDetail.phone}
+                        </a>
                         <button
                           onClick={() => {
                             navigator.clipboard.writeText(pendingDetail.phone);

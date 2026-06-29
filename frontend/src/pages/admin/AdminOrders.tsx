@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle,
   Check, XCircle, ChevronRight, User, Phone, MapPin, ClipboardList,
-  Banknote, CreditCard, Clock, Truck, Hash, FileText, CircleDot,
+  Banknote, CreditCard, Clock, Truck, Hash, FileText, CircleDot, Copy,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
@@ -15,6 +15,30 @@ import api from '../../api/axios';
 import { subscriptionApi, CancelRequest } from '../../api/subscription';
 
 interface CustomerOption { id: number; name: string; phone: string; jar_rate: number; }
+
+// ── Clickable phone number — opens dialer + copy button ──
+const PhoneLink = ({ phone, className = '' }: { phone: string; className?: string }) => {
+  const handleDial = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.location.href = `tel:${phone}`;
+  };
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(phone).catch(() => {});
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 group/ph ${className}`}>
+      <a href={`tel:${phone}`} onClick={handleDial}
+        className="text-brand-600 hover:text-brand-700 hover:underline transition-colors font-medium">
+        {phone}
+      </a>
+      <button onClick={handleCopy} title="Copy number"
+        className="opacity-0 group-hover/ph:opacity-100 transition-opacity p-0.5 rounded hover:bg-slate-100">
+        <Copy className="w-3 h-3 text-slate-400" />
+      </button>
+    </span>
+  );
+};
 
 const STATUS_FILTERS = ['all', 'pending', 'delivered', 'cancelled'];
 
@@ -122,7 +146,8 @@ const OrderDetailModal = ({ orderId, onClose }: { orderId: number; onClose: () =
                 <div>
                   <p className="text-sm font-bold text-slate-800">{order.customer_name}</p>
                   <p className="text-xs text-slate-400 flex items-center gap-1">
-                    <Phone className="w-3 h-3" />{order.customer_phone}
+                    <Phone className="w-3 h-3" />
+                    <PhoneLink phone={order.customer_phone ?? ''} />
                   </p>
                 </div>
               </div>
@@ -422,7 +447,7 @@ export const AdminOrders = () => {
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <p className="text-sm font-bold text-slate-800">{cr.customer_name}</p>
-                              <p className="text-[11px] text-slate-500">{cr.customer_phone}</p>
+                              <PhoneLink phone={cr.customer_phone ?? ''} className="text-[11px] text-slate-500" />
                             </div>
                             <div className="text-right shrink-0">
                               <p className="text-xs font-bold text-slate-700">Order #{cr.order_id}</p>
@@ -598,7 +623,7 @@ export const AdminOrders = () => {
                   <td className="px-4 py-3.5 text-xs font-bold text-slate-400">#{o.id}</td>
                   <td className="px-4 py-3.5">
                     <p className="text-sm font-semibold text-slate-800">{o.customer_name}</p>
-                    <p className="text-xs text-slate-400">{o.customer_phone}</p>
+                    <PhoneLink phone={o.customer_phone ?? ''} className="text-xs text-slate-400" />
                   </td>
                   <td className="px-4 py-3.5 text-xs text-slate-600 capitalize">{o.type}</td>
                   <td className="px-4 py-3.5 text-sm font-semibold text-slate-700">{o.quantity}</td>

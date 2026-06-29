@@ -115,7 +115,7 @@ export const getOrdersByCustomer = async (customerId: number): Promise<Order[]> 
 
 export const getOrdersByStaff = async (staffId: number): Promise<Order[]> => {
   // Active orders: all assigned/pending (any staff can deliver)
-  // Completed orders: only this staff's own (for history tab)
+  // Completed orders: this staff's own orders OR orders they delivered (even if not formally assigned)
   const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT
       o.*,
@@ -131,18 +131,21 @@ export const getOrdersByStaff = async (staffId: number): Promise<Order[]> => {
       AND t.mode      = 'online'
       AND t.status    = 'completed'
       AND t.type      = 'credit'
+    LEFT JOIN deliveries d
+      ON  d.order_id = o.id
+      AND d.staff_id = ?
     WHERE (
       -- Active orders visible to all staff
       o.status IN ('assigned', 'pending')
       OR
-      -- Completed/cancelled only for this staff's own orders
-      (o.status IN ('completed', 'delivered', 'cancelled') AND o.staff_id = ?)
+      -- Completed/cancelled: show if assigned to this staff OR if they recorded the delivery
+      (o.status IN ('completed', 'delivered', 'cancelled') AND (o.staff_id = ? OR d.id IS NOT NULL))
     )
     ORDER BY
       (o.staff_id = ?) DESC,
       FIELD(o.status,'assigned','pending','completed','delivered','cancelled') ASC,
       o.created_at DESC
-  `, [staffId, staffId]);
+  `, [staffId, staffId, staffId]);
   return rows as Order[];
 };
 

@@ -747,6 +747,15 @@ export const completeDelivery = async (req: AuthRequest, res: Response): Promise
       notes: notes || undefined,
     });
 
+    // Also set staff_id on the order itself if it was unassigned (pending with no staff)
+    // This ensures the order is visible in admin/staff order history views
+    if (!order.staff_id) {
+      await pool.query(
+        `UPDATE orders SET staff_id = ?, updated_at = NOW() WHERE id = ?`,
+        [req.user!.id, order.id]
+      );
+    }
+
     await OrderModel.updateOrderStatus(order.id, 'completed', req.user!.id);
 
     // Update inventory: reduce staff assigned, increase empty_collected

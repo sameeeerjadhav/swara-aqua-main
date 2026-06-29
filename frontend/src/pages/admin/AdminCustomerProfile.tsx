@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Phone, MapPin, Droplets, Package, CreditCard, IndianRupee,
-  ChevronLeft, ChevronRight, FileText, CalendarDays, Pencil, Trash2, AlertTriangle, Camera,
+  ChevronLeft, ChevronRight, FileText, CalendarDays, Pencil, Trash2, AlertTriangle, Camera, Copy,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
@@ -33,6 +33,24 @@ const BILL_STATUS: Record<string, string> = {
   paid:    'bg-green-50 text-green-700 border-green-200',
   partial: 'bg-amber-50 text-amber-700 border-amber-200',
   unpaid:  'bg-red-50   text-red-600   border-red-200',
+};
+
+// ── Clickable phone — opens dialer on click, copy button on hover ──
+const PhoneLink = ({ phone, className = '' }: { phone: string; className?: string }) => {
+  const handleDial = (e: React.MouseEvent) => { e.stopPropagation(); window.location.href = `tel:${phone}`; };
+  const handleCopy = (e: React.MouseEvent) => { e.stopPropagation(); navigator.clipboard.writeText(phone).catch(() => {}); };
+  return (
+    <span className={`inline-flex items-center gap-1 group/ph ${className}`}>
+      <a href={`tel:${phone}`} onClick={handleDial}
+        className="text-brand-600 hover:text-brand-700 hover:underline transition-colors font-medium">
+        {phone}
+      </a>
+      <button onClick={handleCopy} title="Copy number"
+        className="opacity-0 group-hover/ph:opacity-100 transition-opacity p-0.5 rounded hover:bg-slate-100">
+        <Copy className="w-3 h-3 text-slate-400" />
+      </button>
+    </span>
+  );
 };
 
 export const AdminCustomerProfile = () => {
@@ -315,7 +333,8 @@ export const AdminCustomerProfile = () => {
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <Badge status={profile.status} />
               <span className="text-xs text-slate-500 flex items-center gap-1">
-                <Phone className="w-3 h-3" />{profile.phone}
+                <Phone className="w-3 h-3" />
+                <PhoneLink phone={profile.phone} />
               </span>
               <span className="text-xs text-slate-400">
                 Joined {new Date(profile.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}

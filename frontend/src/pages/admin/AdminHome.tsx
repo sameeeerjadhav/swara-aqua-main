@@ -137,11 +137,16 @@ export const AdminHome = () => {
               <p className="text-white/40 text-xs mt-1">{orderStats.total} orders this month</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/10 rounded-2xl px-3 py-2.5 text-center border border-white/10">
+              {/* Clickable mini tiles → navigate with filter */}
+              <div
+                className="bg-white/10 rounded-2xl px-3 py-2.5 text-center border border-white/10 cursor-pointer hover:bg-white/20 transition-colors active:scale-95"
+                onClick={() => navigate('/admin/orders?status=completed')}>
                 <p className="text-white font-bold text-lg leading-none">{orderStats.completed}</p>
                 <p className="text-white/50 text-[10px] font-medium mt-0.5">Completed</p>
               </div>
-              <div className="bg-amber-400/20 rounded-2xl px-3 py-2.5 text-center border border-amber-400/20">
+              <div
+                className="bg-amber-400/20 rounded-2xl px-3 py-2.5 text-center border border-amber-400/20 cursor-pointer hover:bg-amber-400/30 transition-colors active:scale-95"
+                onClick={() => navigate('/admin/orders?status=pending')}>
                 <p className="text-amber-300 font-bold text-lg leading-none">{orderStats.pending}</p>
                 <p className="text-amber-300/70 text-[10px] font-medium mt-0.5">Pending</p>
               </div>
@@ -194,17 +199,17 @@ export const AdminHome = () => {
           <MetricCard loading={loading} label="Pending"
             value={orderStats?.pending ?? '—'}
             gradient="from-amber-500 to-yellow-400"
-            to="/admin/orders"
+            to="/admin/orders?status=pending"
             icon={<AlertCircle className="w-5 h-5 text-white" />} />
           <MetricCard loading={loading} label="Completed"
             value={orderStats?.completed ?? '—'}
             gradient="from-green-500 to-teal-400"
-            to="/admin/orders"
+            to="/admin/orders?status=completed"
             icon={<TrendingUp className="w-5 h-5 text-white" />} />
           <MetricCard loading={loading} label="Cancelled"
             value={orderStats?.cancelled ?? '—'}
             gradient="from-red-500 to-rose-400"
-            to="/admin/orders"
+            to="/admin/orders?status=cancelled"
             icon={<XCircle className="w-5 h-5 text-white" />} />
         </motion.div>
       </div>
@@ -225,7 +230,7 @@ export const AdminHome = () => {
               icon: Package, gradient: 'from-brand-600 to-brand-500',
               label: 'Manage Orders',
               sub: `${orderStats?.pending ?? '—'} orders need attention`,
-              to: '/admin/orders',
+              to: '/admin/orders?status=pending',
               urgent: false,
             },
             {
@@ -291,9 +296,9 @@ export const AdminHome = () => {
 
           {/* iOS / Web QR */}
           <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
-            onClick={() => setExpandedQR({ src: '/permanentqr.png', label: ' iOS / Web' })}>
+            onClick={() => setExpandedQR({ src: '/permanentqr.png', label: ' iOS / Web' })}>
             <div className="flex items-center gap-1 bg-blue-100 rounded-full px-2 py-0.5">
-              <span className="text-blue-700 text-[10px] font-bold"> iOS / Web</span>
+              <span className="text-blue-700 text-[10px] font-bold"> iOS / Web</span>
             </div>
             <img src="/permanentqr.png" alt="iOS / Web QR Code" className="w-24 h-24 object-contain" />
             <div className="text-center">

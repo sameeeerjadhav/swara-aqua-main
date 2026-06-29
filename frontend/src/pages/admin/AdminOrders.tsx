@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle,
@@ -277,10 +278,15 @@ const OrderDetailModal = ({ orderId, onClose }: { orderId: number; onClose: () =
 // ── Main Component ────────────────────────────────────────────────────────────
 export const AdminOrders = () => {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  // Pre-apply filter from URL query param e.g. ?status=pending
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const s = new URLSearchParams(window.location.search).get('status');
+    return s && STATUS_FILTERS.includes(s) ? s : 'all';
+  });
   const [dateFilter, setDateFilter] = useState('');   // YYYY-MM-DD
   const [monthFilter, setMonthFilter] = useState('');   // YYYY-MM
   const [dateMode, setDateMode] = useState<'date' | 'month' | null>(null);

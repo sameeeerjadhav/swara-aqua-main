@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Navigation, CheckCircle, X, Package, Phone, User, RefreshCw, Clock, Calendar, CalendarClock, Repeat, Droplets } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
@@ -27,7 +28,10 @@ export const StaffDeliveries = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [selectedTimeline, setSelectedTimeline] = useState<TimelineEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<FilterTab>('pending');
+  const [activeTab, setActiveTab] = useState<FilterTab>(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab') as FilterTab | null;
+    return tab && ['pending','completed','daily','preorder'].includes(tab) ? tab : 'pending';
+  });
   const [deliverySuccess, setDeliverySuccess] = useState<{ orderId: number; customer: string; jars: number; amount: number; mode: string } | null>(null);
 
   const [deliveryForm, setDeliveryForm] = useState({

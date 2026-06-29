@@ -75,7 +75,7 @@ export const StaffHome = () => {
       icon: CheckCircle2,
       from: 'from-emerald-500', to: 'to-green-400',
       glow: 'rgba(16,185,129,0.35)',
-      href: '/staff/deliveries',
+      href: '/staff/deliveries?tab=completed',
     },
     {
       label: t('jars_out', lang),
@@ -91,7 +91,7 @@ export const StaffHome = () => {
       icon: IndianRupee,
       from: 'from-amber-500', to: 'to-orange-400',
       glow: 'rgba(245,158,11,0.35)',
-      href: '/staff/deliveries',
+      href: '/staff/deliveries?tab=completed',
     },
     {
       label: t('pending', lang),
@@ -99,7 +99,7 @@ export const StaffHome = () => {
       icon: Clock,
       from: 'from-purple-500', to: 'to-indigo-400',
       glow: 'rgba(139,92,246,0.35)',
-      href: '/staff/deliveries',
+      href: '/staff/deliveries?tab=pending',
     },
   ];
 

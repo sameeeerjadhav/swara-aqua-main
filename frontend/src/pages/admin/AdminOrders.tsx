@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle,
   Check, XCircle, ChevronRight, User, Phone, MapPin, ClipboardList,
-  Banknote, CreditCard, Clock, Truck, Hash, FileText, CircleDot, Copy,
+  Banknote, CreditCard, Clock, Truck, Hash, FileText, CircleDot, Copy, Navigation,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
@@ -40,7 +40,7 @@ const PhoneLink = ({ phone, className = '' }: { phone: string; className?: strin
   );
 };
 
-const STATUS_FILTERS = ['all', 'active', 'pending', 'assigned', 'delivered', 'cancelled'];
+const STATUS_FILTERS = ['all', 'pending', 'assigned', 'delivered', 'cancelled'];
 
 // Returns YYYY-MM-DD for today
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -280,7 +280,7 @@ export const AdminOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');   // YYYY-MM-DD
   const [monthFilter, setMonthFilter] = useState('');   // YYYY-MM
   const [dateMode, setDateMode] = useState<'date' | 'month' | null>(null);
@@ -304,11 +304,7 @@ export const AdminOrders = () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
-      if (statusFilter === 'active') {
-        params.status = 'pending,assigned'; // combined active filter
-      } else if (statusFilter !== 'all') {
-        params.status = statusFilter;
-      }
+      if (statusFilter !== 'all') params.status = statusFilter;
       if (search) params.search = search;
       if (dateFilter) params.date = dateFilter;
       else if (monthFilter) params.month = monthFilter;
@@ -592,7 +588,7 @@ export const AdminOrders = () => {
             <button key={s} onClick={() => setStatusFilter(s)}
               className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all capitalize
                 ${statusFilter === s ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
-              {s === 'all' ? 'All Time' : s === 'active' ? '⚡ Active' : s}
+              {s === 'all' ? 'All' : s}
             </button>
           ))}
         </div>
@@ -646,42 +642,76 @@ export const AdminOrders = () => {
           </table>
         </div>
 
-        {/* Mobile — compact list rows */}
-        <div className="md:hidden divide-y divide-slate-100">
+        {/* Mobile — staff-style order cards */}
+        <div className="md:hidden p-3 space-y-3">
           {loading ? (
-            [0, 1, 2, 3, 4].map(i => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3">
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3.5 w-32" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-                <Skeleton className="h-5 w-16 rounded-full shrink-0" />
-                <Skeleton className="h-4 w-12 shrink-0" />
-              </div>
-            ))
+            [0,1,2,3].map(i => <Skeleton key={i} className="h-40 rounded-2xl" />)
           ) : orders.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-sm">No orders found</div>
-          ) : orders.map(o => (
-            <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              onClick={() => setSelectedOrderId(o.id)}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-brand-50/50 active:bg-brand-100/60 transition-colors cursor-pointer">
+          ) : orders.map((o, i) => (
+            <motion.div key={o.id}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+              className={`bg-white rounded-2xl border shadow-card p-4 transition-all
+                ${o.status === 'cancelled' ? 'opacity-60 border-dashed border-slate-200'
+                  : ['completed','delivered'].includes(o.status) ? 'border-green-100'
+                  : o.status === 'assigned' ? 'border-brand-100 ring-1 ring-brand-100'
+                  : 'border-slate-100'}`}>
 
-              {/* Customer info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{o.customer_name}</p>
+              {/* Top row: #ID + status badge | amount + jars */}
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-400">#{o.id}</span>
+                  <OrderStatusBadge status={o.status} />
+                  {o.type !== 'instant' && (
+                    <span className="text-[9px] font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wide capitalize">
+                      {o.type}
+                    </span>
+                  )}
                 </div>
-                <p className="text-[11px] text-slate-400 truncate">
-                  {o.quantity} jars · {o.staff_name || 'Unassigned'} · {new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                </p>
+                <div className="text-right shrink-0 ml-2">
+                  <p className="text-base font-bold text-brand-600">₹{o.total_amount}</p>
+                  <p className="text-xs text-slate-400">{o.quantity} jar{o.quantity > 1 ? 's' : ''}</p>
+                </div>
               </div>
 
-              {/* Right: status + amount + chevron */}
-              <div className="shrink-0 text-right flex flex-col items-end gap-1">
-                <OrderStatusBadge status={o.status} />
-                <span className="text-xs font-bold text-brand-600">₹{o.total_amount}</span>
+              {/* Customer name */}
+              <p className="text-sm font-bold text-slate-800 mb-1">{o.customer_name}</p>
+
+              {/* Address */}
+              {o.address && (
+                <p className="text-xs text-slate-400 flex items-center gap-1 mb-2 truncate">
+                  <MapPin className="w-3 h-3 shrink-0" />{o.address}
+                </p>
+              )}
+
+              {/* Staff */}
+              {o.staff_name && (
+                <p className="text-[11px] text-slate-400 mb-2">→ {o.staff_name}</p>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => setSelectedOrderId(o.id)}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-brand-300 transition-all active:scale-95">
+                  View Details
+                </button>
+                {(o.address || (o.latitude && o.longitude)) && (
+                  <button
+                    onClick={() => {
+                      if (o.latitude && o.longitude) {
+                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${o.latitude},${o.longitude}`, '_blank');
+                      } else if (o.address) {
+                        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}`, '_blank');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white text-brand-600 hover:bg-brand-50 hover:border-brand-300 transition-all active:scale-95">
+                    <Navigation className="w-3.5 h-3.5" />
+                    Navigate
+                  </button>
+                )}
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
             </motion.div>
           ))}
         </div>

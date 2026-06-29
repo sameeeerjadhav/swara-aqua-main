@@ -203,9 +203,9 @@ export const StaffHome = () => {
             </p>
           </div>
 
-          {/* Cash in hand — click → deliveries */}
+          {/* Cash in hand — click → inventory (where cash submission lives) */}
           <div
-            onClick={() => navigate('/staff/deliveries')}
+            onClick={() => navigate('/staff/inventory')}
             className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-400 p-4 cursor-pointer active:scale-[0.97] transition-all">
             <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
             <div className="flex items-center gap-2 mb-3">

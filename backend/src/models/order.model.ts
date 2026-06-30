@@ -296,13 +296,12 @@ export const addTimeline = async (
 export const getOrderStats = async (): Promise<RowDataPacket> => {
   const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT
-      COUNT(*)                                                               AS total,
-      SUM(status = 'pending')                                                AS pending,
-      SUM(status = 'assigned')                                               AS assigned,
-      SUM(status = 'completed')                                              AS completed,
-      SUM(status = 'cancelled')                                              AS cancelled,
-      COALESCE(SUM(CASE WHEN status = 'completed' THEN total_amount END), 0) AS total_revenue,
-      DATE_FORMAT(NOW(), '%M %Y')                                            AS stats_month
+      COUNT(*)                                                                          AS total,
+      SUM(status IN ('pending', 'assigned'))                                            AS pending,
+      SUM(status IN ('completed', 'delivered'))                                         AS completed,
+      SUM(status = 'cancelled')                                                         AS cancelled,
+      COALESCE(SUM(CASE WHEN status IN ('completed','delivered') THEN total_amount END), 0) AS total_revenue,
+      DATE_FORMAT(NOW(), '%M %Y')                                                       AS stats_month
     FROM orders
     WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')
   `);

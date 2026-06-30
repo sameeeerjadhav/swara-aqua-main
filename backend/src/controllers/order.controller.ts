@@ -174,18 +174,23 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 
 export const getOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { status, date, month, search } = req.query as Record<string, string>;
-    let orders;
+    const { status, date, month, search, page, limit } = req.query as Record<string, string>;
 
     if (req.user!.role === 'customer') {
-      orders = await OrderModel.getOrdersByCustomer(req.user!.id);
+      const orders = await OrderModel.getOrdersByCustomer(req.user!.id);
+      res.json({ orders });
     } else if (req.user!.role === 'staff') {
-      orders = await OrderModel.getOrdersByStaff(req.user!.id);
+      const orders = await OrderModel.getOrdersByStaff(req.user!.id);
+      res.json({ orders });
     } else {
-      orders = await OrderModel.getAllOrders({ status, date, month, search });
+      // Admin: paginated
+      const result = await OrderModel.getAllOrders({
+        status, date, month, search,
+        page:  page  ? Number(page)  : undefined,
+        limit: limit ? Number(limit) : undefined,
+      });
+      res.json(result); // { orders, total, page, limit, totalPages }
     }
-
-    res.json({ orders });
   } catch (err) {
     console.error('getOrders error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });

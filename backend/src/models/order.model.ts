@@ -155,7 +155,9 @@ export const getAllOrders = async (filters: {
   date?: string;
   month?: string;
   search?: string;
-} = {}): Promise<Order[]> => {
+  page?: number;
+  limit?: number;
+} = {}): Promise<{ orders: Order[]; total: number; page: number; limit: number; totalPages: number }> => {
   const conditions: string[] = ['1=1'];
   const params: unknown[] = [];
 
@@ -182,11 +184,30 @@ export const getAllOrders = async (filters: {
     params.push(`%${filters.search}%`, `%${filters.search}%`);
   }
 
-  const [rows] = await pool.query<RowDataPacket[]>(
-    orderQuery(`WHERE ${conditions.join(' AND ')}`),
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  // ── Total count (for pagination metadata) ─────────────────────────────────
+  const [countRows] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total
+     FROM orders o
+     JOIN users c ON c.id = o.customer_id
+     ${whereClause}`,
     params
   );
-  return rows as Order[];
+  const total: number = Number(countRows[0]?.total ?? 0);
+
+  // ── Paginated data ─────────────────────────────────────────────────────────
+  const page  = Math.max(1, filters.page  ?? 1);
+  const limit = Math.min(100, Math.max(1, filters.limit ?? 25));
+  const offset = (page - 1) * limit;
+  const totalPages = Math.ceil(total / limit) || 1;
+
+  const [rows] = await pool.query<RowDataPacket[]>(
+    orderQuery(`${whereClause} LIMIT ? OFFSET ?`),
+    [...params, limit, offset]
+  );
+
+  return { orders: rows as Order[], total, page, limit, totalPages };
 };
 
 export const getOrderById = async (id: number): Promise<Order | null> => {

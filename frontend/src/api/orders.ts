@@ -48,8 +48,8 @@ export const ordersApi = {
   create: (data: Partial<Order> & { pricePerJar?: number; deliveryDate?: string }) =>
     api.post('/orders', data),
 
-  list: (params?: Record<string, string>) =>
-    api.get<{ orders: Order[] }>('/orders', { params }),
+  list: (params?: Record<string, string | number>) =>
+    api.get<{ orders: Order[]; total: number; page: number; limit: number; totalPages: number }>('/orders', { params }),
 
   get: (id: number) =>
     api.get<{ order: Order; timeline: TimelineEntry[]; delivery: Delivery | null }>(`/orders/${id}`),

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, RefreshCw, Calendar, X, Plus, Package, AlertTriangle,
-  Check, XCircle, ChevronRight, User, Phone, MapPin, ClipboardList,
+  Check, XCircle, ChevronRight, ChevronLeft, User, Phone, MapPin, ClipboardList,
   Banknote, CreditCard, Clock, Truck, Hash, FileText, CircleDot, Copy, Navigation,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
@@ -310,10 +310,17 @@ export const AdminOrders = () => {
   const [crLoading, setCrLoading] = useState(false);
   const [showCancelRequests, setShowCancelRequests] = useState(true);
 
-  const load = async () => {
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const load = async (pageOverride?: number) => {
     setLoading(true);
+    const currentPage = pageOverride ?? page;
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string | number> = {};
       // 'pending' from admin's view = pending + assigned (both undelivered)
       // 'completed' from admin's view = completed + delivered (both finished)
       if (statusFilter === 'pending') {
@@ -326,22 +333,29 @@ export const AdminOrders = () => {
       if (search) params.search = search;
       if (dateFilter) params.date = dateFilter;
       else if (monthFilter) params.month = monthFilter;
+      params.page  = currentPage;
+      params.limit = pageSize;
       const res = await ordersApi.list(params);
       setOrders(res.data.orders);
+      setTotalOrders(res.data.total);
+      setTotalPages(res.data.totalPages);
+      setPage(res.data.page);
     } catch { toast('Failed to load orders', 'error'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [statusFilter, dateFilter, monthFilter]);
+  // Reset to page 1 whenever filters change, then reload
+  useEffect(() => { setPage(1); }, [statusFilter, dateFilter, monthFilter, pageSize]);
+  useEffect(() => { load(); }, [page, statusFilter, dateFilter, monthFilter, pageSize]);
 
-  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); load(); };
+  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); load(1); };
 
   const clearDateFilters = () => { setDateFilter(''); setMonthFilter(''); setDateMode(null); };
 
-  // SSE: auto-refresh when orders change
+  // SSE: auto-refresh when orders change (stay on current page)
   useSSE({
-    order_created: () => load(),
-    order_updated: () => load(),
+    order_created:      () => load(),
+    order_updated:      () => load(),
     delivery_completed: () => load(),
   });
 
@@ -734,6 +748,73 @@ export const AdminOrders = () => {
           ))}
         </div>
       </div>
+
+      {/* ── Pagination Bar ── */}
+      {!loading && totalOrders > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-card px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+
+          {/* Left: summary + page size */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="text-xs text-slate-500">
+              Showing{' '}
+              <span className="font-bold text-slate-700">{(page - 1) * pageSize + 1}</span>–
+              <span className="font-bold text-slate-700">{Math.min(page * pageSize, totalOrders)}</span>
+              {' '}of{' '}
+              <span className="font-bold text-slate-700">{totalOrders}</span> orders
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-400">Per page:</span>
+              {[10, 25, 50, 100].map(n => (
+                <button key={n} onClick={() => setPageSize(n)}
+                  className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition-all ${
+                    pageSize === n ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: prev / page number pills / next */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
+                .reduce<(number | '...')[]>((acc, n, idx, arr) => {
+                  if (idx > 0 && (n as number) - (arr[idx - 1] as number) > 1) acc.push('...');
+                  acc.push(n);
+                  return acc;
+                }, [])
+                .map((n, i) =>
+                  n === '...' ? (
+                    <span key={`e${i}`} className="px-1 text-slate-400 text-xs">…</span>
+                  ) : (
+                    <button key={n} onClick={() => setPage(n as number)}
+                      className={`min-w-[28px] h-7 rounded-lg text-xs font-semibold transition-all ${
+                        page === n ? 'bg-brand-600 text-white shadow-sm' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}>
+                      {n}
+                    </button>
+                  )
+                )}
+
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── New Order Modal (with customer picker) ─── */}
       <AnimatePresence>

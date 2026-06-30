@@ -45,7 +45,7 @@ export interface Delivery {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const orderQuery = (where: string) => `
+const orderQuery = (where: string, suffix = '') => `
   SELECT
     o.*,
     c.name  AS customer_name,
@@ -69,6 +69,7 @@ const orderQuery = (where: string) => `
     AND cr.status   = 'pending'
   ${where}
   ORDER BY o.created_at DESC
+  ${suffix}
 `;
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -203,7 +204,7 @@ export const getAllOrders = async (filters: {
   const totalPages = Math.ceil(total / limit) || 1;
 
   const [rows] = await pool.query<RowDataPacket[]>(
-    orderQuery(`${whereClause} LIMIT ? OFFSET ?`),
+    orderQuery(whereClause, 'LIMIT ? OFFSET ?'),
     [...params, limit, offset]
   );
 

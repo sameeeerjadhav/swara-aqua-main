@@ -42,21 +42,21 @@ export const StaffDeliveries = () => {
     notes: '',
   });
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try { const { data } = await ordersApi.list(); setOrders(data.orders); }
-    catch { toast('Failed to load orders', 'error'); }
-    finally { setLoading(false); }
+    catch { if (!silent) toast('Failed to load orders', 'error'); }
+    finally { if (!silent) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, []);
 
-  // SSE: auto-refresh when staff gets new assignments or orders change
+  // SSE: silently refresh in background — no scroll jump, no skeleton flash
   useSSE({
-    order_assigned:     () => load(),
-    order_created:      () => load(),
-    order_updated:      () => load(),
-    delivery_completed: () => load(),
+    order_assigned:     () => load(true),
+    order_created:      () => load(true),
+    order_updated:      () => load(true),
+    delivery_completed: () => load(true),
   });
 
   const openOrder = (order: Order) => {

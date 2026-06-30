@@ -316,8 +316,8 @@ export const AdminOrders = () => {
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  const load = async (pageOverride?: number) => {
-    setLoading(true);
+  const load = async (pageOverride?: number, silent = false) => {
+    if (!silent) setLoading(true);
     const currentPage = pageOverride ?? page;
     try {
       const params: Record<string, string | number> = {};
@@ -340,8 +340,8 @@ export const AdminOrders = () => {
       setTotalOrders(res.data.total);
       setTotalPages(res.data.totalPages);
       setPage(res.data.page);
-    } catch { toast('Failed to load orders', 'error'); }
-    finally { setLoading(false); }
+    } catch { if (!silent) toast('Failed to load orders', 'error'); }
+    finally { if (!silent) setLoading(false); }
   };
 
   // Reset to page 1 whenever filters change, then reload
@@ -352,11 +352,11 @@ export const AdminOrders = () => {
 
   const clearDateFilters = () => { setDateFilter(''); setMonthFilter(''); setDateMode(null); };
 
-  // SSE: auto-refresh when orders change (stay on current page)
+  // SSE: silently refresh in background — no table flicker, no scroll jump
   useSSE({
-    order_created:      () => load(),
-    order_updated:      () => load(),
-    delivery_completed: () => load(),
+    order_created:      () => load(undefined, true),
+    order_updated:      () => load(undefined, true),
+    delivery_completed: () => load(undefined, true),
   });
 
   // Cancel requests

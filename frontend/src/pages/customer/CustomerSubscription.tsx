@@ -7,6 +7,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { subscriptionApi, Subscription } from '../../api/subscription';
 import { addressApi, UserAddress } from '../../api/address';
@@ -31,6 +32,7 @@ export const CustomerSubscription = () => {
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [mode,    setMode]    = useState<FormMode>('none');
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Shared form state (setup + edit)
   const [selectedSlots, setSelectedSlots] = useState<SlotMap>({});
@@ -142,7 +144,7 @@ export const CustomerSubscription = () => {
   const handleRenew  = async () => { if (!sub) return; try { await subscriptionApi.renew(sub.id);  toast('Subscription renewed for next month! 🎉', 'success'); await load(); } catch { toast('Failed to renew', 'error'); } };
   const handleCancel = async () => {
     if (!sub) return;
-    if (!confirm('Are you sure you want to cancel your subscription?')) return;
+    setShowCancelConfirm(false);
     try { await subscriptionApi.cancel(sub.id); toast('Subscription cancelled', 'warning'); await load(); }
     catch { toast('Failed to cancel', 'error'); }
   };
@@ -442,9 +444,20 @@ export const CustomerSubscription = () => {
         </button>
       )}
 
-      <Button variant="danger" size="sm" className="w-full" onClick={handleCancel}>
+      <Button variant="danger" size="sm" className="w-full" onClick={() => setShowCancelConfirm(true)}>
         Cancel Subscription
       </Button>
+
+      <ConfirmDialog
+        open={showCancelConfirm}
+        variant="warning"
+        title="Cancel Subscription?"
+        message="Your active subscription will be cancelled. Deliveries will stop after the current period. You can resubscribe at any time."
+        confirmLabel="Yes, Cancel"
+        cancelLabel="Keep Subscription"
+        onConfirm={handleCancel}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
     </div>
   );
 };

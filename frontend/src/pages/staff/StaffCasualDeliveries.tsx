@@ -7,6 +7,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import api from '../../api/axios';
 import { useLang } from '../../context/LanguageContext';
 import { t } from '../../i18n/staff';
@@ -194,6 +195,7 @@ export const StaffCasualDeliveries = () => {
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,8 +208,14 @@ export const StaffCasualDeliveries = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this record?')) return;
+  const handleDelete = (id: number) => {
+    setConfirmId(id);
+  };
+
+  const doDelete = async () => {
+    if (confirmId === null) return;
+    const id = confirmId;
+    setConfirmId(null);
     setDeleting(id);
     try {
       await api.delete(`/casual-deliveries/${id}`);
@@ -343,6 +351,15 @@ export const StaffCasualDeliveries = () => {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="Delete Record"
+        message="This casual delivery record will be permanently deleted. This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={doDelete}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 };

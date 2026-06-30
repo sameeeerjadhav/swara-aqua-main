@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api, { getUploadUrl } from '../../api/axios';
 import { useToast } from '../../components/ui/Toast';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 interface Banner {
   id: number;
@@ -22,6 +23,7 @@ export const AdminBanners = () => {
   const [banners, setBanners]   = useState<Banner[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
 
   // Upload form state
   const [title,    setTitle]    = useState('');
@@ -81,7 +83,13 @@ export const AdminBanners = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this banner?')) return;
+    setConfirmId(id);
+  };
+
+  const doDelete = async () => {
+    if (confirmId === null) return;
+    const id = confirmId;
+    setConfirmId(null);
     try {
       await api.delete(`/banners/${id}`);
       setBanners(prev => prev.filter(b => b.id !== id));
@@ -268,6 +276,15 @@ export const AdminBanners = () => {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="Delete Banner"
+        message="This banner will be permanently removed from the customer app. This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={doDelete}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 };

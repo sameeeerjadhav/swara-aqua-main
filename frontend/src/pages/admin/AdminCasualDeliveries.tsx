@@ -7,6 +7,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import api from '../../api/axios';
 
 interface CasualDelivery {
@@ -36,6 +37,7 @@ export const AdminCasualDeliveries = () => {
   const [records,    setRecords]    = useState<CasualDelivery[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [deleting,   setDeleting]   = useState<number | null>(null);
+  const [confirmId,  setConfirmId]  = useState<number | null>(null);
   const [startDate,  setStartDate]  = useState('');
   const [endDate,    setEndDate]    = useState('');
   const [staffFilter, setStaffFilter] = useState('');
@@ -55,8 +57,14 @@ export const AdminCasualDeliveries = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this record?')) return;
+  const handleDelete = (id: number) => {
+    setConfirmId(id);
+  };
+
+  const doDelete = async () => {
+    if (confirmId === null) return;
+    const id = confirmId;
+    setConfirmId(null);
     setDeleting(id);
     try {
       await api.delete(`/casual-deliveries/${id}`);
@@ -219,6 +227,15 @@ export const AdminCasualDeliveries = () => {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="Delete Record"
+        message="This casual delivery record will be permanently deleted. This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={doDelete}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 };

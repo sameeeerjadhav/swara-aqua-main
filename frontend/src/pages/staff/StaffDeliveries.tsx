@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Navigation, CheckCircle, X, Package, Phone, User, RefreshCw, Clock, Calendar, CalendarClock, Repeat, Droplets } from 'lucide-react';
+import { MapPin, Navigation, CheckCircle, X, Package, Phone, User, RefreshCw, Clock, Calendar, CalendarClock, Repeat, Droplets, Search } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -33,6 +33,7 @@ export const StaffDeliveries = () => {
     return tab && ['pending','completed','daily','preorder'].includes(tab) ? tab : 'pending';
   });
   const [deliverySuccess, setDeliverySuccess] = useState<{ orderId: number; customer: string; jars: number; amount: number; mode: string } | null>(null);
+  const [search, setSearch] = useState('');
 
   const [deliveryForm, setDeliveryForm] = useState({
     deliveredQuantity: 0,
@@ -157,13 +158,26 @@ export const StaffDeliveries = () => {
   const todayGroups = groupByCustomer(dailyOrdersToday);
   const tomorrowGroups = groupByCustomer(dailyOrdersTomorrow);
 
-  const visibleOrders = activeTab === 'pending'
+  // Client-side search filter (name or phone)
+  const matchesSearch = (o: Order) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (o.customer_name || '').toLowerCase().includes(q) ||
+      (o.customer_phone || '').includes(q)
+    );
+  };
+
+  const visibleOrders = (activeTab === 'pending'
     ? pendingOrders
     : activeTab === 'completed'
     ? completedOrders
     : activeTab === 'preorder'
     ? preOrders
-    : []; // daily tab uses its own render
+    : []).filter(matchesSearch); // daily tab uses its own render
+
+  const filteredTodayGroups    = todayGroups.filter(g => matchesSearch({ customer_name: g.name, customer_phone: g.phone } as Order));
+  const filteredTomorrowGroups = tomorrowGroups.filter(g => matchesSearch({ customer_name: g.name, customer_phone: g.phone } as Order));
 
   const tabCount: Record<FilterTab, number> = {
     pending:   pendingOrders.length,
@@ -279,12 +293,30 @@ export const StaffDeliveries = () => {
         ))}
       </div>
 
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={lang === 'mr' ? 'नाव किंवा फोन शोधा…' : 'Search by name or phone…'}
+          className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all"
+        />
+        {search && (
+          <button onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="space-y-3">{[0,1,2].map(i => <Skeleton key={i} className="h-28 rounded-2xl" />)}</div>
       ) : activeTab === 'daily' ? (
         /* ── Daily Orders: grouped by customer ── */
         <div className="space-y-5">
-          {todayGroups.length === 0 && tomorrowGroups.length === 0 ? (
+          {filteredTodayGroups.length === 0 && filteredTomorrowGroups.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-10 text-center">
               <Repeat className="w-10 h-10 text-slate-300 mx-auto mb-3" />
               <p className="text-sm font-semibold text-slate-600">
@@ -297,25 +329,25 @@ export const StaffDeliveries = () => {
           ) : (
             <>
               {/* Today */}
-              {todayGroups.length > 0 && (
+              {filteredTodayGroups.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" /> {lang === 'mr' ? 'आजच्या योजना डिलिव्हरी' : "Today's Plan Deliveries"}
                   </p>
                   <div className="space-y-3">
-                    {todayGroups.map(g => <DailyCustomerCard key={g.customerId} group={g} onDeliver={openOrder} onNavigate={openMaps} />)}
+                    {filteredTodayGroups.map(g => <DailyCustomerCard key={g.customerId} group={g} onDeliver={openOrder} onNavigate={openMaps} />)}
                   </div>
                 </div>
               )}
 
               {/* Tomorrow */}
-              {tomorrowGroups.length > 0 && (
+              {filteredTomorrowGroups.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5" /> Tomorrow's Upcoming
                   </p>
                   <div className="space-y-3">
-                    {tomorrowGroups.map(g => <DailyCustomerCard key={g.customerId} group={g} onDeliver={openOrder} onNavigate={openMaps} isTomorrow />)}
+                    {filteredTomorrowGroups.map(g => <DailyCustomerCard key={g.customerId} group={g} onDeliver={openOrder} onNavigate={openMaps} isTomorrow />)}
                   </div>
                 </div>
               )}
@@ -324,21 +356,32 @@ export const StaffDeliveries = () => {
         </div>
       ) : visibleOrders.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-10 text-center">
-          {activeTab === 'pending' && <>
-            <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-slate-600">No pending deliveries</p>
-            <p className="text-xs text-slate-400 mt-1">New assignments will appear here automatically.</p>
-          </>}
-          {activeTab === 'completed' && <>
-            <CheckCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-slate-600">No completed orders yet</p>
-            <p className="text-xs text-slate-400 mt-1">Completed deliveries will show here.</p>
-          </>}
-          {activeTab === 'preorder' && <>
-            <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-slate-600">No upcoming pre-orders</p>
-            <p className="text-xs text-slate-400 mt-1">Future scheduled orders will appear here.</p>
-          </>}
+          {search.trim() ? (
+            <>
+              <Search className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-slate-600">No results for &ldquo;{search}&rdquo;</p>
+              <p className="text-xs text-slate-400 mt-1">Try a different name or phone number.</p>
+              <button onClick={() => setSearch('')} className="mt-3 text-xs text-brand-600 font-semibold hover:underline">Clear search</button>
+            </>
+          ) : (
+            <>
+              {activeTab === 'pending' && <>
+                <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-slate-600">No pending deliveries</p>
+                <p className="text-xs text-slate-400 mt-1">New assignments will appear here automatically.</p>
+              </>}
+              {activeTab === 'completed' && <>
+                <CheckCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-slate-600">No completed orders yet</p>
+                <p className="text-xs text-slate-400 mt-1">Completed deliveries will show here.</p>
+              </>}
+              {activeTab === 'preorder' && <>
+                <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-slate-600">No upcoming pre-orders</p>
+                <p className="text-xs text-slate-400 mt-1">Future scheduled orders will appear here.</p>
+              </>}
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

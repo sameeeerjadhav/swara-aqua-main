@@ -383,14 +383,54 @@ export const StaffDeliveries = () => {
             </>
           )}
         </div>
-      ) : (
-        <div className="space-y-3">
-          {visibleOrders.map(o => (
-            <OrderCard key={o.id} order={o} onOpen={['completed','delivered'].includes(o.status) ? viewOrder : openOrder} onNavigate={openMaps}
-              isAssignedToMe={o.staff_id === user?.id} />
-          ))}
-        </div>
-      )}
+      ) : (() => {
+        // ── Group visibleOrders by date ───────────────────────────────────────
+        const todayStr  = new Date().toISOString().split('T')[0];
+        const yestDate  = new Date(); yestDate.setDate(yestDate.getDate() - 1);
+        const yestStr   = yestDate.toISOString().split('T')[0];
+
+        const dateLabel = (iso: string) => {
+          const d = iso.split('T')[0];
+          if (d === todayStr) return lang === 'mr' ? 'आज' : 'Today';
+          if (d === yestStr)  return lang === 'mr' ? 'काल' : 'Yesterday';
+          const dt = new Date(iso);
+          return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: dt.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+        };
+
+        // Build ordered list of [dateKey, orders[]] pairs (most recent first)
+        const groups = new Map<string, Order[]>();
+        for (const o of visibleOrders) {
+          const key = (o.created_at || '').split('T')[0];
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(o);
+        }
+
+        return (
+          <div className="space-y-1">
+            {Array.from(groups.entries()).map(([key, groupOrders]) => (
+              <div key={key}>
+                {/* ── Date divider ── */}
+                <div className="flex items-center gap-3 py-3">
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
+                    {dateLabel(key + 'T00:00:00')}
+                  </span>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+                {/* ── Orders for this date ── */}
+                <div className="space-y-3">
+                  {groupOrders.map(o => (
+                    <OrderCard key={o.id} order={o}
+                      onOpen={['completed','delivered'].includes(o.status) ? viewOrder : openOrder}
+                      onNavigate={openMaps}
+                      isAssignedToMe={o.staff_id === user?.id} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── Delivery Bottom Sheet ── */}
       <AnimatePresence>

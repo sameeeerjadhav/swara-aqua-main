@@ -45,7 +45,7 @@ export const StaffHome = () => {
         ordersApi.list(),
       ]);
       setSummary(sumRes.data);
-      setPending(ordRes.data.orders.filter(o => o.status === 'assigned'));
+      setPending(ordRes.data.orders.filter(o => ['assigned', 'pending'].includes(o.status)));
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, []);
@@ -95,7 +95,7 @@ export const StaffHome = () => {
     },
     {
       label: t('pending', lang),
-      value: summary?.pending_orders ?? 0,
+      value: pending.length,
       icon: Clock,
       from: 'from-purple-500', to: 'to-indigo-400',
       glow: 'rgba(139,92,246,0.35)',

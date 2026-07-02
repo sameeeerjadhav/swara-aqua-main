@@ -9,7 +9,7 @@ import { formatLocalDate } from '../utils/date';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const fmt  = (n: number | string) => `₹ ${Number(n).toFixed(2)}`;
+const fmt  = (n: number | string) => `Rs. ${Number(n).toFixed(2)}`;
 
 const monthLabel = (m: string) => {
   const [y, mo] = m.split('-');
@@ -82,17 +82,17 @@ const getDailyDeliveries = async (customerId: number, month: string): Promise<Da
 // ── Company Details ──────────────────────────────────────────────────────────
 
 const COMPANY = {
-  name:    'Swara Aqua',
+  name:    'Sarvam Enterprises',
   address: 'wagh nagar, Jalgaon',
   phone:   '+91 83800 38838',
   email:   'sarvam.enterprises1234@gmail.com',
   state:   '27-Maharashtra',
-  firm:    'Swara Aqua',
+  firm:    'Sarvam Enterprises',
   bank: {
-    name:    'Union Bank Of India, Jalgaon',
-    account: '174411010000103',
-    ifsc:    'UBIN0817449',
-    holder:  'Swara Aqua',
+    name:    'Maharashtra Gramin Bank, Jalgaon',
+    account: '80103293539',
+    ifsc:    'MAHG0005515',
+    holder:  'Sarvam Enterprises',
   },
 };
 

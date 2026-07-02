@@ -978,12 +978,12 @@ export const getDailySummary = async (req: AuthRequest, res: Response): Promise<
       WHERE staff_id = ? AND DATE(delivered_at) = ? AND status = 'delivered'
     `, [staffId, today]);
 
-    // Pending orders still assigned to this staff
+    // Pending orders visible to this staff (all assigned/pending, same as the pending tab)
     const [pendingRows] = await pool.query<RowDataPacket[]>(`
       SELECT COUNT(*) AS pending_orders
       FROM orders
-      WHERE staff_id = ? AND status IN ('assigned', 'pending')
-    `, [staffId]);
+      WHERE status IN ('assigned', 'pending')
+    `, []);
 
     // Jar inventory
     const [invRows] = await pool.query<RowDataPacket[]>(

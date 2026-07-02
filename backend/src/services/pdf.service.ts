@@ -220,8 +220,8 @@ export const generateBillPDF = async (bill: Bill, res: Response): Promise<void> 
   doc.text('Item Name',   colX.item,     y + 7, { width: colW.item });
   doc.text('HSN/ SAC',    colX.hsn,      y + 7, { width: colW.hsn });
   doc.text('Quantity',    colX.qty,      y + 7, { width: colW.qty,   align: 'center' });
-  doc.text('Price/ Unit', colX.price,    y + 7, { width: colW.price, align: 'right' });
-  doc.text('Amount',      colX.amt,      y + 7, { width: colW.amt,   align: 'right' });
+  doc.text('Price/ Unit', colX.price,    y + 7, { width: colW.price - 6, align: 'right' });
+  doc.text('Amount',      colX.amt,      y + 7, { width: colW.amt   - 6, align: 'right' });
   y += 24;
 
   doc.rect(M, y, IW, 28).strokeColor(C.border).lineWidth(0.5).stroke();
@@ -230,16 +230,16 @@ export const generateBillPDF = async (bill: Bill, res: Response): Promise<void> 
   doc.font('Helvetica-Bold').text('Water Jar Refill', colX.item, y + 9, { width: colW.item });
   doc.font('Helvetica').text('',       colX.hsn,      y + 9, { width: colW.hsn });
   doc.text(String(bill.total_jars),    colX.qty,      y + 9, { width: colW.qty,   align: 'center' });
-  doc.text(`₹ ${Number(bill.jar_rate).toFixed(2)}`, colX.price, y + 9, { width: colW.price, align: 'right' });
+  doc.text(`Rs. ${Number(bill.jar_rate).toFixed(2)}`, colX.price, y + 9, { width: colW.price - 6, align: 'right' });
   doc.font('Helvetica-Bold')
-     .text(`₹ ${Number(bill.subtotal).toFixed(2)}`, colX.amt, y + 9, { width: colW.amt, align: 'right' });
+     .text(`Rs. ${Number(bill.subtotal).toFixed(2)}`, colX.amt, y + 9, { width: colW.amt - 6, align: 'right' });
   y += 28;
 
   doc.rect(M, y, IW, 24).strokeColor(C.border).lineWidth(0.5).stroke();
   doc.fillColor(C.dark).fontSize(9.5).font('Helvetica-Bold');
   doc.text('Total',              colX.item, y + 7, { width: colW.item });
   doc.text(String(bill.total_jars), colX.qty, y + 7, { width: colW.qty, align: 'center' });
-  doc.text(`₹ ${Number(bill.subtotal).toFixed(2)}`, colX.amt, y + 7, { width: colW.amt, align: 'right' });
+  doc.text(`Rs. ${Number(bill.subtotal).toFixed(2)}`, colX.amt, y + 7, { width: colW.amt - 6, align: 'right' });
   y += 24;
 
   // ═════════════════════════════════════════════════════════════════════════════
@@ -260,11 +260,11 @@ export const generateBillPDF = async (bill: Bill, res: Response): Promise<void> 
 
   const pbRowH = 20;
   const pbRows: { label: string; value: string; bold?: boolean; dark?: boolean }[] = [
-    { label: 'Paid by Cash',    value: `₹ ${cashPaid.toFixed(2)}`   },
-    { label: 'Paid by Online',  value: `₹ ${onlinePaid.toFixed(2)}` },
-    { label: 'Paid by Advance', value: `₹ ${advancePaid.toFixed(2)}` },
-    { label: 'Total Paid',      value: `₹ ${totalPaid.toFixed(2)}`,   bold: true },
-    { label: 'Amount Due',      value: `₹ ${amtDue.toFixed(2)}`,      bold: true, dark: amtDue > 0 },
+    { label: 'Paid by Cash',    value: `Rs. ${cashPaid.toFixed(2)}`   },
+    { label: 'Paid by Online',  value: `Rs. ${onlinePaid.toFixed(2)}` },
+    { label: 'Paid by Advance', value: `Rs. ${advancePaid.toFixed(2)}` },
+    { label: 'Total Paid',      value: `Rs. ${totalPaid.toFixed(2)}`,   bold: true },
+    { label: 'Amount Due',      value: `Rs. ${amtDue.toFixed(2)}`,      bold: true, dark: amtDue > 0 },
   ];
 
   const halfW = IW / 2;
@@ -296,11 +296,11 @@ export const generateBillPDF = async (bill: Bill, res: Response): Promise<void> 
      .text(numberToWords(Number(bill.total_amount)), M, y, { width: leftColW - 20 });
 
   const summaryRows = [
-    { label: 'Sub Total',    value: `₹ ${Number(bill.subtotal).toFixed(2)}`,     highlight: false },
-    { label: 'Total',        value: `₹ ${Number(bill.total_amount).toFixed(2)}`, highlight: true  },
-    { label: 'Received',     value: `₹ ${Number(bill.paid_amount).toFixed(2)}`,  highlight: false },
-    { label: 'Balance',      value: `₹ ${due.toFixed(2)}`,                       highlight: false },
-    { label: 'Payment Mode', value: due > 0 ? 'Credit' : 'Paid',                highlight: false },
+    { label: 'Sub Total',    value: `Rs. ${Number(bill.subtotal).toFixed(2)}`,     highlight: false },
+    { label: 'Total',        value: `Rs. ${Number(bill.total_amount).toFixed(2)}`, highlight: true  },
+    { label: 'Received',     value: `Rs. ${Number(bill.paid_amount).toFixed(2)}`,  highlight: false },
+    { label: 'Balance',      value: `Rs. ${due.toFixed(2)}`,                       highlight: false },
+    { label: 'Payment Mode', value: due > 0 ? 'Credit' : 'Paid',                  highlight: false },
   ];
 
   let ssy = wordsY - 14;
@@ -514,8 +514,8 @@ export const generateReportPDF = async (data: ReportData, res: Response): Promis
   doc.text('Item Name',   colX.item,     y + 7, { width: colW.item });
   doc.text('HSN/ SAC',    colX.hsn,      y + 7, { width: colW.hsn });
   doc.text('Quantity',    colX.qty,      y + 7, { width: colW.qty,   align: 'center' });
-  doc.text('Price/ Unit', colX.price,    y + 7, { width: colW.price, align: 'right' });
-  doc.text('Amount',      colX.amt,      y + 7, { width: colW.amt,   align: 'right' });
+  doc.text('Price/ Unit', colX.price,    y + 7, { width: colW.price - 6, align: 'right' });
+  doc.text('Amount',      colX.amt,      y + 7, { width: colW.amt   - 6, align: 'right' });
   y += 24;
 
   doc.rect(M, y, IW, 28).strokeColor(C.border).lineWidth(0.5).stroke();
@@ -524,15 +524,15 @@ export const generateReportPDF = async (data: ReportData, res: Response): Promis
   doc.font('Helvetica-Bold').text('Water Jar Refill', colX.item, y + 9, { width: colW.item });
   doc.font('Helvetica').text('', colX.hsn, y + 9, { width: colW.hsn });
   doc.text(String(data.totalJars), colX.qty, y + 9, { width: colW.qty, align: 'center' });
-  doc.text(`₹ ${data.jarRate.toFixed(2)}`, colX.price, y + 9, { width: colW.price, align: 'right' });
-  doc.font('Helvetica-Bold').text(`₹ ${data.totalAmount.toFixed(2)}`, colX.amt, y + 9, { width: colW.amt, align: 'right' });
+  doc.text(`Rs. ${data.jarRate.toFixed(2)}`, colX.price, y + 9, { width: colW.price - 6, align: 'right' });
+  doc.font('Helvetica-Bold').text(`Rs. ${data.totalAmount.toFixed(2)}`, colX.amt, y + 9, { width: colW.amt - 6, align: 'right' });
   y += 28;
 
   doc.rect(M, y, IW, 24).strokeColor(C.border).lineWidth(0.5).stroke();
   doc.fillColor(C.dark).fontSize(9.5).font('Helvetica-Bold');
   doc.text('Total',                   colX.item, y + 7, { width: colW.item });
   doc.text(String(data.totalJars),    colX.qty,  y + 7, { width: colW.qty, align: 'center' });
-  doc.text(`₹ ${data.totalAmount.toFixed(2)}`, colX.amt, y + 7, { width: colW.amt, align: 'right' });
+  doc.text(`Rs. ${data.totalAmount.toFixed(2)}`, colX.amt, y + 7, { width: colW.amt - 6, align: 'right' });
   y += 24;
 
   // ═══ PAYMENT BREAKDOWN ══════════════════════════════════════════════════════
@@ -545,11 +545,11 @@ export const generateReportPDF = async (data: ReportData, res: Response): Promis
   const pbRowH = 20;
   const halfW  = IW / 2;
   const pbRows: { label: string; value: string; bold?: boolean; dark?: boolean }[] = [
-    { label: 'Paid by Cash',    value: `₹ ${(data.cashPaid    || 0).toFixed(2)}` },
-    { label: 'Paid by Online',  value: `₹ ${(data.onlinePaid  || 0).toFixed(2)}` },
-    { label: 'Paid by Advance', value: `₹ ${(data.advancePaid || 0).toFixed(2)}` },
-    { label: 'Total Paid',      value: `₹ ${(data.totalPaid   || 0).toFixed(2)}`,   bold: true },
-    { label: 'Amount Due',      value: `₹ ${(data.amountDue   || 0).toFixed(2)}`,   bold: true, dark: (data.amountDue || 0) > 0 },
+    { label: 'Paid by Cash',    value: `Rs. ${(data.cashPaid    || 0).toFixed(2)}` },
+    { label: 'Paid by Online',  value: `Rs. ${(data.onlinePaid  || 0).toFixed(2)}` },
+    { label: 'Paid by Advance', value: `Rs. ${(data.advancePaid || 0).toFixed(2)}` },
+    { label: 'Total Paid',      value: `Rs. ${(data.totalPaid   || 0).toFixed(2)}`,   bold: true },
+    { label: 'Amount Due',      value: `Rs. ${(data.amountDue   || 0).toFixed(2)}`,   bold: true, dark: (data.amountDue || 0) > 0 },
   ];
 
   pbRows.forEach(({ label, value, bold, dark }) => {
@@ -578,8 +578,8 @@ export const generateReportPDF = async (data: ReportData, res: Response): Promis
      .text(numberToWords(data.totalAmount), M, y, { width: leftColW - 20 });
 
   const summaryRows = [
-    { label: 'Sub Total', value: `₹ ${data.totalAmount.toFixed(2)}`, highlight: false },
-    { label: 'Total',     value: `₹ ${data.totalAmount.toFixed(2)}`, highlight: true  },
+    { label: 'Sub Total', value: `Rs. ${data.totalAmount.toFixed(2)}`, highlight: false },
+    { label: 'Total',     value: `Rs. ${data.totalAmount.toFixed(2)}`, highlight: true  },
   ];
 
   let ssy = wordsY - 14;

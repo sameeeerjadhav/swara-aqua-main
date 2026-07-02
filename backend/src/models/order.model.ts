@@ -316,10 +316,10 @@ export const addTimeline = async (
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 export const getOrderStats = async (): Promise<RowDataPacket> => {
+  // Monthly totals (revenue, completed, etc. scoped to current month)
   const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT
       COUNT(*)                                                                          AS total,
-      SUM(status IN ('pending', 'assigned'))                                            AS pending,
       SUM(status IN ('completed', 'delivered'))                                         AS completed,
       SUM(status = 'cancelled')                                                         AS cancelled,
       COALESCE(SUM(CASE WHEN status IN ('completed','delivered') THEN total_amount END), 0) AS total_revenue,
@@ -327,5 +327,13 @@ export const getOrderStats = async (): Promise<RowDataPacket> => {
     FROM orders
     WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')
   `);
-  return rows[0];
+
+  // Pending is ALL-TIME: an order placed in June is still pending until delivered
+  const [pendingRows] = await pool.query<RowDataPacket[]>(`
+    SELECT COUNT(*) AS pending
+    FROM orders
+    WHERE status IN ('pending', 'assigned')
+  `);
+
+  return { ...rows[0], pending: Number(pendingRows[0].pending) };
 };

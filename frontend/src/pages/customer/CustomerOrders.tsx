@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Package, X, ChevronRight, MapPin, FileText, Droplets, RefreshCw, Navigation, Home, Briefcase, Check, Map, CreditCard } from 'lucide-react';
+import { Plus, Package, X, ChevronRight, MapPin, FileText, Droplets, RefreshCw, Navigation, Home, Briefcase, Check, Map, CreditCard, Phone } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
@@ -699,6 +699,27 @@ export const CustomerOrders = () => {
                     {!isCancelled && <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-500 transition-colors" />}
                   </div>
                 </div>
+
+                {/* Delivery Agent / Staff Info */}
+                {order.staff_name && !isCancelled && (
+                  <div className="mt-3 pt-3 border-t border-slate-50 flex items-center justify-between" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                        <span className="text-sm">👤</span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Delivery Agent</p>
+                        <p className="text-xs font-semibold text-slate-800">{order.staff_name}</p>
+                      </div>
+                    </div>
+                    {order.staff_phone && (
+                      <a href={`tel:+91${order.staff_phone}`} className="flex items-center gap-1.5 bg-brand-50 text-brand-700 px-3 py-1.5 rounded-full hover:bg-brand-100 active:scale-95 transition-all">
+                        <Phone className="w-3.5 h-3.5" />
+                        <span className="text-[11px] font-bold">Call</span>
+                      </a>
+                    )}
+                  </div>
+                )}
 
                 {/* Pay Now / Paid indicator — only for non-cancelled, non-pending-request orders */}
                 {!isCancelled && !hasPendingRequest && (

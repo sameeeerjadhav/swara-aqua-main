@@ -23,6 +23,7 @@ export interface Order {
   customer_name?: string;
   customer_phone?: string;
   staff_name?: string;
+  staff_phone?: string;
   paid_online?: boolean;  // true if a completed online payment exists in transactions
   cancel_request_id?: number | null;
   cancel_request_status?: 'pending' | 'approved' | 'rejected' | null;
@@ -51,6 +52,7 @@ const orderQuery = (where: string, suffix = '') => `
     c.name  AS customer_name,
     c.phone AS customer_phone,
     s.name  AS staff_name,
+    s.phone AS staff_phone,
     CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END AS paid_online,
     cr.id         AS cancel_request_id,
     cr.status     AS cancel_request_status,
@@ -123,6 +125,7 @@ export const getOrdersByStaff = async (staffId: number): Promise<Order[]> => {
       c.name  AS customer_name,
       c.phone AS customer_phone,
       s.name  AS staff_name,
+      s.phone AS staff_phone,
       CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END AS paid_online
     FROM orders o
     JOIN  users c ON c.id = o.customer_id

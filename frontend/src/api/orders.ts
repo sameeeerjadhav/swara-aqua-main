@@ -19,7 +19,9 @@ export interface Order {
   customer_name?: string;
   customer_phone?: string;
   staff_name?: string;
+  staff_phone?: string;
   paid_online?: boolean; // true if a completed online payment exists
+  cancel_request_status?: string | null;
 }
 
 export interface Delivery {

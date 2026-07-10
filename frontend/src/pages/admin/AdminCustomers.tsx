@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered, KeyRound } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -166,10 +166,26 @@ export const AdminCustomers = () => {
   const [payLaterMap, setPayLaterMap] = useState<Record<number, number>>({});
   const [totalPayLater, setTotalPayLater] = useState(0);
 
-  // Add Customer modal
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [addingCustomer, setAddingCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', password: '', jarRate: '50', address: '' });
+
+  // Password reset
+  const [resettingPwdId, setResettingPwdId] = useState<number | null>(null);
+  const [tempPwdResult, setTempPwdResult] = useState<{ name: string; phone: string; pwd: string } | null>(null);
+
+  const handleResetPassword = async (u: CustomerRow) => {
+    setResettingPwdId(u.id);
+    try {
+      const { data } = await api.post(`/admin/users/${u.id}/reset-password`);
+      setTempPwdResult({ name: u.name, phone: u.phone, pwd: data.tempPassword });
+      setSelectedCustomer(null);
+    } catch {
+      toast('Failed to reset password', 'error');
+    } finally {
+      setResettingPwdId(null);
+    }
+  };
 
   // Place Order for customer modal
   const [orderForCustomer, setOrderForCustomer] = useState<CustomerRow | null>(null);
@@ -630,6 +646,13 @@ export const AdminCustomers = () => {
                           </Button>
                         )}
                         <Button variant="ghost" size="sm"
+                          icon={<KeyRound className="w-3.5 h-3.5 text-amber-500" />}
+                          loading={resettingPwdId === u.id}
+                          onClick={() => handleResetPassword(u)}
+                          className="text-amber-600 hover:bg-amber-50">
+                          Reset Pwd
+                        </Button>
+                        <Button variant="ghost" size="sm"
                           icon={<Trash2 className="w-3.5 h-3.5 text-red-500" />}
                           onClick={() => setDeleteTarget(u)}
                           className="text-red-600 hover:bg-red-50">
@@ -894,6 +917,13 @@ export const AdminCustomers = () => {
                         <XCircle className="w-4 h-4" /> Reject Customer
                       </button>
                     )}
+                    {/* Reset Password */}
+                    <button
+                      onClick={() => handleResetPassword(selectedCustomer)}
+                      disabled={resettingPwdId === selectedCustomer.id}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 text-amber-700 text-sm font-semibold rounded-2xl border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-50">
+                      <KeyRound className="w-4 h-4" /> {resettingPwdId === selectedCustomer.id ? 'Resetting…' : 'Reset Password'}
+                    </button>
                     {/* Delete */}
                     <button
                       onClick={() => { setDeleteTarget(selectedCustomer); setSelectedCustomer(null); }}
@@ -903,6 +933,54 @@ export const AdminCustomers = () => {
                   </div>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
+      {/* -- Temp Password Result Modal -- */}
+      <AnimatePresence>
+        {tempPwdResult && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setTempPwdResult(null)}>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <KeyRound className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Password Reset Done!</h3>
+                  <p className="text-xs text-slate-400">Share this with the customer verbally</p>
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5 space-y-3">
+                <div>
+                  <p className="text-[11px] text-amber-600 font-bold uppercase tracking-wide mb-1">Customer</p>
+                  <p className="text-sm font-semibold text-slate-800">{tempPwdResult.name} &mdash; {tempPwdResult.phone}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-amber-600 font-bold uppercase tracking-wide mb-1">Temporary Password</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-extrabold text-slate-900 tracking-widest font-mono">{tempPwdResult.pwd}</span>
+                    <button onClick={() => navigator.clipboard.writeText(tempPwdResult!.pwd).catch(() => {})}
+                      className="p-1.5 rounded-lg hover:bg-amber-100 transition-colors">
+                      <Copy className="w-4 h-4 text-amber-600" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mb-5 text-center leading-relaxed">
+                Tell the customer to log in with this password, then change it from their profile settings.
+              </p>
+              <Button variant="primary" size="md" className="w-full" onClick={() => setTempPwdResult(null)}>
+                Done
+              </Button>
             </motion.div>
           </motion.div>
         )}

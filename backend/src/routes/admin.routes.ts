@@ -7,6 +7,7 @@ import {
   updateUserProfile, deleteUser,
   getCustomerOrder, saveCustomerOrder,
   getStaffCustomerOrder, saveStaffCustomerOrder, resetStaffCustomerOrder,
+  resetUserPassword,
 } from '../controllers/admin.controller';
 import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
@@ -22,6 +23,7 @@ router.patch('/users/:id/jar-rate', ...allowAdmin, updateJarRate);
 router.patch('/users/:id/profile',  ...allowAdmin, updateUserProfile);   // ← NEW: admin edit any user
 router.delete('/users/:id',         ...allowAdmin, deleteUser);           // ← NEW: soft delete user
 router.post('/users/:id/photo',   ...allowAdmin, photoUpload.single('photo'), uploadCustomerPhoto);
+router.post('/users/:id/reset-password', ...allowAdmin, resetUserPassword);    // ← Reset password
 router.post('/staff',             ...allowAdmin, createStaff);
 router.post('/customer',          ...allowAdmin, createCustomer);
 router.post('/orders',            ...allowAdmin, createOrderForCustomer);

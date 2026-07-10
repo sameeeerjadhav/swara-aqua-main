@@ -869,3 +869,26 @@ export const resetStaffCustomerOrder = async (req: AuthRequest, res: Response): 
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+// POST /admin/users/:id/reset-password
+// Admin resets any user's password to a temp password: aqua + zero-padded userId
+export const resetUserPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = Number(req.params.id);
+    if (isNaN(userId)) { res.status(400).json({ message: 'Invalid user id' }); return; }
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, name FROM users WHERE id = ? AND deleted_at IS NULL',
+      [userId]
+    );
+    if (!(rows as any[]).length) { res.status(404).json({ message: 'User not found' }); return; }
+    const user = (rows as any[])[0];
+    const tempPassword = 'aqua' + String(userId).padStart(4, '0');
+    const hashed = await bcrypt.hash(tempPassword, 12);
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashed, userId]);
+    notify(() => NotifService.sendToUser({ userId, title: 'Password Reset', body: 'Your password was reset. Temp password: ' + tempPassword, type: 'general', data: {} }));
+    res.json({ message: 'Password reset for ' + user.name, tempPassword });
+  } catch (err) {
+    console.error('resetUserPassword error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Phone, Lock, Droplets, ArrowRight } from 'lucide-react';
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   if (user) { return <Navigate to={`/${user.role}`} replace />; }
 
@@ -131,7 +132,27 @@ export default function LoginPage() {
             <Button type="submit" loading={loading} size="lg" className="w-full mt-2" icon={<ArrowRight className="w-4 h-4" />}>
               Sign In
             </Button>
+            {/* Forgot Password */}
+            <div className="text-center pt-1">
+              <button type="button" onClick={() => setShowForgot(f => !f)}
+                className="text-sm text-slate-400 hover:text-brand-600 transition-colors hover:underline underline-offset-2">
+                Forgot your password?
+              </button>
+            </div>
           </form>
+          {showForgot && (
+            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+              className="mt-4 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-4">
+              <p className="text-sm font-semibold text-blue-800 mb-1">Need a password reset?</p>
+              <p className="text-xs text-blue-600 mb-3 leading-relaxed">
+                Contact Swara Aqua support. Admin will reset your password and give you a temporary one over the phone.
+              </p>
+              <a href="tel:+919999999999"
+                className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-bold px-4 py-2.5 rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-sm">
+                <Phone className="w-4 h-4" /> Call Support
+              </a>
+            </motion.div>
+          )}
 
           <div className="mt-6 pt-6 border-t border-slate-100">
             <InstallAppButton />

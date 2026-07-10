@@ -8,6 +8,7 @@ import {
   getCustomerOrder, saveCustomerOrder,
   getStaffCustomerOrder, saveStaffCustomerOrder, resetStaffCustomerOrder,
   resetUserPassword,
+  getPasswordResetRequests, approvePasswordReset, rejectPasswordReset,
 } from '../controllers/admin.controller';
 import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
@@ -44,5 +45,10 @@ router.delete('/staff/customer-order', authenticate, resetStaffCustomerOrder); /
 router.get('/firebase/status',    ...allowAdmin, getFirebaseStatus);
 router.post('/firebase/upload',   ...allowAdmin, uploadCredentials);
 router.post('/firebase/reload',   ...allowAdmin, reloadCredentials);
+
+// Password reset requests
+router.get('/password-reset-requests',            ...allowAdmin, getPasswordResetRequests);
+router.post('/password-reset-requests/:id/approve', ...allowAdmin, approvePasswordReset);
+router.delete('/password-reset-requests/:id',      ...allowAdmin, rejectPasswordReset);
 
 export default router;

@@ -892,3 +892,71 @@ export const resetUserPassword = async (req: AuthRequest, res: Response): Promis
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };
+
+// GET /admin/password-reset-requests
+export const getPasswordResetRequests = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT pr.id, pr.user_id, pr.status, pr.created_at,
+             u.name AS user_name, u.phone AS user_phone
+      FROM password_reset_requests pr
+      JOIN users u ON u.id = pr.user_id
+      WHERE pr.status = 'pending'
+      ORDER BY pr.created_at DESC
+    `);
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error('getPasswordResetRequests error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// POST /admin/password-reset-requests/:id/approve
+export const approvePasswordReset = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = Number(req.params.id);
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM password_reset_requests WHERE id = ? AND status = ?', [id, 'pending']
+    );
+    if (!(rows as any[]).length) { res.status(404).json({ message: 'Request not found or already processed' }); return; }
+    const reqRow = (rows as any[])[0];
+
+    // Set the new (already bcrypt-hashed) password
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [reqRow.new_password, reqRow.user_id]);
+    await pool.query(
+      'UPDATE password_reset_requests SET status = ?, reviewed_at = NOW() WHERE id = ?',
+      ['approved', id]
+    );
+
+    // Notify the customer
+    notify(() =>
+      NotifService.sendToUser({
+        userId: reqRow.user_id,
+        title: 'Password Updated ✅',
+        body: 'Your password reset request has been approved. You can now log in with your new password.',
+        type: 'general',
+        data: {},
+      })
+    );
+
+    res.json({ message: 'Password reset approved and applied' });
+  } catch (err) {
+    console.error('approvePasswordReset error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// DELETE /admin/password-reset-requests/:id  (reject)
+export const rejectPasswordReset = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = Number(req.params.id);
+    await pool.query(
+      'UPDATE password_reset_requests SET status = ?, reviewed_at = NOW() WHERE id = ? AND status = ?',
+      ['rejected', id, 'pending']
+    );
+    res.json({ message: 'Password reset request rejected' });
+  } catch (err) {
+    console.error('rejectPasswordReset error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

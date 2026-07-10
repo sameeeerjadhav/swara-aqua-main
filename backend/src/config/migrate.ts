@@ -433,7 +433,21 @@ export const runMigrations = async (): Promise<void> => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
-    console.log('✅ Migrations complete');  } catch (err) {
+    
+    // -- password_reset_requests (for forgot-password flow) --
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_requests (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        user_id      INT NOT NULL,
+        new_password VARCHAR(255) NOT NULL,
+        status       ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reviewed_at  TIMESTAMP NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+console.log('✅ Migrations complete');  } catch (err) {
     console.error('❌ Migration error:', (err as Error).message);
     // Don't crash the server — log and continue
   } finally {

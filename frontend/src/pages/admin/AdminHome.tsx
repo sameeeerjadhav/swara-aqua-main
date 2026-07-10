@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Package, TrendingUp, Clock, ChevronRight,
   XCircle, IndianRupee, AlertCircle,
-  BarChart3, Bell, UserRound, Wallet, Banknote,
+  BarChart3, Bell, UserRound, Wallet, Banknote, KeyRound, CheckCircle, X,
 } from 'lucide-react';
 
 import { StatCardSkeleton } from '../../components/ui/Skeleton';
@@ -65,6 +65,8 @@ export const AdminHome = () => {
   const [orderStats,   setOrderStats]   = useState<OrderStats | null>(null);
   const [pendingCash,  setPendingCash]  = useState(0);
   const [expandedQR,   setExpandedQR]   = useState<{ src: string; label: string } | null>(null);
+  const [pwdResetRequests, setPwdResetRequests] = useState<{ id: number; user_name: string; user_phone: string; created_at: string }[]>([]);
+  const [pwdActionId, setPwdActionId] = useState<number | null>(null);
   const loading = !userStats || !orderStats;
 
   const loadStats = () => {
@@ -73,6 +75,10 @@ export const AdminHome = () => {
     // Load pending cash submissions count
     inventoryApi.getCashSubmissions()
       .then(({ data }) => setPendingCash(data.submissions.filter((s: { status: string }) => s.status === 'pending').length))
+      .catch(() => {});
+    // Load password reset requests
+    api.get('/admin/password-reset-requests')
+      .then(({ data }) => setPwdResetRequests(data.requests))
       .catch(() => {});
   };
 
@@ -117,6 +123,64 @@ export const AdminHome = () => {
           </div>
           <ChevronRight className="w-4 h-4 text-amber-500 shrink-0" />
         </motion.button>
+      )}
+
+      {/* ── Password Reset Requests Banner ── */}
+      {pwdResetRequests.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-card">
+          <div className="flex items-center gap-3 px-4 py-3 bg-violet-50 border-b border-violet-100">
+            <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+              <KeyRound className="w-4 h-4 text-violet-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-violet-800">
+                {pwdResetRequests.length} Password Reset Request{pwdResetRequests.length > 1 ? 's' : ''}
+              </p>
+              <p className="text-xs text-violet-500">Approve to apply the customer's new password</p>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {pwdResetRequests.map(r => (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{r.user_name}</p>
+                  <p className="text-xs text-slate-400">{r.user_phone} &middot; {new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    disabled={pwdActionId === r.id}
+                    onClick={async () => {
+                      setPwdActionId(r.id);
+                      try {
+                        await api.post(`/admin/password-reset-requests/${r.id}/approve`);
+                        setPwdResetRequests(prev => prev.filter(x => x.id !== r.id));
+                        toast(`Password updated for ${r.user_name}`, 'success');
+                      } catch { toast('Failed to approve request', 'error'); }
+                      finally { setPwdActionId(null); }
+                    }}
+                    className="flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-green-100 transition-colors disabled:opacity-50">
+                    <CheckCircle className="w-3.5 h-3.5" /> Approve
+                  </button>
+                  <button
+                    disabled={pwdActionId === r.id}
+                    onClick={async () => {
+                      setPwdActionId(r.id);
+                      try {
+                        await api.delete(`/admin/password-reset-requests/${r.id}`);
+                        setPwdResetRequests(prev => prev.filter(x => x.id !== r.id));
+                        toast(`Request rejected`, 'success');
+                      } catch { toast('Failed to reject request', 'error'); }
+                      finally { setPwdActionId(null); }
+                    }}
+                    className="flex items-center gap-1 bg-red-50 text-red-600 border border-red-200 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-red-100 transition-colors disabled:opacity-50">
+                    <X className="w-3.5 h-3.5" /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       )}
 
       {/* ── Revenue hero ── */}

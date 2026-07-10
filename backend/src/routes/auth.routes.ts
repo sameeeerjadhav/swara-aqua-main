@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { signup, login, getMe, refreshToken, changePassword, updateProfile } from '../controllers/auth.controller';
+import { signup, login, getMe, refreshToken, changePassword, updateProfile, forgotPassword } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { upload, uploadMyPhoto } from '../controllers/photo.controller';
 
@@ -32,6 +32,7 @@ router.post('/refresh', refreshLimiter, refreshToken);
 router.post('/change-password', authenticate, changePassword);
 router.patch('/profile', authenticate, updateProfile);
 router.post('/profile-photo', authenticate, upload.single('photo'), uploadMyPhoto);
+router.post('/forgot-password', authLimiter, forgotPassword);  // ← public: customer submits reset request
 
 export default router;
 

@@ -248,3 +248,63 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+// POST /auth/forgot-password -- public endpoint
+// Customer submits phone + desired new password; stored pending for admin approval
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone, newPassword } = req.body;
+    if (!phone || !newPassword) {
+      res.status(400).json({ message: 'Phone and new password are required' }); return;
+    }
+    if (newPassword.length < 6) {
+      res.status(400).json({ message: 'New password must be at least 6 characters' }); return;
+    }
+
+    const pool = (await import('../config/db')).default;
+    const [rows] = await pool.query<any[]>(
+      'SELECT id, name, role FROM users WHERE phone = ? AND deleted_at IS NULL',
+      [String(phone).replace(/[\s\-]/g, '')]
+    );
+    if (!(rows as any[]).length) {
+      // Generic message to avoid phone enumeration
+      res.json({ message: 'If this number is registered, your request has been submitted to the admin.' }); return;
+    }
+    const user = (rows as any[])[0];
+
+    // Only customers can request password reset this way; admins/staff use the admin panel
+    if (user.role !== 'customer') {
+      res.json({ message: 'If this number is registered, your request has been submitted to the admin.' }); return;
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+
+    // Cancel any previous pending requests for this user
+    await pool.query(
+      'UPDATE password_reset_requests SET status = ? WHERE user_id = ? AND status = ?',
+      ['rejected', user.id, 'pending']
+    );
+
+    // Insert new request
+    await pool.query(
+      'INSERT INTO password_reset_requests (user_id, new_password) VALUES (?, ?)',
+      [user.id, hashed]
+    );
+
+    // Notify admin
+    notify(() =>
+      NotifService.sendToRole(
+        'admin',
+        'Password Reset Request',
+        user.name + ' (' + phone + ') has requested a password reset. Please review in the admin panel.',
+        'approval',
+        { userId: String(user.id) }
+      )
+    );
+
+    res.json({ message: 'Your password reset request has been submitted. The admin will review and update your password.' });
+  } catch (err) {
+    console.error('forgotPassword error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

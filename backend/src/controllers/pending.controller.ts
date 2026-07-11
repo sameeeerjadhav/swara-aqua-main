@@ -35,8 +35,24 @@ export const getMyPending = async (req: AuthRequest, res: Response): Promise<voi
       [customerId]
     );
 
+    // Add unbilled unpaid manual delivery amounts (jars × jar_rate) for months not yet billed
+    const [[manualRow]] = await pool.query<RowDataPacket[]>(
+      `SELECT COALESCE(SUM(m.jars * u.jar_rate), 0) AS manual_unpaid
+       FROM manual_delivery_entries m
+       JOIN users u ON u.id = m.customer_id
+       WHERE m.customer_id = ?
+         AND m.is_paid = 0
+         AND DATE_FORMAT(m.delivery_date, '%Y-%m') NOT IN (
+           SELECT month FROM bills WHERE customer_id = ?
+         )`,
+      [customerId, customerId]
+    );
+
+    const basePending  = Number(user?.pending_balance ?? 0);
+    const manualUnpaid = Number(manualRow?.manual_unpaid ?? 0);
+
     res.json({
-      pending_balance: Number(user?.pending_balance ?? 0),
+      pending_balance: basePending + manualUnpaid,
       items,
     });
   } catch (err) {

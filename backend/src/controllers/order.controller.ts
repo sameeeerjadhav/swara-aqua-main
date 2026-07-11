@@ -885,18 +885,36 @@ export const getCalendarData = async (req: AuthRequest, res: Response): Promise<
 
     const [rows] = await pool.query<RowDataPacket[]>(`
       SELECT
-        DATE_FORMAT(d.delivered_at, '%Y-%m-%d')    AS date,
-        SUM(d.delivered_quantity)                   AS jars_delivered,
-        COUNT(DISTINCT d.order_id)                 AS orders_count,
-        SUM(d.collected_amount)                    AS total_amount
-      FROM deliveries d
-      JOIN orders o ON o.id = d.order_id
-      WHERE o.customer_id = ?
-        AND DATE_FORMAT(d.delivered_at, '%Y-%m') = ?
-        AND d.status = 'delivered'
-      GROUP BY DATE_FORMAT(d.delivered_at, '%Y-%m-%d')
+        date,
+        SUM(jars_delivered) AS jars_delivered,
+        SUM(orders_count)   AS orders_count,
+        SUM(total_amount)   AS total_amount
+      FROM (
+        SELECT
+          DATE_FORMAT(d.delivered_at, '%Y-%m-%d') AS date,
+          SUM(d.delivered_quantity)               AS jars_delivered,
+          COUNT(DISTINCT d.order_id)              AS orders_count,
+          SUM(d.collected_amount)                 AS total_amount
+        FROM deliveries d
+        JOIN orders o ON o.id = d.order_id
+        WHERE o.customer_id = ?
+          AND DATE_FORMAT(d.delivered_at, '%Y-%m') = ?
+          AND d.status = 'delivered'
+        GROUP BY DATE_FORMAT(d.delivered_at, '%Y-%m-%d')
+        UNION ALL
+        SELECT
+          DATE_FORMAT(m.delivery_date, '%Y-%m-%d') AS date,
+          SUM(m.jars)                              AS jars_delivered,
+          0                                        AS orders_count,
+          SUM(m.amount_collected)                  AS total_amount
+        FROM manual_delivery_entries m
+        WHERE m.customer_id = ?
+          AND DATE_FORMAT(m.delivery_date, '%Y-%m') = ?
+        GROUP BY DATE_FORMAT(m.delivery_date, '%Y-%m-%d')
+      ) combined
+      GROUP BY date
       ORDER BY date ASC
-    `, [targetCustomerId, month]);
+    `, [targetCustomerId, month, targetCustomerId, month]);
 
     res.json({ days: rows });
   } catch (err) {
@@ -926,30 +944,56 @@ export const getCalendarDayDetail = async (req: AuthRequest, res: Response): Pro
     }
 
     const [rows] = await pool.query<RowDataPacket[]>(`
-      SELECT
-        d.id,
-        d.delivered_quantity                                AS jars,
-        TIME_FORMAT(COALESCE(d.delivered_at, d.created_at), '%h:%i %p') AS time_str,
-        HOUR(COALESCE(d.delivered_at, d.created_at))        AS hour,
-        u.name                                              AS staff_name
-      FROM deliveries d
-      JOIN orders o     ON o.id  = d.order_id
-      LEFT JOIN users u ON u.id  = d.staff_id
-      WHERE o.customer_id = ?
-        AND DATE(COALESCE(d.delivered_at, d.created_at)) = ?
-        AND d.status = 'delivered'
-      ORDER BY COALESCE(d.delivered_at, d.created_at) ASC
-    `, [targetCustomerId, date]);
+      SELECT id, jars, time_str, hour, staff_name, amount_collected, is_paid, is_manual, notes
+      FROM (
+        SELECT
+          d.id,
+          d.delivered_quantity                                AS jars,
+          TIME_FORMAT(COALESCE(d.delivered_at, d.created_at), '%h:%i %p') AS time_str,
+          HOUR(COALESCE(d.delivered_at, d.created_at))        AS hour,
+          u.name                                              AS staff_name,
+          d.collected_amount                                  AS amount_collected,
+          CASE WHEN d.collected_amount > 0 THEN 1 ELSE 0 END  AS is_paid,
+          0                                                   AS is_manual,
+          NULL                                                AS notes
+        FROM deliveries d
+        JOIN orders o     ON o.id  = d.order_id
+        LEFT JOIN users u ON u.id  = d.staff_id
+        WHERE o.customer_id = ?
+          AND DATE(COALESCE(d.delivered_at, d.created_at)) = ?
+          AND d.status = 'delivered'
+        UNION ALL
+        SELECT
+          m.id,
+          m.jars,
+          TIME_FORMAT(ADDTIME(m.delivery_date, m.delivery_time), '%h:%i %p') AS time_str,
+          HOUR(m.delivery_time)                               AS hour,
+          u2.name                                             AS staff_name,
+          m.amount_collected,
+          m.is_paid,
+          1                                                   AS is_manual,
+          m.notes
+        FROM manual_delivery_entries m
+        LEFT JOIN users u2 ON u2.id = m.admin_id
+        WHERE m.customer_id = ?
+          AND m.delivery_date = ?
+      ) combined
+      ORDER BY hour ASC, time_str ASC
+    `, [targetCustomerId, date, targetCustomerId, date]);
 
     const deliveries = rows.map((r: RowDataPacket) => {
       const h = Number(r.hour);
       const period = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
       return {
-        id: r.id,
-        jars: Number(r.jars),
-        time: r.time_str,
+        id:               r.id,
+        jars:             Number(r.jars),
+        time:             r.time_str,
         period,
-        staff_name: r.staff_name || 'Unknown',
+        staff_name:       r.staff_name || 'Admin',
+        amount_collected: Number(r.amount_collected),
+        is_paid:          Boolean(r.is_paid),
+        is_manual:        Boolean(r.is_manual),
+        notes:            r.notes || null,
       };
     });
 

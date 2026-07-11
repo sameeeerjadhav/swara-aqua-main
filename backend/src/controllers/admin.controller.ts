@@ -871,7 +871,7 @@ export const resetStaffCustomerOrder = async (req: AuthRequest, res: Response): 
 };
 
 // POST /admin/users/:id/reset-password
-// Admin resets any user's password to a temp password: aqua + zero-padded userId
+// Admin resets any user's password to a fixed temp password: 123456
 export const resetUserPassword = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = Number(req.params.id);
@@ -882,10 +882,10 @@ export const resetUserPassword = async (req: AuthRequest, res: Response): Promis
     );
     if (!(rows as any[]).length) { res.status(404).json({ message: 'User not found' }); return; }
     const user = (rows as any[])[0];
-    const tempPassword = 'aqua' + String(userId).padStart(4, '0');
+    const tempPassword = '123456';
     const hashed = await bcrypt.hash(tempPassword, 12);
     await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashed, userId]);
-    notify(() => NotifService.sendToUser({ userId, title: 'Password Reset', body: 'Your password was reset. Temp password: ' + tempPassword, type: 'general', data: {} }));
+    notify(() => NotifService.sendToUser({ userId, title: 'Password Reset', body: 'Your password was reset to 123456. Please log in and change it.', type: 'general', data: {} }));
     res.json({ message: 'Password reset for ' + user.name, tempPassword });
   } catch (err) {
     console.error('resetUserPassword error:', err);

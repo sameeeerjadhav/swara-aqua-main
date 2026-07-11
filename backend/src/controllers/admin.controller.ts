@@ -612,17 +612,28 @@ export const getCustomerDeliveryCalendar = async (req: AuthRequest, res: Respons
     const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
 
     const [rows] = await pool.query<RowDataPacket[]>(`
-      SELECT
-        DAY(COALESCE(d.delivered_at, d.created_at)) AS day,
-        SUM(d.delivered_quantity) AS jars
-      FROM deliveries d
-      JOIN orders o ON o.id = d.order_id
-      WHERE o.customer_id = ?
-        AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?
-        AND d.status = 'delivered'
-      GROUP BY DAY(COALESCE(d.delivered_at, d.created_at))
+      SELECT day, SUM(jars) AS jars FROM (
+        SELECT
+          DAY(COALESCE(d.delivered_at, d.created_at)) AS day,
+          SUM(d.delivered_quantity) AS jars
+        FROM deliveries d
+        JOIN orders o ON o.id = d.order_id
+        WHERE o.customer_id = ?
+          AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?
+          AND d.status = 'delivered'
+        GROUP BY DAY(COALESCE(d.delivered_at, d.created_at))
+        UNION ALL
+        SELECT
+          DAY(m.delivery_date) AS day,
+          SUM(m.jars) AS jars
+        FROM manual_delivery_entries m
+        WHERE m.customer_id = ?
+          AND DATE_FORMAT(m.delivery_date, '%Y-%m') = ?
+        GROUP BY DAY(m.delivery_date)
+      ) combined
+      GROUP BY day
       ORDER BY day ASC
-    `, [customerId, month]);
+    `, [customerId, month, customerId, month]);
 
     const [y, m] = month.split('-').map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
@@ -653,25 +664,51 @@ export const getCustomerDayDeliveries = async (req: AuthRequest, res: Response):
         d.delivered_quantity                                AS jars,
         TIME_FORMAT(COALESCE(d.delivered_at, d.created_at), '%h:%i %p') AS time_str,
         HOUR(COALESCE(d.delivered_at, d.created_at))        AS hour,
-        u.name                                              AS staff_name
+        u.name                                              AS staff_name,
+        d.collected_amount                                  AS amount_collected,
+        d.payment_mode                                      AS payment_mode,
+        CASE WHEN d.collected_amount > 0 THEN 1 ELSE 0 END AS is_paid,
+        0                                                   AS is_manual,
+        NULL                                                AS notes
       FROM deliveries d
       JOIN orders o     ON o.id  = d.order_id
       LEFT JOIN users u ON u.id  = d.staff_id
       WHERE o.customer_id = ?
         AND DATE(COALESCE(d.delivered_at, d.created_at)) = ?
         AND d.status = 'delivered'
-      ORDER BY COALESCE(d.delivered_at, d.created_at) ASC
-    `, [customerId, date]);
+      UNION ALL
+      SELECT
+        m.id,
+        m.jars,
+        TIME_FORMAT(ADDTIME(m.delivery_date, m.delivery_time), '%h:%i %p') AS time_str,
+        HOUR(m.delivery_time)                               AS hour,
+        u2.name                                             AS staff_name,
+        m.amount_collected,
+        m.payment_mode,
+        m.is_paid,
+        1                                                   AS is_manual,
+        m.notes
+      FROM manual_delivery_entries m
+      LEFT JOIN users u2 ON u2.id = m.admin_id
+      WHERE m.customer_id = ?
+        AND m.delivery_date = ?
+      ORDER BY hour ASC, time_str ASC
+    `, [customerId, date, customerId, date]);
 
     const deliveries = rows.map((r: RowDataPacket) => {
       const h = Number(r.hour);
       const period = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
       return {
-        id:         r.id,
-        jars:       Number(r.jars),
-        time:       r.time_str,
+        id:               r.id,
+        jars:             Number(r.jars),
+        time:             r.time_str,
         period,
-        staff_name: r.staff_name || 'Unknown',
+        staff_name:       r.staff_name || 'Admin',
+        amount_collected: Number(r.amount_collected),
+        payment_mode:     r.payment_mode || 'none',
+        is_paid:          Boolean(r.is_paid),
+        is_manual:        Boolean(r.is_manual),
+        notes:            r.notes || null,
       };
     });
 
@@ -958,5 +995,84 @@ export const rejectPasswordReset = async (req: AuthRequest, res: Response): Prom
   } catch (err) {
     console.error('rejectPasswordReset error:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// POST /admin/customers/:id/manual-delivery
+export const addManualDelivery = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const customerId = Number(req.params.id);
+    const adminId    = req.user!.id;
+    const { jars, amount_collected, is_paid, payment_mode, delivery_date, delivery_time, notes } = req.body;
+
+    if (!jars || jars < 1) { res.status(400).json({ message: 'jars must be >= 1' }); return; }
+    if (!delivery_date) { res.status(400).json({ message: 'delivery_date is required (YYYY-MM-DD)' }); return; }
+
+    const [userRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM users WHERE id = ? AND role = ? AND deleted_at IS NULL',
+      [customerId, 'customer']
+    );
+    if (!userRows.length) { res.status(404).json({ message: 'Customer not found' }); return; }
+
+    const paidFlag  = is_paid ? 1 : 0;
+    const pMode     = paidFlag ? (payment_mode || 'cash') : 'none';
+    const amount    = paidFlag ? Math.max(0, Number(amount_collected) || 0) : 0;
+    const dTime     = delivery_time || '09:00:00';
+
+    const [result] = await pool.query<any>(
+      `INSERT INTO manual_delivery_entries
+        (customer_id, admin_id, jars, amount_collected, is_paid, payment_mode, delivery_date, delivery_time, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [customerId, adminId, jars, amount, paidFlag, pMode, delivery_date, dTime, notes || null]
+    );
+
+    res.status(201).json({ message: 'Manual delivery entry added', id: result.insertId });
+  } catch (err) {
+    console.error('addManualDelivery error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// PUT /admin/manual-deliveries/:entryId
+export const updateManualDelivery = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const entryId = Number(req.params.entryId);
+    const { jars, amount_collected, is_paid, payment_mode, delivery_date, delivery_time, notes } = req.body;
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM manual_delivery_entries WHERE id = ?', [entryId]
+    );
+    if (!rows.length) { res.status(404).json({ message: 'Entry not found' }); return; }
+
+    const paidFlag = is_paid ? 1 : 0;
+    const pMode    = paidFlag ? (payment_mode || 'cash') : 'none';
+    const amount   = paidFlag ? Math.max(0, Number(amount_collected) || 0) : 0;
+
+    await pool.query(
+      `UPDATE manual_delivery_entries
+       SET jars=?, amount_collected=?, is_paid=?, payment_mode=?,
+           delivery_date=?, delivery_time=?, notes=?
+       WHERE id=?`,
+      [jars, amount, paidFlag, pMode,
+       delivery_date, delivery_time || '09:00:00', notes || null,
+       entryId]
+    );
+
+    res.json({ message: 'Manual delivery entry updated' });
+  } catch (err) {
+    console.error('updateManualDelivery error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// DELETE /admin/manual-deliveries/:entryId
+export const deleteManualDelivery = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const entryId = Number(req.params.entryId);
+    await pool.query('DELETE FROM manual_delivery_entries WHERE id = ?', [entryId]);
+    res.json({ message: 'Manual delivery entry deleted' });
+  } catch (err) {
+    console.error('deleteManualDelivery error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };

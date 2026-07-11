@@ -447,6 +447,27 @@ export const runMigrations = async (): Promise<void> => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
+
+    // -- manual_delivery_entries (admin-logged deliveries without an order) --
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS manual_delivery_entries (
+        id               INT AUTO_INCREMENT PRIMARY KEY,
+        customer_id      INT NOT NULL,
+        admin_id         INT NOT NULL,
+        jars             INT NOT NULL DEFAULT 1,
+        amount_collected DECIMAL(10,2) NOT NULL DEFAULT 0,
+        is_paid          TINYINT(1) NOT NULL DEFAULT 0,
+        payment_mode     ENUM('cash','online','advance','none') NOT NULL DEFAULT 'none',
+        delivery_date    DATE NOT NULL,
+        delivery_time    TIME NOT NULL DEFAULT '09:00:00',
+        notes            TEXT NULL,
+        created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (admin_id)    REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
 console.log('✅ Migrations complete');  } catch (err) {
     console.error('❌ Migration error:', (err as Error).message);
     // Don't crash the server — log and continue

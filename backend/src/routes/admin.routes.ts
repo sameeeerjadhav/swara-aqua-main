@@ -9,6 +9,7 @@ import {
   getStaffCustomerOrder, saveStaffCustomerOrder, resetStaffCustomerOrder,
   resetUserPassword,
   getPasswordResetRequests, approvePasswordReset, rejectPasswordReset,
+  addManualDelivery, updateManualDelivery, deleteManualDelivery,
 } from '../controllers/admin.controller';
 import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
@@ -35,6 +36,11 @@ router.put('/settings/:key',      ...allowAdmin, updateSetting);
 router.get('/customers-list',              authenticate, getCustomersForStaff); // staff + admin
 router.get('/customer-deliveries/:id',     authenticate, getCustomerDeliveryCalendar);  // staff + admin
 router.get('/customer-deliveries/:id/day', authenticate, getCustomerDayDeliveries);     // staff + admin
+
+// Manual delivery entries (admin only)
+router.post('/customers/:id/manual-delivery',    ...allowAdmin, addManualDelivery);
+router.put('/manual-deliveries/:entryId',         ...allowAdmin, updateManualDelivery);
+router.delete('/manual-deliveries/:entryId',      ...allowAdmin, deleteManualDelivery);
 
 router.get('/customer-order',       ...allowAdmin,  getCustomerOrder);         // admin get order
 router.put('/customer-order',       ...allowAdmin,  saveCustomerOrder);        // admin save order

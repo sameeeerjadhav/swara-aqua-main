@@ -36,16 +36,23 @@ const billStatusFromAmounts = (totalAmount: number, paidAmount: number): Bill['s
   return 'unpaid';
 };
 
-/** Total jars delivered in a month (date from delivered_at, fallback created_at) */
+/** Total jars delivered in a month — regular orders + manual admin entries */
 const countJars = async (conn: Conn, customerId: number, month: string): Promise<number> => {
   const [rows] = await conn.query<RowDataPacket[]>(
-    `SELECT COALESCE(SUM(d.delivered_quantity), 0) AS total_jars
-     FROM deliveries d
-     JOIN orders o ON o.id = d.order_id
-     WHERE o.customer_id = ?
-       AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?
-       AND d.status = 'delivered'`,
-    [customerId, month]
+    `SELECT COALESCE(SUM(jars), 0) AS total_jars FROM (
+       SELECT d.delivered_quantity AS jars
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       WHERE o.customer_id = ?
+         AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?
+         AND d.status = 'delivered'
+       UNION ALL
+       SELECT m.jars
+       FROM manual_delivery_entries m
+       WHERE m.customer_id = ?
+         AND DATE_FORMAT(m.delivery_date, '%Y-%m') = ?
+     ) combined`,
+    [customerId, month, customerId, month]
   );
   return Number(rows[0].total_jars);
 };
@@ -85,6 +92,17 @@ const computePaymentBreakdown = async (
     [customerId, month]
   );
 
+  // Cash and online collected via manual delivery entries (admin-logged)
+  const [manualRows] = await conn.query<RowDataPacket[]>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN m.payment_mode = 'cash'   AND m.is_paid = 1 THEN m.amount_collected ELSE 0 END), 0) AS cash_paid,
+       COALESCE(SUM(CASE WHEN m.payment_mode = 'online' AND m.is_paid = 1 THEN m.amount_collected ELSE 0 END), 0) AS online_paid
+     FROM manual_delivery_entries m
+     WHERE m.customer_id = ?
+       AND DATE_FORMAT(m.delivery_date, '%Y-%m') = ?`,
+    [customerId, month]
+  );
+
   // Online bill payments (Clear All Dues / individual bill pay via Razorpay) recorded in transactions
   const [txRows] = await conn.query<RowDataPacket[]>(
     `SELECT COALESCE(SUM(t.amount), 0) AS online_bill_pay
@@ -109,8 +127,8 @@ const computePaymentBreakdown = async (
   );
 
   return {
-    cash_paid:        Number(deliveryRows[0].cash_paid),
-    online_paid:      Number(deliveryRows[0].online_door) + Number(txRows[0].online_bill_pay),
+    cash_paid:        Number(deliveryRows[0].cash_paid)   + Number(manualRows[0].cash_paid),
+    online_paid:      Number(deliveryRows[0].online_door) + Number(manualRows[0].online_paid) + Number(txRows[0].online_bill_pay),
     pay_later_amount: Number(plRows[0].pay_later_total),
   };
 };

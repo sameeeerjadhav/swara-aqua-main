@@ -179,13 +179,29 @@ export const getCustomerProfile = async (req: AuthRequest, res: Response): Promi
       WHERE o.customer_id = ?
     `, [id]);
 
-    // Pending bill amount
+    // Pending bill amount + unbilled unpaid manual deliveries
     const [pendingRows] = await pool.query<RowDataPacket[]>(
-      `SELECT COALESCE(SUM(total_amount - paid_amount), 0) AS pending_amount,
-              COUNT(*) AS pending_bills
+      `SELECT
+         COALESCE(SUM(total_amount - paid_amount), 0) AS bill_pending,
+         COUNT(*) AS pending_bills
        FROM bills WHERE customer_id = ? AND status IN ('unpaid', 'partial')`,
       [id]
     );
+
+    // Unpaid manual delivery entries for months not yet billed
+    const [manualPendingRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COALESCE(SUM(m.jars * u.jar_rate), 0) AS manual_unpaid
+       FROM manual_delivery_entries m
+       JOIN users u ON u.id = m.customer_id
+       WHERE m.customer_id = ?
+         AND m.is_paid = 0
+         AND DATE_FORMAT(m.delivery_date, '%Y-%m') NOT IN (
+           SELECT month FROM bills WHERE customer_id = ?
+         )`,
+      [id, id]
+    );
+
+    const pendingAmount = Number(pendingRows[0].bill_pending) + Number(manualPendingRows[0].manual_unpaid);
 
     // Recent bills
     const [bills] = await pool.query<RowDataPacket[]>(
@@ -211,7 +227,8 @@ export const getCustomerProfile = async (req: AuthRequest, res: Response): Promi
       },
       stats: {
         ...statsRows[0],
-        ...pendingRows[0],
+        pending_amount: pendingAmount,
+        pending_bills:  Number(pendingRows[0].pending_bills),
       },
       bills,
       orders,

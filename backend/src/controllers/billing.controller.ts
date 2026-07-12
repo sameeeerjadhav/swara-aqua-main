@@ -503,18 +503,28 @@ const getReportData = async (customerId: number, startDate: string, endDate: str
   if (!custRows.length) return null;
   const customer = custRows[0];
 
-  // Daily breakdown
+  // Daily breakdown — regular deliveries + admin manual entries
   const [dailyRows] = await pool.query<RowDataPacket[]>(
-    `SELECT DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m-%d') AS delivery_date,
-            SUM(d.delivered_quantity) AS jars
-     FROM deliveries d
-     JOIN orders o ON o.id = d.order_id
-     WHERE o.customer_id = ?
-       AND DATE(COALESCE(d.delivered_at, d.created_at)) BETWEEN ? AND ?
-       AND d.status = 'delivered'
-     GROUP BY DATE(COALESCE(d.delivered_at, d.created_at))
+    `SELECT delivery_date, SUM(jars) AS jars FROM (
+       SELECT DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m-%d') AS delivery_date,
+              SUM(d.delivered_quantity) AS jars
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       WHERE o.customer_id = ?
+         AND DATE(COALESCE(d.delivered_at, d.created_at)) BETWEEN ? AND ?
+         AND d.status = 'delivered'
+       GROUP BY DATE(COALESCE(d.delivered_at, d.created_at))
+       UNION ALL
+       SELECT DATE_FORMAT(m.delivery_date, '%Y-%m-%d') AS delivery_date,
+              SUM(m.jars) AS jars
+       FROM manual_delivery_entries m
+       WHERE m.customer_id = ?
+         AND m.delivery_date BETWEEN ? AND ?
+       GROUP BY m.delivery_date
+     ) combined
+     GROUP BY delivery_date
      ORDER BY delivery_date ASC`,
-    [customerId, startDate, endDate]
+    [customerId, startDate, endDate, customerId, startDate, endDate]
   );
 
   const days = dailyRows.map((r: RowDataPacket) => ({
@@ -566,7 +576,20 @@ const getReportData = async (customerId: number, startDate: string, endDate: str
   const cashPaid    = Number(cashRows[0]?.cash_paid)    || 0;
   const onlinePaid  = Number(onlineRows[0]?.online_paid)  || 0;
   const advancePaid = Number(advRows[0]?.advance_paid)  || 0;
-  const totalPaid   = cashPaid + onlinePaid + advancePaid;
+
+  // Also add manual delivery payments within the date range
+  const [manualPayRows] = await pool.query<RowDataPacket[]>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN payment_mode = 'cash'   AND is_paid = 1 THEN amount_collected ELSE 0 END), 0) AS cash_paid,
+       COALESCE(SUM(CASE WHEN payment_mode = 'online' AND is_paid = 1 THEN amount_collected ELSE 0 END), 0) AS online_paid
+     FROM manual_delivery_entries
+     WHERE customer_id = ? AND delivery_date BETWEEN ? AND ?`,
+    [customerId, startDate, endDate]
+  );
+  const manualCash   = Number(manualPayRows[0]?.cash_paid)   || 0;
+  const manualOnline = Number(manualPayRows[0]?.online_paid) || 0;
+
+  const totalPaid   = cashPaid + manualCash + onlinePaid + manualOnline + advancePaid;
   const amountDue   = Math.max(0, totalAmount - totalPaid);
 
   return {

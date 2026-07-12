@@ -325,10 +325,18 @@ export const getOrderStats = async (): Promise<RowDataPacket> => {
       COUNT(*)                                                                          AS total,
       SUM(status IN ('completed', 'delivered'))                                         AS completed,
       SUM(status = 'cancelled')                                                         AS cancelled,
-      COALESCE(SUM(CASE WHEN status IN ('completed','delivered') THEN total_amount END), 0) AS total_revenue,
+      COALESCE(SUM(CASE WHEN status IN ('completed','delivered') THEN total_amount END), 0) AS order_revenue,
       DATE_FORMAT(NOW(), '%M %Y')                                                       AS stats_month
     FROM orders
     WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')
+  `);
+
+  // Manual delivery payments collected this month (admin-logged)
+  const [manualRows] = await pool.query<RowDataPacket[]>(`
+    SELECT COALESCE(SUM(amount_collected), 0) AS manual_revenue
+    FROM manual_delivery_entries
+    WHERE is_paid = 1
+      AND DATE_FORMAT(delivery_date, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')
   `);
 
   // Pending is ALL-TIME: an order placed in June is still pending until delivered
@@ -338,5 +346,12 @@ export const getOrderStats = async (): Promise<RowDataPacket> => {
     WHERE status IN ('pending', 'assigned')
   `);
 
-  return { ...rows[0], pending: Number(pendingRows[0].pending) };
+  const orderRevenue  = Number(rows[0].order_revenue)  || 0;
+  const manualRevenue = Number(manualRows[0].manual_revenue) || 0;
+
+  return {
+    ...rows[0],
+    total_revenue: orderRevenue + manualRevenue,
+    pending: Number(pendingRows[0].pending),
+  };
 };

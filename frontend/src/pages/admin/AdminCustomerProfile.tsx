@@ -444,8 +444,8 @@ export const AdminCustomerProfile = () => {
     return (
       <div className="max-w-4xl text-center py-20">
         <p className="text-slate-400">Customer not found</p>
-        <Button variant="secondary" size="sm" onClick={() => navigate('/admin/users')} className="mt-4">
-          Back to Users
+        <Button variant="secondary" size="sm" onClick={() => navigate(-1)} className="mt-4">
+          Back
         </Button>
       </div>
     );
@@ -456,7 +456,7 @@ export const AdminCustomerProfile = () => {
     try {
       await (await import('../../api/axios')).default.delete(`/admin/users/${id}`);
       toast('Customer account deleted. All records preserved.', 'success');
-      navigate('/admin/users');
+      navigate(-1);
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Failed to delete', 'error');
     } finally { setDeleting(false); setShowDelete(false); }
@@ -529,7 +529,7 @@ export const AdminCustomerProfile = () => {
       {/* Back + Header */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <button onClick={() => navigate('/admin/users')}
+          <button onClick={() => navigate(-1)}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all shrink-0">
             <ArrowLeft className="w-4 h-4 text-slate-600" />
           </button>

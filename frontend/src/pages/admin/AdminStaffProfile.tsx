@@ -78,9 +78,9 @@ export const AdminStaffProfile = () => {
     return (
       <div className="max-w-4xl text-center py-20">
         <p className="text-slate-400">Staff member not found</p>
-        <button onClick={() => navigate('/admin/staff')}
+        <button onClick={() => navigate(-1)}
           className="mt-4 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-semibold">
-          Back to Staff
+          Back
         </button>
       </div>
     );
@@ -91,7 +91,7 @@ export const AdminStaffProfile = () => {
     try {
       await api.delete(`/admin/users/${id}`);
       toast('Staff account deleted', 'success');
-      navigate('/admin/staff');
+      navigate(-1);
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Failed to delete', 'error');
     } finally { setDeleting(false); setShowDelete(false); }
@@ -145,7 +145,7 @@ export const AdminStaffProfile = () => {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-4">
         {/* Top row: back arrow + action buttons */}
         <div className="flex items-center justify-between mb-3">
-          <button onClick={() => navigate('/admin/staff')}
+          <button onClick={() => navigate(-1)}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all shrink-0">
             <ArrowLeft className="w-4 h-4 text-slate-600" />
           </button>

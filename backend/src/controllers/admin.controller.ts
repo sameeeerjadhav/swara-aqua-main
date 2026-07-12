@@ -168,16 +168,23 @@ export const getCustomerProfile = async (req: AuthRequest, res: Response): Promi
       [id]
     );
 
-    // Stats
+    // Stats — UNION regular deliveries + admin manual entries
     const [statsRows] = await pool.query<RowDataPacket[]>(`
       SELECT
-        COALESCE(SUM(d.delivered_quantity), 0)    AS total_jars_delivered,
-        COUNT(DISTINCT o.id)                       AS total_orders,
-        COALESCE(SUM(d.collected_amount), 0)       AS total_collected
-      FROM orders o
-      LEFT JOIN deliveries d ON d.order_id = o.id AND d.status = 'delivered'
-      WHERE o.customer_id = ?
-    `, [id]);
+        COALESCE(SUM(jars), 0)     AS total_jars_delivered,
+        COUNT(DISTINCT order_id)   AS total_orders,
+        COALESCE(SUM(collected), 0) AS total_collected
+      FROM (
+        SELECT d.delivered_quantity AS jars, o.id AS order_id, d.collected_amount AS collected
+        FROM orders o
+        LEFT JOIN deliveries d ON d.order_id = o.id AND d.status = 'delivered'
+        WHERE o.customer_id = ?
+        UNION ALL
+        SELECT m.jars AS jars, NULL AS order_id, m.amount_collected AS collected
+        FROM manual_delivery_entries m
+        WHERE m.customer_id = ?
+      ) combined
+    `, [id, id]);
 
     // Pending bill amount + unbilled unpaid manual deliveries
     const [pendingRows] = await pool.query<RowDataPacket[]>(
@@ -571,12 +578,19 @@ export const getCustomersForStaff = async (req: AuthRequest, res: Response): Pro
         (SELECT a.label   FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label,
         u.profile_photo,
         COALESCE((
-          SELECT SUM(d.delivered_quantity)
-          FROM deliveries d
-          JOIN orders o ON o.id = d.order_id
-          WHERE o.customer_id = u.id
-            AND d.status = 'delivered'
-            AND DATE(COALESCE(d.delivered_at, d.created_at)) = CURDATE()
+          SELECT SUM(q) FROM (
+            SELECT SUM(d.delivered_quantity) AS q
+            FROM deliveries d
+            JOIN orders o ON o.id = d.order_id
+            WHERE o.customer_id = u.id
+              AND d.status = 'delivered'
+              AND DATE(COALESCE(d.delivered_at, d.created_at)) = CURDATE()
+            UNION ALL
+            SELECT SUM(m.jars) AS q
+            FROM manual_delivery_entries m
+            WHERE m.customer_id = u.id
+              AND m.delivery_date = CURDATE()
+          ) t
         ), 0) AS today_jars
       FROM users u
       WHERE u.role = 'customer' AND u.status = 'active' AND u.deleted_at IS NULL

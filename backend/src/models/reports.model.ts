@@ -194,7 +194,9 @@ export const getTopCustomers = async (limit = 8): Promise<RowDataPacket[]> => {
        u.id, u.name,
        COUNT(DISTINCT o.id)                   AS total_orders,
        COALESCE(SUM(t.amount), 0)             AS total_paid,
-       COALESCE(SUM(d.delivered_quantity), 0) AS total_jars
+       COALESCE(SUM(d.delivered_quantity), 0) + COALESCE((
+         SELECT SUM(m.jars) FROM manual_delivery_entries m WHERE m.customer_id = u.id
+       ), 0) AS total_jars
      FROM users u
      LEFT JOIN orders o ON o.customer_id = u.id AND o.status NOT IN ('cancelled')
      LEFT JOIN transactions t ON t.customer_id = u.id AND t.type = 'credit'

@@ -1039,6 +1039,14 @@ export const addManualDelivery = async (req: AuthRequest, res: Response): Promis
     if (!jars || jars < 1) { res.status(400).json({ message: 'jars must be >= 1' }); return; }
     if (!delivery_date) { res.status(400).json({ message: 'delivery_date is required (YYYY-MM-DD)' }); return; }
 
+    // Reject future dates — deliveries can only be logged for today or past days
+    const todayIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const todayStr = `${todayIST.getFullYear()}-${String(todayIST.getMonth() + 1).padStart(2, '0')}-${String(todayIST.getDate()).padStart(2, '0')}`;
+    if (delivery_date > todayStr) {
+      res.status(400).json({ message: 'Cannot log deliveries for future dates' });
+      return;
+    }
+
     const [userRows] = await pool.query<RowDataPacket[]>(
       'SELECT id FROM users WHERE id = ? AND role = ? AND deleted_at IS NULL',
       [customerId, 'customer']
@@ -1074,6 +1082,16 @@ export const updateManualDelivery = async (req: AuthRequest, res: Response): Pro
       'SELECT id FROM manual_delivery_entries WHERE id = ?', [entryId]
     );
     if (!rows.length) { res.status(404).json({ message: 'Entry not found' }); return; }
+
+    // Reject future dates
+    if (delivery_date) {
+      const todayIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const todayStr = `${todayIST.getFullYear()}-${String(todayIST.getMonth() + 1).padStart(2, '0')}-${String(todayIST.getDate()).padStart(2, '0')}`;
+      if (delivery_date > todayStr) {
+        res.status(400).json({ message: 'Cannot log deliveries for future dates' });
+        return;
+      }
+    }
 
     const paidFlag = is_paid ? 1 : 0;
     const pMode    = paidFlag ? (payment_mode || 'cash') : 'none';

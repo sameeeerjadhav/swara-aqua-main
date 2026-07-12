@@ -665,8 +665,8 @@ export const AdminCustomerProfile = () => {
           </div>
           <div className="flex items-center gap-2">
             {selectedDate ? (
-              /* Add Delivery Button */
-              !showAddForm && !editingEntry && (
+              /* Add Delivery Button — only for today or past dates */
+              !showAddForm && !editingEntry && selectedDate <= todayStr && (
                 <button
                   onClick={() => setShowAddForm(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">
@@ -709,18 +709,29 @@ export const AdminCustomerProfile = () => {
                     if (day === null) return <div key={`e-${i}`} className="aspect-square border-b border-r border-slate-50 bg-slate-50/30" />;
                     const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     const jars = dayMap.get(day) || 0;
-                    const isToday = dateStr === todayStr;
-                    const hasData = jars > 0;
+                    const isToday  = dateStr === todayStr;
+                    const isFuture = dateStr > todayStr;
+                    const hasData  = jars > 0;
                     return (
                       <button key={dateStr}
-                        onClick={() => handleDayClick(dateStr)}
-                        className={`aspect-square border-b border-r border-slate-50 p-1 flex flex-col items-center justify-center transition-all cursor-pointer
-                          ${isToday ? 'ring-2 ring-brand-400 ring-inset bg-brand-50/40' : ''}
-                          ${hasData
-                            ? 'bg-gradient-to-br from-brand-50 to-aqua-400/10 hover:from-brand-100 hover:to-aqua-400/20 active:scale-95'
-                            : 'hover:bg-slate-50 active:scale-95'}
+                        onClick={() => !isFuture && handleDayClick(dateStr)}
+                        disabled={isFuture}
+                        className={`aspect-square border-b border-r border-slate-50 p-1 flex flex-col items-center justify-center transition-all
+                          ${isFuture
+                            ? 'opacity-30 cursor-not-allowed bg-slate-50/20'
+                            : isToday
+                              ? 'ring-2 ring-brand-400 ring-inset bg-brand-50/40 cursor-pointer active:scale-95'
+                              : hasData
+                                ? 'bg-gradient-to-br from-brand-50 to-aqua-400/10 hover:from-brand-100 hover:to-aqua-400/20 cursor-pointer active:scale-95'
+                                : 'hover:bg-slate-50 cursor-pointer active:scale-95'
+                          }
                         `}>
-                        <span className={`text-[10px] font-medium ${isToday ? 'text-brand-700 font-bold' : hasData ? 'text-brand-600' : 'text-slate-400'}`}>
+                        <span className={`text-[10px] font-medium ${
+                          isFuture ? 'text-slate-300'
+                          : isToday ? 'text-brand-700 font-bold'
+                          : hasData ? 'text-brand-600'
+                          : 'text-slate-400'
+                        }`}>
                           {day}
                         </span>
                         {hasData && (

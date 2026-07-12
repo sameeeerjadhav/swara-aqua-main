@@ -165,28 +165,73 @@ export const verifyPendingPayment = async (req: AuthRequest, res: Response): Pro
 };
 
 // ── GET /api/pending/admin ────────────────────────────────────────────────────
-// Admin: all customers with their pending balance
+// Admin: all customers with their full outstanding balance
 export const getAdminPendingSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    // Comprehensive outstanding per customer:
+    //   pending_balance  = pay-later delivery orders (stored on users table)
+    //   bill_outstanding = unpaid/partial bills
+    //   manual_unpaid    = unbilled unpaid manual delivery entries (jars × jar_rate)
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT
-         u.id, u.name, u.phone, u.pending_balance,
-         COUNT(pp.id)      AS pending_count,
-         MIN(pp.created_at) AS oldest_pending
+         u.id, u.name, u.phone,
+         u.pending_balance,
+         COALESCE(b.bill_outstanding, 0)  AS bill_outstanding,
+         COALESCE(m.manual_unpaid,  0)    AS manual_unpaid,
+         (u.pending_balance
+           + COALESCE(b.bill_outstanding, 0)
+           + COALESCE(m.manual_unpaid,  0)) AS total_outstanding
        FROM users u
-       LEFT JOIN pending_payments pp
-         ON pp.customer_id = u.id AND pp.status = 'pending'
-       WHERE u.role = 'customer' AND u.pending_balance > 0
-       GROUP BY u.id
-       ORDER BY u.pending_balance DESC`,
+       LEFT JOIN (
+         SELECT customer_id,
+                SUM(total_amount - paid_amount) AS bill_outstanding
+         FROM bills
+         WHERE status IN ('unpaid', 'partial')
+         GROUP BY customer_id
+       ) b ON b.customer_id = u.id
+       LEFT JOIN (
+         SELECT m2.customer_id,
+                SUM(m2.jars * u2.jar_rate) AS manual_unpaid
+         FROM manual_delivery_entries m2
+         JOIN users u2 ON u2.id = m2.customer_id
+         WHERE m2.is_paid = 0
+           AND DATE_FORMAT(m2.delivery_date, '%Y-%m') NOT IN (
+             SELECT month FROM bills WHERE customer_id = m2.customer_id
+           )
+         GROUP BY m2.customer_id
+       ) m ON m.customer_id = u.id
+       WHERE u.role = 'customer'
+         AND u.deleted_at IS NULL
+         AND (
+           u.pending_balance > 0
+           OR COALESCE(b.bill_outstanding, 0) > 0
+           OR COALESCE(m.manual_unpaid, 0) > 0
+         )
+       ORDER BY total_outstanding DESC`,
     );
 
     const [[{ total }]] = await pool.query<RowDataPacket[]>(
-      `SELECT COALESCE(SUM(pending_balance), 0) AS total
-       FROM users WHERE role = 'customer'`
+      `SELECT COALESCE(
+         SUM(u.pending_balance)
+         + (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM bills WHERE status IN ('unpaid','partial'))
+         + (SELECT COALESCE(SUM(m.jars * u2.jar_rate), 0)
+            FROM manual_delivery_entries m
+            JOIN users u2 ON u2.id = m.customer_id
+            WHERE m.is_paid = 0
+              AND DATE_FORMAT(m.delivery_date, '%Y-%m') NOT IN (
+                SELECT month FROM bills WHERE customer_id = m.customer_id
+              ))
+       , 0) AS total
+       FROM users WHERE role = 'customer' AND deleted_at IS NULL`
     );
 
-    res.json({ customers: rows, total_pending: Number(total) });
+    // Map total_outstanding as pending_balance so frontend doesn't need changes
+    const mappedRows = rows.map(r => ({
+      ...r,
+      pending_balance: Number(r.total_outstanding),
+    }));
+
+    res.json({ customers: mappedRows, total_pending: Number(total) });
   } catch (err) {
     res.status(500).json({ message: 'Internal server error' });
   }

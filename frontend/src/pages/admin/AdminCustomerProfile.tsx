@@ -286,6 +286,12 @@ export const AdminCustomerProfile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Smart back: use history if available, otherwise go to customers list
+  const goBack = () => {
+    if (window.history.state?.idx > 0) navigate(-1);
+    else navigate('/admin/customers', { replace: true });
+  };
+
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [stats, setStats]     = useState<CustomerProfileStats | null>(null);
   const [bills, setBills]     = useState<any[]>([]);
@@ -444,7 +450,7 @@ export const AdminCustomerProfile = () => {
     return (
       <div className="max-w-4xl text-center py-20">
         <p className="text-slate-400">Customer not found</p>
-        <Button variant="secondary" size="sm" onClick={() => navigate(-1)} className="mt-4">
+        <Button variant="secondary" size="sm" onClick={goBack} className="mt-4">
           Back
         </Button>
       </div>
@@ -456,7 +462,7 @@ export const AdminCustomerProfile = () => {
     try {
       await (await import('../../api/axios')).default.delete(`/admin/users/${id}`);
       toast('Customer account deleted. All records preserved.', 'success');
-      navigate(-1);
+      goBack();
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Failed to delete', 'error');
     } finally { setDeleting(false); setShowDelete(false); }
@@ -529,7 +535,7 @@ export const AdminCustomerProfile = () => {
       {/* Back + Header */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <button onClick={() => navigate(-1)}
+          <button onClick={goBack}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all shrink-0">
             <ArrowLeft className="w-4 h-4 text-slate-600" />
           </button>

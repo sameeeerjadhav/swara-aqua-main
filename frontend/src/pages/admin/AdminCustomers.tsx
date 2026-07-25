@@ -195,6 +195,9 @@ export const AdminCustomers = () => {
   const [savingGroup, setSavingGroup] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
   const [assigningGroup, setAssigningGroup] = useState<{ customerId: number; current: number | null } | null>(null);
+  // Members panel (second view inside the modal)
+  const [managingMembersOf, setManagingMembersOf] = useState<CustomerGroup | null>(null);
+  const [memberSearch, setMemberSearch] = useState('');
 
   const loadGroups = async () => {
     try {
@@ -1674,165 +1677,329 @@ export const AdminCustomers = () => {
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowManageGroups(false)}>
+            onClick={() => { setShowManageGroups(false); setManagingMembersOf(null); setMemberSearch(''); }}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
               onClick={e => e.stopPropagation()}
               className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <Tag className="w-5 h-5 text-brand-600" />
-                  <h2 className="text-base font-bold text-slate-900">Manage Customer Groups</h2>
-                </div>
-                <button onClick={() => setShowManageGroups(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              <AnimatePresence mode="wait">
 
-              {/* Scrollable body */}
-              <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+                {/* ─── Panel 1: Groups list + form ─── */}
+                {!managingMembersOf && (
+                  <motion.div key="groups-panel" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.18 }} className="flex flex-col flex-1 min-h-0">
 
-                {/* Create / Edit Form */}
-                <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    {editingGroup ? 'Edit Group' : 'New Group'}
-                  </p>
-
-                  {/* Name */}
-                  <input
-                    value={groupForm.name}
-                    onChange={e => setGroupForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="Group name (e.g. Daily Orders)"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
-
-                  {/* Color swatches */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-400 mb-1.5">Color</p>
-                    <div className="flex flex-wrap gap-2">
-                      {GROUP_COLORS.map(c => (
-                        <button key={c} onClick={() => setGroupForm(f => ({ ...f, color: c }))}
-                          className={`w-7 h-7 rounded-full border-2 transition-all ${groupForm.color === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-105'}`}
-                          style={{ backgroundColor: c }} />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Emoji icon */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-400 mb-1.5">Icon</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {GROUP_ICONS.map(ico => (
-                        <button key={ico} onClick={() => setGroupForm(f => ({ ...f, icon: ico }))}
-                          className={`w-8 h-8 flex items-center justify-center rounded-xl text-base border-2 transition-all ${groupForm.icon === ico ? 'border-brand-500 bg-brand-50' : 'border-transparent hover:border-slate-200 bg-white'}`}>
-                          {ico}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <input
-                    value={groupForm.description}
-                    onChange={e => setGroupForm(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Description (optional)"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
-
-                  {/* Preview + Save */}
-                  <div className="flex items-center gap-2 pt-1">
-                    {groupForm.name && (
-                      <GroupBadge name={groupForm.name} color={groupForm.color} icon={groupForm.icon} />
-                    )}
-                    <div className="flex gap-2 ml-auto">
-                      {editingGroup && (
-                        <button onClick={() => { setEditingGroup(null); setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' }); }}
-                          className="px-3 py-1.5 rounded-xl bg-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-300 transition-colors">
-                          Cancel
-                        </button>
-                      )}
-                      <button
-                        disabled={!groupForm.name.trim() || savingGroup}
-                        onClick={async () => {
-                          if (!groupForm.name.trim()) return;
-                          setSavingGroup(true);
-                          try {
-                            if (editingGroup) {
-                              await groupsApi.update(editingGroup.id, groupForm);
-                              toast(`Group "${groupForm.name}" updated`, 'success');
-                              setEditingGroup(null);
-                            } else {
-                              await groupsApi.create(groupForm);
-                              toast(`Group "${groupForm.name}" created! 🎉`, 'success');
-                            }
-                            setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' });
-                            await loadGroups();
-                          } catch { toast('Failed to save group', 'error'); }
-                          finally { setSavingGroup(false); }
-                        }}
-                        className="px-4 py-1.5 rounded-xl bg-brand-600 text-white text-xs font-bold hover:bg-brand-700 transition-colors disabled:opacity-50 flex items-center gap-1.5">
-                        {savingGroup ? 'Saving…' : editingGroup ? '✓ Update' : '+ Create'}
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-5 h-5 text-brand-600" />
+                        <h2 className="text-base font-bold text-slate-900">Manage Groups</h2>
+                      </div>
+                      <button onClick={() => { setShowManageGroups(false); setEditingGroup(null); }}
+                        className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400">
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
-                  </div>
-                </div>
 
-                {/* Existing groups list */}
-                {groups.length === 0 ? (
-                  <div className="text-center py-6 text-slate-400 text-sm">
-                    No groups yet. Create your first group above.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Existing Groups</p>
-                    {groups.map(g => (
-                      <div key={g.id}
-                        className="flex items-center gap-3 bg-white border border-slate-100 rounded-2xl px-4 py-3 hover:border-slate-200 transition-colors">
-                        {/* Color dot */}
+                    {/* Scrollable body */}
+                    <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+
+                      {/* Create / Edit Form */}
+                      <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          {editingGroup ? 'Edit Group' : 'New Group'}
+                        </p>
+                        <input
+                          value={groupForm.name}
+                          onChange={e => setGroupForm(f => ({ ...f, name: e.target.value }))}
+                          placeholder="Group name (e.g. Daily Orders)"
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                        <div>
+                          <p className="text-[10px] font-semibold text-slate-400 mb-1.5">Color</p>
+                          <div className="flex flex-wrap gap-2">
+                            {GROUP_COLORS.map(c => (
+                              <button key={c} onClick={() => setGroupForm(f => ({ ...f, color: c }))}
+                                className={`w-7 h-7 rounded-full border-2 transition-all ${groupForm.color === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-105'}`}
+                                style={{ backgroundColor: c }} />
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold text-slate-400 mb-1.5">Icon</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {GROUP_ICONS.map(ico => (
+                              <button key={ico} onClick={() => setGroupForm(f => ({ ...f, icon: ico }))}
+                                className={`w-8 h-8 flex items-center justify-center rounded-xl text-base border-2 transition-all ${groupForm.icon === ico ? 'border-brand-500 bg-brand-50' : 'border-transparent hover:border-slate-200 bg-white'}`}>
+                                {ico}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <input
+                          value={groupForm.description}
+                          onChange={e => setGroupForm(f => ({ ...f, description: e.target.value }))}
+                          placeholder="Description (optional)"
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                        <div className="flex items-center gap-2 pt-1">
+                          {groupForm.name && <GroupBadge name={groupForm.name} color={groupForm.color} icon={groupForm.icon} />}
+                          <div className="flex gap-2 ml-auto">
+                            {editingGroup && (
+                              <button onClick={() => { setEditingGroup(null); setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' }); }}
+                                className="px-3 py-1.5 rounded-xl bg-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-300 transition-colors">
+                                Cancel
+                              </button>
+                            )}
+                            <button
+                              disabled={!groupForm.name.trim() || savingGroup}
+                              onClick={async () => {
+                                if (!groupForm.name.trim()) return;
+                                setSavingGroup(true);
+                                try {
+                                  if (editingGroup) {
+                                    await groupsApi.update(editingGroup.id, groupForm);
+                                    toast(`Group "${groupForm.name}" updated`, 'success');
+                                    setEditingGroup(null);
+                                  } else {
+                                    await groupsApi.create(groupForm);
+                                    toast(`Group "${groupForm.name}" created! 🎉`, 'success');
+                                  }
+                                  setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' });
+                                  await loadGroups();
+                                } catch { toast('Failed to save group', 'error'); }
+                                finally { setSavingGroup(false); }
+                              }}
+                              className="px-4 py-1.5 rounded-xl bg-brand-600 text-white text-xs font-bold hover:bg-brand-700 transition-colors disabled:opacity-50 flex items-center gap-1.5">
+                              {savingGroup ? 'Saving…' : editingGroup ? '✓ Update' : '+ Create'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Existing groups */}
+                      {groups.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 text-sm">
+                          <Tag className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          No groups yet. Create your first group above.
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Your Groups</p>
+                          {groups.map(g => {
+                            const memberCount = customers.filter(c => c.group_id === g.id).length;
+                            return (
+                              <div key={g.id}
+                                className="flex items-center gap-3 bg-white border border-slate-100 rounded-2xl px-4 py-3 hover:border-slate-200 transition-colors">
+                                {/* Icon */}
+                                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
+                                  style={{ backgroundColor: g.color + '20' }}>
+                                  {g.icon}
+                                </div>
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-slate-800 truncate">{g.name}</p>
+                                  <p className="text-[10px] text-slate-400">
+                                    {memberCount} member{memberCount !== 1 ? 's' : ''}
+                                    {g.description ? ` · ${g.description}` : ''}
+                                  </p>
+                                </div>
+                                {/* Actions */}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Members button — opens members panel */}
+                                  <button
+                                    onClick={() => { setManagingMembersOf(g); setMemberSearch(''); }}
+                                    title="Manage members"
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-bold border transition-all hover:scale-105"
+                                    style={{ color: g.color, borderColor: g.color + '40', backgroundColor: g.color + '12' }}>
+                                    <User className="w-3 h-3" />
+                                    Members
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingGroup(g); setGroupForm({ name: g.name, color: g.color, icon: g.icon, description: g.description || '' }); }}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    disabled={deletingGroupId === g.id}
+                                    onClick={async () => {
+                                      if (!window.confirm(`Delete "${g.name}"? Customers in this group will become ungrouped.`)) return;
+                                      setDeletingGroupId(g.id);
+                                      try {
+                                        await groupsApi.delete(g.id);
+                                        setCustomers(prev => prev.map(c => c.group_id === g.id ? { ...c, group_id: null, group_name: null, group_color: null, group_icon: null } : c));
+                                        toast(`Group "${g.name}" deleted`, 'success');
+                                        await loadGroups();
+                                      } catch { toast('Failed to delete group', 'error'); }
+                                      finally { setDeletingGroupId(null); }
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-400 transition-colors disabled:opacity-50">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ─── Panel 2: Manage Members ─── */}
+                {managingMembersOf && (() => {
+                  const g = managingMembersOf;
+                  const members    = customers.filter(c => c.group_id === g.id);
+                  const nonMembers = customers.filter(c => c.group_id !== g.id);
+                  const lc = memberSearch.toLowerCase();
+                  const filtMembers    = lc ? members.filter(c => c.name.toLowerCase().includes(lc) || c.phone.includes(lc)) : members;
+                  const filtNonMembers = lc ? nonMembers.filter(c => c.name.toLowerCase().includes(lc) || c.phone.includes(lc)) : nonMembers;
+
+                  const doAssign = async (customerId: number, targetGroupId: number | null, isAdd: boolean) => {
+                    setAssigningGroup({ customerId, current: isAdd ? null : g.id });
+                    try {
+                      await groupsApi.assignCustomer(customerId, targetGroupId);
+                      if (isAdd) {
+                        setCustomers(prev => prev.map(c => c.id === customerId
+                          ? { ...c, group_id: g.id, group_name: g.name, group_color: g.color, group_icon: g.icon }
+                          : c));
+                      } else {
+                        setCustomers(prev => prev.map(c => c.id === customerId
+                          ? { ...c, group_id: null, group_name: null, group_color: null, group_icon: null }
+                          : c));
+                      }
+                      // Sync the modal group's member count
+                      await loadGroups();
+                    } catch { toast('Failed to update', 'error'); }
+                    finally { setAssigningGroup(null); }
+                  };
+
+                  return (
+                    <motion.div key="members-panel" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.18 }} className="flex flex-col flex-1 min-h-0">
+
+                      {/* Header */}
+                      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 shrink-0">
+                        <button onClick={() => { setManagingMembersOf(null); setMemberSearch(''); }}
+                          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-500 transition-colors">
+                          <ChevronRight className="w-4 h-4 rotate-180" />
+                        </button>
                         <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0"
                           style={{ backgroundColor: g.color + '20' }}>
                           {g.icon}
                         </div>
-                        {/* Info */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-slate-800 truncate">{g.name}</p>
-                          <p className="text-[10px] text-slate-400">
-                            {g.member_count} customer{g.member_count !== 1 ? 's' : ''}
-                            {g.description ? ` · ${g.description}` : ''}
-                          </p>
+                          <h2 className="text-sm font-bold text-slate-900 truncate">{g.name}</h2>
+                          <p className="text-[10px] text-slate-400">{members.length} member{members.length !== 1 ? 's' : ''}</p>
                         </div>
-                        {/* Actions */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => { setEditingGroup(g); setGroupForm({ name: g.name, color: g.color, icon: g.icon, description: g.description || '' }); }}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            disabled={deletingGroupId === g.id}
-                            onClick={async () => {
-                              if (!window.confirm(`Delete "${g.name}"? Customers in this group will become ungrouped.`)) return;
-                              setDeletingGroupId(g.id);
-                              try {
-                                await groupsApi.delete(g.id);
-                                // Clear group from local customer list
-                                setCustomers(prev => prev.map(c => c.group_id === g.id ? { ...c, group_id: null, group_name: null, group_color: null, group_icon: null } : c));
-                                toast(`Group "${g.name}" deleted`, 'success');
-                                await loadGroups();
-                              } catch { toast('Failed to delete group', 'error'); }
-                              finally { setDeletingGroupId(null); }
-                            }}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-400 transition-colors disabled:opacity-50">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                        <button onClick={() => { setShowManageGroups(false); setManagingMembersOf(null); }}
+                          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Search */}
+                      <div className="px-5 pt-3 pb-2 shrink-0">
+                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:border-brand-400 transition-all">
+                          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <input value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
+                            placeholder="Search customers…"
+                            className="flex-1 bg-transparent text-xs text-slate-700 placeholder-slate-400 outline-none" />
+                          {memberSearch && (
+                            <button onClick={() => setMemberSearch('')} className="text-slate-400 hover:text-slate-600">
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+
+                      {/* Lists */}
+                      <div className="overflow-y-auto flex-1 px-5 pb-4 space-y-4">
+
+                        {/* Current Members */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2 pt-1">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              In this group ({filtMembers.length})
+                            </p>
+                            {members.length > 0 && (
+                              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full"
+                                style={{ color: g.color, backgroundColor: g.color + '15' }}>
+                                {g.icon} {g.name}
+                              </span>
+                            )}
+                          </div>
+                          {filtMembers.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-3">
+                              {memberSearch ? 'No matches in this group' : 'No members yet — add from below'}
+                            </p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {filtMembers.map(c => (
+                                <div key={c.id} className="flex items-center gap-3 bg-white border border-slate-100 rounded-2xl px-3 py-2.5 hover:border-slate-200 transition-colors">
+                                  <Avatar name={c.name} photo={c.profile_photo} size="xs" className="w-8 h-8 shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-800 truncate">{c.name}</p>
+                                    <p className="text-[10px] text-slate-400">{c.phone}</p>
+                                  </div>
+                                  <button
+                                    disabled={assigningGroup?.customerId === c.id}
+                                    onClick={() => doAssign(c.id, null, false)}
+                                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors disabled:opacity-50">
+                                    {assigningGroup?.customerId === c.id ? '…' : '✕ Remove'}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Other Customers to add */}
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                            Add customers ({filtNonMembers.length})
+                          </p>
+                          {filtNonMembers.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-3">
+                              {memberSearch ? 'No matches' : 'All customers are already in this group'}
+                            </p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {filtNonMembers.map(c => (
+                                <div key={c.id} className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-2xl px-3 py-2.5 hover:border-slate-200 transition-colors">
+                                  <Avatar name={c.name} photo={c.profile_photo} size="xs" className="w-8 h-8 shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-700 truncate">{c.name}</p>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <p className="text-[10px] text-slate-400">{c.phone}</p>
+                                      {c.group_name && c.group_color && c.group_icon && (
+                                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border"
+                                          style={{ color: c.group_color, borderColor: c.group_color + '40', backgroundColor: c.group_color + '12' }}>
+                                          {c.group_icon} {c.group_name}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <button
+                                    disabled={assigningGroup?.customerId === c.id}
+                                    onClick={() => doAssign(c.id, g.id, true)}
+                                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-50"
+                                    style={{ color: g.color, borderColor: g.color + '40', backgroundColor: g.color + '12' }}>
+                                    {assigningGroup?.customerId === c.id ? '…' : '+ Add'}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    </motion.div>
+                  );
+                })()}
+
+              </AnimatePresence>
+
             </motion.div>
           </motion.div>
         )}

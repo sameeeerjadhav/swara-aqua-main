@@ -7,7 +7,7 @@ export interface AdvanceTransaction {
   user_id: number;
   type: 'credit' | 'debit';
   amount: number;
-  mode: 'razorpay' | 'advance' | 'refund';
+  mode: 'razorpay' | 'advance' | 'refund' | 'cash';
   status: 'completed' | 'pending' | 'failed';
   reference_id: string | null;
   note: string | null;
@@ -57,4 +57,8 @@ export const advanceApi = {
 
   rejectAccess: (userId: number, reason?: string) =>
     api.patch<{ message: string }>(`/advance/access-requests/${userId}/reject`, { reason }),
+
+  // Admin: add cash payment to customer's advance balance
+  adminCashTopup: (userId: number, amount: number, note?: string) =>
+    api.post<{ message: string; balance: number }>('/advance/admin-topup', { userId, amount, note }),
 };

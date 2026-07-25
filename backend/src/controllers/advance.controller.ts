@@ -384,3 +384,76 @@ export const refundAdvanceOnCancel = async (
     [customerId, refundAmt, `cancel-${orderId}`, `Refund for cancelled Order #${orderId}`]
   );
 };
+
+// POST /api/advance/admin-topup  — admin credits cash into a customer's advance balance
+export const adminCashTopup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const adminId = req.user!.id;
+    const { userId, amount, note } = req.body;
+
+    if (!userId || !amount || Number(amount) <= 0) {
+      res.status(400).json({ message: 'userId and a positive amount are required' }); return;
+    }
+
+    const creditAmount = parseFloat(Number(amount).toFixed(2));
+    const txNote = note?.trim() || 'Cash advance credit by admin';
+
+    // Verify target is a customer
+    const [userRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, name, role FROM users WHERE id = ?', [userId]
+    );
+    if (!userRows.length || userRows[0].role !== 'customer') {
+      res.status(404).json({ message: 'Customer not found' }); return;
+    }
+    const customerName = userRows[0].name;
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Credit advance balance
+      await conn.query(
+        'UPDATE users SET prepaid_balance = prepaid_balance + ? WHERE id = ?',
+        [creditAmount, userId]
+      );
+
+      // Record in advance_transactions
+      await conn.query(
+        `INSERT INTO advance_transactions
+           (user_id, type, amount, mode, status, reference_id, note)
+         VALUES (?, 'credit', ?, 'cash', 'completed', ?, ?)`,
+        [userId, creditAmount, `admin-${adminId}-${Date.now()}`, txNote]
+      );
+
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT prepaid_balance FROM users WHERE id = ?', [userId]
+    );
+    const newBalance = Number(rows[0]?.prepaid_balance ?? 0);
+
+    // Notify the customer
+    notify(() =>
+      NotifService.sendToUser({
+        userId: Number(userId),
+        title: '💵 Cash Payment Received!',
+        body:  `₹${creditAmount} cash added to your advance balance. New balance: ₹${newBalance}`,
+        type:  'payment',
+      })
+    );
+
+    SSE.sendToUser(Number(userId), 'advance_updated', { balance: newBalance });
+
+    console.log(`Admin ${adminId} topped up ₹${creditAmount} cash for customer ${customerName} (${userId})`);
+    res.json({ message: `₹${creditAmount} added to ${customerName}'s advance balance`, balance: newBalance });
+  } catch (err) {
+    console.error('adminCashTopup error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

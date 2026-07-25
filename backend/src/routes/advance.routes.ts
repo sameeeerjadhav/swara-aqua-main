@@ -10,6 +10,7 @@ import {
   getAdvanceAccessRequests,
   approveAdvanceAccess,
   rejectAdvanceAccess,
+  adminCashTopup,
 } from '../controllers/advance.controller';
 
 const router = Router();
@@ -34,5 +35,6 @@ router.post('/pay-order',          authenticate, advanceWriteLimiter, payOrderWi
 router.get('/access-requests',                    ...allowAdmin, getAdvanceAccessRequests);
 router.patch('/access-requests/:userId/approve',  ...allowAdmin, approveAdvanceAccess);
 router.patch('/access-requests/:userId/reject',   ...allowAdmin, rejectAdvanceAccess);
+router.post('/admin-topup',                       ...allowAdmin, adminCashTopup);
 
 export default router;

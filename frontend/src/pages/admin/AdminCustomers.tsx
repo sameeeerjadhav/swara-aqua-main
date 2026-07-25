@@ -482,43 +482,48 @@ export const AdminCustomers = () => {
         )}
       </AnimatePresence>
 
-      <div className="flex items-center justify-end gap-2 overflow-x-auto no-scrollbar">
-        {/* Add Customer — always fully visible as primary CTA */}
-        <Button size="sm" icon={<UserPlus className="w-3.5 h-3.5" />}
-          className="shrink-0"
+      {/* Action bar */}
+      <div className="flex items-center gap-2">
+
+        {/* ── Add Customer — left side, never shrinks ── */}
+        <Button
+          size="sm"
+          icon={<UserPlus className="w-3.5 h-3.5" />}
+          className="shrink-0 whitespace-nowrap"
           onClick={() => setShowAddCustomer(true)}>
           Add Customer
         </Button>
 
-        {/* Groups — icon-only on mobile */}
-        <button
-          onClick={() => { setEditingGroup(null); setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' }); setShowManageGroups(true); }}
-          title="Manage Groups"
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all text-xs font-semibold shadow-sm">
-          <Tag className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Groups</span>
-        </button>
+        {/* ── Secondary actions — right side, scrolls on small screens ── */}
+        <div className="flex items-center justify-end gap-2 flex-1 min-w-0 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => { setEditingGroup(null); setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' }); setShowManageGroups(true); }}
+            title="Manage Groups"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all text-xs font-semibold shadow-sm">
+            <Tag className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Groups</span>
+          </button>
 
-        {/* Reorder — icon-only on mobile */}
-        <button
-          onClick={() => { if (reorderMode) { cancelReorder(); } else { setReorderedList([...customers]); setReorderMode(true); } }}
-          title={reorderMode ? 'Cancel reorder' : 'Reorder customers'}
-          className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 shadow-sm
-            ${reorderMode
-              ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-              : 'bg-white text-slate-600 border-slate-200 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50'}`}>
-          <ListOrdered className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{reorderMode ? 'Cancel' : 'Reorder'}</span>
-        </button>
+          <button
+            onClick={() => { if (reorderMode) { cancelReorder(); } else { setReorderedList([...customers]); setReorderMode(true); } }}
+            title={reorderMode ? 'Cancel reorder' : 'Reorder customers'}
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 shadow-sm
+              ${reorderMode
+                ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                : 'bg-white text-slate-600 border-slate-200 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50'}`}>
+            <ListOrdered className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{reorderMode ? 'Cancel' : 'Reorder'}</span>
+          </button>
 
-        {/* Refresh — icon-only on mobile */}
-        <button
-          onClick={load}
-          title="Refresh"
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all text-xs font-semibold shadow-sm">
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Refresh</span>
-        </button>
+          <button
+            onClick={load}
+            title="Refresh"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all text-xs font-semibold shadow-sm">
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
+
       </div>
 
       {/* Pay Later outstanding total */}

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard, CheckCircle2, XCircle, Clock, RefreshCw,
   User, Phone, IndianRupee, ShieldCheck, ShieldX,
-  Banknote, X, Plus,
+  Banknote, X, Plus, Minus,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -27,6 +27,7 @@ export const AdminAdvanceRequests = () => {
 
   // Cash top-up modal state
   const [cashTarget, setCashTarget]   = useState<AdvanceAccessRequest | null>(null);
+  const [cashType,   setCashType]     = useState<'credit' | 'debit'>('credit');
   const [cashAmount, setCashAmount]   = useState('');
   const [cashNote,   setCashNote]     = useState('');
   const [addingCash, setAddingCash]   = useState(false);
@@ -68,9 +69,9 @@ export const AdminAdvanceRequests = () => {
     if (!amt || amt <= 0) { toast('Enter a valid amount', 'error'); return; }
     setAddingCash(true);
     try {
-      const { data } = await advanceApi.adminCashTopup(cashTarget.id, amt, cashNote || undefined);
-      toast(`💵 ₹${amt} added to ${cashTarget.name}'s balance`, 'success');
-      // Update balance in list immediately
+      const { data } = await advanceApi.adminCashTopup(cashTarget.id, amt, cashType, cashNote || undefined);
+      const verb = cashType === 'credit' ? 'added to' : 'removed from';
+      toast(`${cashType === 'credit' ? '💵' : '📉'} ₹${amt} ${verb} ${cashTarget.name}'s balance`, 'success');
       setRequests(prev => prev.map(r => r.id === cashTarget.id
         ? { ...r, prepaid_balance: data.balance }
         : r
@@ -78,8 +79,9 @@ export const AdminAdvanceRequests = () => {
       setCashTarget(null);
       setCashAmount('');
       setCashNote('');
+      setCashType('credit');
     } catch (e: any) {
-      toast(e?.response?.data?.message || 'Failed to add cash', 'error');
+      toast(e?.response?.data?.message || 'Failed to update balance', 'error');
     } finally { setAddingCash(false); }
   };
 
@@ -193,12 +195,12 @@ export const AdminAdvanceRequests = () => {
                     <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
                     <p className="text-xs text-green-700 font-medium flex-1">Advance access granted</p>
                   </div>
-                  {/* 💵 Add Cash button */}
+                  {/* 💵 Adjust Balance button */}
                   <button
-                    onClick={() => { setCashTarget(req); setCashAmount(''); setCashNote(''); }}
+                    onClick={() => { setCashTarget(req); setCashAmount(''); setCashNote(''); setCashType('credit'); }}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-all active:scale-[0.98]">
                     <Banknote className="w-3.5 h-3.5" />
-                    Add Cash to Advance Balance
+                    Adjust Advance Balance
                   </button>
                 </div>
               )}
@@ -228,12 +230,12 @@ export const AdminAdvanceRequests = () => {
               className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
               {/* Header */}
-              <div className="bg-emerald-600 px-5 py-4 flex items-center justify-between shrink-0">
+              <div className={`px-5 py-4 flex items-center justify-between shrink-0 ${cashType === 'credit' ? 'bg-emerald-600' : 'bg-red-500'} transition-colors`}>
                 <div className="flex items-center gap-2">
                   <Banknote className="w-5 h-5 text-white" />
                   <div>
-                    <p className="text-sm font-bold text-white">Add Cash Payment</p>
-                    <p className="text-xs text-emerald-100">{cashTarget.name}</p>
+                    <p className="text-sm font-bold text-white">Adjust Advance Balance</p>
+                    <p className="text-xs text-white/70">{cashTarget.name}</p>
                   </div>
                 </div>
                 <button onClick={() => setCashTarget(null)}
@@ -245,18 +247,48 @@ export const AdminAdvanceRequests = () => {
               {/* Scrollable body */}
               <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
+                {/* Credit / Debit toggle */}
+                <div className="flex gap-2 bg-slate-100 rounded-2xl p-1">
+                  <button
+                    onClick={() => setCashType('credit')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                      cashType === 'credit'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}>
+                    <Plus className="w-3 h-3" /> Add Credit
+                  </button>
+                  <button
+                    onClick={() => setCashType('debit')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                      cashType === 'debit'
+                        ? 'bg-red-500 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}>
+                    <Minus className="w-3 h-3" /> Reduce
+                  </button>
+                </div>
+
                 {/* Current balance info */}
-                <div className="flex items-center justify-between bg-emerald-50 rounded-2xl px-4 py-3">
-                  <p className="text-xs font-semibold text-emerald-700">Current Balance</p>
-                  <p className="text-base font-extrabold text-emerald-700">
+                <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${
+                  cashType === 'credit' ? 'bg-emerald-50' : 'bg-red-50'
+                }`}>
+                  <p className={`text-xs font-semibold ${cashType === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>Current Balance</p>
+                  <p className={`text-base font-extrabold ${cashType === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>
                     ₹{Number(cashTarget.prepaid_balance).toFixed(2)}
                   </p>
                 </div>
 
                 {/* Amount input */}
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1.5 block">Cash Amount Received (₹)</label>
-                  <div className="flex items-center gap-2 bg-white border-2 border-slate-200 rounded-2xl px-4 py-3 focus-within:border-emerald-500 transition-all">
+                  <label className="text-xs font-bold text-slate-500 mb-1.5 block">
+                    {cashType === 'credit' ? 'Amount to Credit (₹)' : 'Amount to Reduce (₹)'}
+                  </label>
+                  <div className={`flex items-center gap-2 bg-white border-2 rounded-2xl px-4 py-3 transition-all ${
+                    cashType === 'credit'
+                      ? 'border-slate-200 focus-within:border-emerald-500'
+                      : 'border-slate-200 focus-within:border-red-400'
+                  }`}>
                     <IndianRupee className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
                       type="number"
@@ -298,25 +330,43 @@ export const AdminAdvanceRequests = () => {
                 </div>
 
                 {/* Preview */}
-                {cashAmount && parseFloat(cashAmount) > 0 && (
-                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
-                    <p className="text-xs text-emerald-700">New balance will be</p>
-                    <p className="text-base font-extrabold text-emerald-700">
-                      ₹{(Number(cashTarget.prepaid_balance) + parseFloat(cashAmount)).toFixed(2)}
-                    </p>
-                  </motion.div>
+                {cashAmount && parseFloat(cashAmount) > 0 && (() => {
+                  const current   = Number(cashTarget.prepaid_balance);
+                  const amt       = parseFloat(cashAmount);
+                  const newBal    = cashType === 'credit' ? current + amt : current - amt;
+                  const isNeg     = newBal < 0;
+                  const accent    = cashType === 'credit' ? 'emerald' : 'red';
+                  return (
+                    <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                      className={`flex items-center justify-between border rounded-2xl px-4 py-3 bg-${accent}-50 border-${accent}-200`}>
+                      <p className={`text-xs text-${accent}-700`}>Balance after this</p>
+                      <p className={`text-base font-extrabold ${isNeg ? 'text-red-600' : `text-${accent}-700`}`}>
+                        ₹{newBal.toFixed(2)}{isNeg ? ' ⚠️' : ''}
+                      </p>
+                    </motion.div>
+                  );
+                })()}
+
+                {/* Debit warning */}
+                {cashType === 'debit' && parseFloat(cashAmount) > Number(cashTarget.prepaid_balance) && (
+                  <p className="text-xs text-red-500 font-semibold text-center">
+                    ⚠️ Amount exceeds current balance — this will be rejected
+                  </p>
                 )}
 
                 {/* Submit */}
                 <button
                   disabled={!cashAmount || parseFloat(cashAmount) <= 0 || addingCash}
                   onClick={handleCashTopup}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-[0.98]">
+                  className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm disabled:opacity-50 transition-all active:scale-[0.98] ${
+                    cashType === 'credit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-500 hover:bg-red-600'
+                  }`}>
                   {addingCash ? (
                     <>Processing…</>
-                  ) : (
+                  ) : cashType === 'credit' ? (
                     <><Plus className="w-4 h-4" /> Add ₹{parseFloat(cashAmount) > 0 ? parseFloat(cashAmount).toFixed(2) : '0'} to Balance</>
+                  ) : (
+                    <><Minus className="w-4 h-4" /> Reduce by ₹{parseFloat(cashAmount) > 0 ? parseFloat(cashAmount).toFixed(2) : '0'}</>
                   )}
                 </button>
 

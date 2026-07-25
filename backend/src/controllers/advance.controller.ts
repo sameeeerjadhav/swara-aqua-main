@@ -385,44 +385,55 @@ export const refundAdvanceOnCancel = async (
   );
 };
 
-// POST /api/advance/admin-topup  — admin credits cash into a customer's advance balance
+// POST /api/advance/admin-topup  — admin credits or debits a customer's advance balance
 export const adminCashTopup = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const adminId = req.user!.id;
-    const { userId, amount, note } = req.body;
+    const { userId, amount, note, type = 'credit' } = req.body;
 
     if (!userId || !amount || Number(amount) <= 0) {
       res.status(400).json({ message: 'userId and a positive amount are required' }); return;
     }
+    if (!['credit', 'debit'].includes(type)) {
+      res.status(400).json({ message: 'type must be credit or debit' }); return;
+    }
 
-    const creditAmount = parseFloat(Number(amount).toFixed(2));
-    const txNote = note?.trim() || 'Cash advance credit by admin';
+    const adjustAmount = parseFloat(Number(amount).toFixed(2));
+    const txNote = note?.trim() || (type === 'credit' ? 'Cash advance credit by admin' : 'Balance reduction by admin');
 
     // Verify target is a customer
     const [userRows] = await pool.query<RowDataPacket[]>(
-      'SELECT id, name, role FROM users WHERE id = ?', [userId]
+      'SELECT id, name, role, prepaid_balance FROM users WHERE id = ?', [userId]
     );
     if (!userRows.length || userRows[0].role !== 'customer') {
       res.status(404).json({ message: 'Customer not found' }); return;
     }
-    const customerName = userRows[0].name;
+    const customerName    = userRows[0].name;
+    const currentBalance  = Number(userRows[0].prepaid_balance);
+
+    // Validate debit won't go below zero
+    if (type === 'debit' && adjustAmount > currentBalance) {
+      res.status(400).json({
+        message: `Cannot reduce by ₹${adjustAmount}. Current balance is only ₹${currentBalance.toFixed(2)}`,
+      }); return;
+    }
 
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
-      // Credit advance balance
-      await conn.query(
-        'UPDATE users SET prepaid_balance = prepaid_balance + ? WHERE id = ?',
-        [creditAmount, userId]
-      );
+      // Credit or debit advance balance
+      const balanceOp = type === 'credit'
+        ? 'UPDATE users SET prepaid_balance = prepaid_balance + ? WHERE id = ?'
+        : 'UPDATE users SET prepaid_balance = prepaid_balance - ? WHERE id = ?';
+      await conn.query(balanceOp, [adjustAmount, userId]);
 
       // Record in advance_transactions
       await conn.query(
         `INSERT INTO advance_transactions
            (user_id, type, amount, mode, status, reference_id, note)
-         VALUES (?, 'credit', ?, 'cash', 'completed', ?, ?)`,
-        [userId, creditAmount, `admin-${adminId}-${Date.now()}`, txNote]
+         VALUES (?, ?, ?, 'cash', 'completed', ?, ?)`,
+        [userId, type, adjustAmount, `admin-${adminId}-${Date.now()}`, txNote]
       );
 
       await conn.commit();
@@ -442,18 +453,25 @@ export const adminCashTopup = async (req: AuthRequest, res: Response): Promise<v
     notify(() =>
       NotifService.sendToUser({
         userId: Number(userId),
-        title: '💵 Cash Payment Received!',
-        body:  `₹${creditAmount} cash added to your advance balance. New balance: ₹${newBalance}`,
+        title: type === 'credit' ? '💵 Cash Payment Received!' : '📉 Balance Adjusted',
+        body:  type === 'credit'
+          ? `₹${adjustAmount} cash added to your advance balance. New balance: ₹${newBalance}`
+          : `₹${adjustAmount} removed from your advance balance. New balance: ₹${newBalance}`,
         type:  'payment',
       })
     );
 
     SSE.sendToUser(Number(userId), 'advance_updated', { balance: newBalance });
 
-    console.log(`Admin ${adminId} topped up ₹${creditAmount} cash for customer ${customerName} (${userId})`);
-    res.json({ message: `₹${creditAmount} added to ${customerName}'s advance balance`, balance: newBalance });
+    const action = type === 'credit' ? 'credited' : 'debited';
+    console.log(`Admin ${adminId} ${action} ₹${adjustAmount} for customer ${customerName} (${userId})`);
+    res.json({
+      message: `₹${adjustAmount} ${action} ${type === 'credit' ? 'to' : 'from'} ${customerName}'s advance balance`,
+      balance: newBalance,
+    });
   } catch (err) {
     console.error('adminCashTopup error:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+

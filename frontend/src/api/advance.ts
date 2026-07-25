@@ -58,7 +58,7 @@ export const advanceApi = {
   rejectAccess: (userId: number, reason?: string) =>
     api.patch<{ message: string }>(`/advance/access-requests/${userId}/reject`, { reason }),
 
-  // Admin: add cash payment to customer's advance balance
-  adminCashTopup: (userId: number, amount: number, note?: string) =>
-    api.post<{ message: string; balance: number }>('/advance/admin-topup', { userId, amount, note }),
+  // Admin: add or subtract cash from customer's advance balance
+  adminCashTopup: (userId: number, amount: number, type: 'credit' | 'debit', note?: string) =>
+    api.post<{ message: string; balance: number }>('/advance/admin-topup', { userId, amount, type, note }),
 };

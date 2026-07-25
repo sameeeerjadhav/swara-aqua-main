@@ -623,19 +623,36 @@ export const AdminCustomers = () => {
               ${groupFilter === 'ungrouped' ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}>
             No Group
           </button>
-          {groups.map(g => (
-            <button key={g.id}
-              onClick={() => setGroupFilter(groupFilter === g.id ? null : g.id)}
-              className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all"
-              style={groupFilter === g.id
-                ? { backgroundColor: g.color, color: '#fff', borderColor: g.color }
-                : { backgroundColor: g.color + '15', color: g.color, borderColor: g.color + '40' }}>
-              <span>{g.icon}</span>{g.name}
-              <span className="text-[10px] opacity-70 ml-0.5">
-                {customers.filter(c => c.group_id === g.id).length}
-              </span>
-            </button>
-          ))}
+          {groups.map(g => {
+            const count = customers.filter(c => c.group_id === g.id).length;
+            const isActive = groupFilter === g.id;
+            return (
+              <div key={g.id} className="shrink-0 flex items-center rounded-lg border overflow-hidden transition-all"
+                style={isActive
+                  ? { backgroundColor: g.color, borderColor: g.color }
+                  : { backgroundColor: g.color + '15', borderColor: g.color + '40' }}>
+                {/* Filter part — click to toggle filter */}
+                <button
+                  onClick={() => setGroupFilter(isActive ? null : g.id)}
+                  className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 text-xs font-semibold transition-colors"
+                  style={{ color: isActive ? '#fff' : g.color }}>
+                  <span>{g.icon}</span>
+                  {g.name}
+                  <span className="text-[10px] opacity-70 ml-0.5">{count}</span>
+                </button>
+                {/* Divider */}
+                <div className="w-px self-stretch" style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.35)' : g.color + '40' }} />
+                {/* + Add members — opens Members panel for this group */}
+                <button
+                  onClick={() => { setManagingMembersOf(g); setMemberSearch(''); setShowManageGroups(true); }}
+                  title={`Add/remove members of "${g.name}"`}
+                  className="flex items-center justify-center px-1.5 py-1 text-xs font-bold transition-colors hover:bg-black/10"
+                  style={{ color: isActive ? '#fff' : g.color }}>
+                  +
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 

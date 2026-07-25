@@ -577,6 +577,10 @@ export const getCustomersForStaff = async (req: AuthRequest, res: Response): Pro
         (SELECT a.address FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address,
         (SELECT a.label   FROM user_addresses a WHERE a.user_id = u.id AND a.is_default = 1 LIMIT 1) AS address_label,
         u.profile_photo,
+        u.group_id,
+        g.name  AS group_name,
+        g.color AS group_color,
+        g.icon  AS group_icon,
         COALESCE((
           SELECT SUM(q) FROM (
             SELECT SUM(d.delivered_quantity) AS q
@@ -593,6 +597,7 @@ export const getCustomersForStaff = async (req: AuthRequest, res: Response): Pro
           ) t
         ), 0) AS today_jars
       FROM users u
+      LEFT JOIN customer_groups g ON g.id = u.group_id
       WHERE u.role = 'customer' AND u.status = 'active' AND u.deleted_at IS NULL
       ORDER BY u.name ASC
     `);

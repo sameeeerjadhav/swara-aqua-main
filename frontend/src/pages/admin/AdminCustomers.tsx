@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered, KeyRound } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered, KeyRound, Tag } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -11,8 +11,9 @@ import api from '../../api/axios';
 import { subscriptionApi } from '../../api/subscription';
 import { pendingApi } from '../../api/pending';
 import { customerOrderApi, applyOrder } from '../../api/customerOrder';
+import { groupsApi, type CustomerGroup } from '../../api/groups';
 
-interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; profile_photo?: string | null; }
+interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; profile_photo?: string | null; group_id?: number | null; group_name?: string | null; group_color?: string | null; group_icon?: string | null; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
 interface BalanceInfo { total: number; months: MonthBill[]; }
 interface SavedAddress { label: string; address: string; is_default: number; }
@@ -20,6 +21,24 @@ interface PendingDetail { id: number; name: string; phone: string; status: strin
 
 const LOW_BAL_THRESHOLD = 60;
 const STATUS_FILTERS = ['all', 'low_balance', 'pay_later', 'active', 'pending', 'rejected'];
+
+// ── Color palette for groups ──────────────────────────────────────────────────
+const GROUP_COLORS = [
+  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B',
+  '#EF4444', '#EC4899', '#14B8A6', '#F97316', '#6366F1',
+];
+const GROUP_ICONS = ['👥', '⭐', '💎', '🚀', '🏷️', '💰', '🎯', '📦', '🌟', '🔑'];
+
+// ── Group badge helper ────────────────────────────────────────────────────────
+const GroupBadge = ({ name, color, icon, small = false }: { name: string; color: string; icon: string; small?: boolean }) => (
+  <span
+    className={`inline-flex items-center gap-1 font-semibold rounded-full border ${small ? 'text-[9px] px-1.5 py-0.5' : 'text-[10px] px-2 py-0.5'}`}
+    style={{ color, borderColor: color + '40', backgroundColor: color + '12' }}
+  >
+    <span>{icon}</span>{name}
+  </span>
+);
+
 
 // ── Clickable phone — opens dialer on click, copy button on hover ──
 const PhoneLink = ({ phone, className = '' }: { phone: string; className?: string }) => {
@@ -166,6 +185,24 @@ export const AdminCustomers = () => {
   const [payLaterMap, setPayLaterMap] = useState<Record<number, number>>({});
   const [totalPayLater, setTotalPayLater] = useState(0);
 
+  // Customer Groups
+  const [groups, setGroups] = useState<CustomerGroup[]>([]);
+  const [groupFilter, setGroupFilter] = useState<number | 'ungrouped' | null>(null);
+  // Manage Groups modal
+  const [showManageGroups, setShowManageGroups] = useState(false);
+  const [groupForm, setGroupForm] = useState({ name: '', color: '#3B82F6', icon: '👥', description: '' });
+  const [editingGroup, setEditingGroup] = useState<CustomerGroup | null>(null);
+  const [savingGroup, setSavingGroup] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
+  const [assigningGroup, setAssigningGroup] = useState<{ customerId: number; current: number | null } | null>(null);
+
+  const loadGroups = async () => {
+    try {
+      const { data } = await groupsApi.list();
+      setGroups(data.groups);
+    } catch { /* silent */ }
+  };
+
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [addingCustomer, setAddingCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', password: '', jarRate: '50', address: '' });
@@ -223,7 +260,7 @@ export const AdminCustomers = () => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadGroups(); }, []);
 
   const handleStatus = async (id: number, status: string) => {
     setActionId(id);
@@ -381,6 +418,9 @@ export const AdminCustomers = () => {
 
   const filtered = customers.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.phone.includes(search);
+    // Group filter
+    if (groupFilter === 'ungrouped' && u.group_id) return false;
+    if (typeof groupFilter === 'number' && u.group_id !== groupFilter) return false;
     if (statusFilter === 'low_balance') {
       return matchSearch
         && u.status === 'active'
@@ -442,6 +482,11 @@ export const AdminCustomers = () => {
       <div className="flex items-center justify-end gap-2">
         <Button size="sm" icon={<UserPlus className="w-3.5 h-3.5" />} onClick={() => setShowAddCustomer(true)}>
           Add Customer
+        </Button>
+        <Button variant="secondary" size="sm"
+          icon={<Tag className="w-3.5 h-3.5" />}
+          onClick={() => { setEditingGroup(null); setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' }); setShowManageGroups(true); }}>
+          Groups
         </Button>
         <Button variant={reorderMode ? 'danger' : 'secondary'} size="sm"
           icon={<ListOrdered className="w-3.5 h-3.5" />}
@@ -537,6 +582,38 @@ export const AdminCustomers = () => {
         ))}
       </div>
 
+      {/* Group filter pills */}
+      {groups.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          <span className="shrink-0 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Group:</span>
+          <button
+            onClick={() => setGroupFilter(null)}
+            className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
+              ${groupFilter === null ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>
+            All
+          </button>
+          <button
+            onClick={() => setGroupFilter(groupFilter === 'ungrouped' ? null : 'ungrouped')}
+            className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
+              ${groupFilter === 'ungrouped' ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}>
+            No Group
+          </button>
+          {groups.map(g => (
+            <button key={g.id}
+              onClick={() => setGroupFilter(groupFilter === g.id ? null : g.id)}
+              className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all"
+              style={groupFilter === g.id
+                ? { backgroundColor: g.color, color: '#fff', borderColor: g.color }
+                : { backgroundColor: g.color + '15', color: g.color, borderColor: g.color + '40' }}>
+              <span>{g.icon}</span>{g.name}
+              <span className="text-[10px] opacity-70 ml-0.5">
+                {customers.filter(c => c.group_id === g.id).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Search */}
       <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-card focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10 transition-all">
         <Search className="w-4 h-4 text-slate-400 shrink-0" />
@@ -576,6 +653,9 @@ export const AdminCustomers = () => {
                         <Avatar name={u.name} photo={u.profile_photo} size="xs" className="w-8 h-8" />
                         <div>
                           <p className="text-sm font-semibold text-slate-800">{u.name}</p>
+                          {u.group_name && u.group_color && u.group_icon && (
+                            <GroupBadge name={u.group_name} color={u.group_color} icon={u.group_icon} small />
+                          )}
                           {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-0.5">
                               ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
@@ -699,6 +779,9 @@ export const AdminCustomers = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
                   <PhoneLink phone={u.phone} className="text-[11px] text-slate-400 mt-0.5" />
+                  {u.group_name && u.group_color && u.group_icon && (
+                    <GroupBadge name={u.group_name} color={u.group_color} icon={u.group_icon} small />
+                  )}
                   {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-1">
                       ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
@@ -877,6 +960,62 @@ export const AdminCustomers = () => {
                     <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-2xl px-4 py-3">
                       <CheckCircle className="w-4 h-4 text-green-500" />
                       <span className="text-sm font-semibold text-green-700">No pending balance — All clear!</span>
+                    </div>
+                  )}
+
+                  {/* Group assignment (inline) */}
+                  {groups.length > 0 && (
+                    <div className="bg-slate-50 rounded-2xl px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-xs font-semibold text-slate-600">Group</span>
+                        </div>
+                        {selectedCustomer.group_name && selectedCustomer.group_color && selectedCustomer.group_icon && (
+                          <GroupBadge name={selectedCustomer.group_name} color={selectedCustomer.group_color} icon={selectedCustomer.group_icon} />
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedCustomer.group_id && (
+                          <button
+                            disabled={!!assigningGroup}
+                            onClick={async () => {
+                              setAssigningGroup({ customerId: selectedCustomer.id, current: selectedCustomer.group_id ?? null });
+                              try {
+                                await groupsApi.assignCustomer(selectedCustomer.id, null);
+                                setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, group_id: null, group_name: null, group_color: null, group_icon: null } : c));
+                                setSelectedCustomer(s => s ? { ...s, group_id: null, group_name: null, group_color: null, group_icon: null } : s);
+                                await loadGroups();
+                                toast('Removed from group', 'success');
+                              } catch { toast('Failed', 'error'); }
+                              finally { setAssigningGroup(null); }
+                            }}
+                            className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">
+                            ✕ Remove from group
+                          </button>
+                        )}
+                        {groups.map(g => (
+                          <button key={g.id}
+                            disabled={!!assigningGroup || selectedCustomer.group_id === g.id}
+                            onClick={async () => {
+                              setAssigningGroup({ customerId: selectedCustomer.id, current: selectedCustomer.group_id ?? null });
+                              try {
+                                await groupsApi.assignCustomer(selectedCustomer.id, g.id);
+                                setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, group_id: g.id, group_name: g.name, group_color: g.color, group_icon: g.icon } : c));
+                                setSelectedCustomer(s => s ? { ...s, group_id: g.id, group_name: g.name, group_color: g.color, group_icon: g.icon } : s);
+                                await loadGroups();
+                                toast(`Moved to "${g.name}"`, 'success');
+                              } catch { toast('Failed', 'error'); }
+                              finally { setAssigningGroup(null); }
+                            }}
+                            className="text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors disabled:opacity-50"
+                            style={selectedCustomer.group_id === g.id
+                              ? { backgroundColor: g.color, color: '#fff', borderColor: g.color }
+                              : { backgroundColor: g.color + '12', color: g.color, borderColor: g.color + '40' }}>
+                            {g.icon} {g.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -1512,6 +1651,177 @@ export const AdminCustomers = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* ─── Manage Groups Modal ─── */}
+      <AnimatePresence>
+        {showManageGroups && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowManageGroups(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-brand-600" />
+                  <h2 className="text-base font-bold text-slate-900">Manage Customer Groups</h2>
+                </div>
+                <button onClick={() => setShowManageGroups(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+
+                {/* Create / Edit Form */}
+                <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    {editingGroup ? 'Edit Group' : 'New Group'}
+                  </p>
+
+                  {/* Name */}
+                  <input
+                    value={groupForm.name}
+                    onChange={e => setGroupForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Group name (e.g. Daily Orders)"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+
+                  {/* Color swatches */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 mb-1.5">Color</p>
+                    <div className="flex flex-wrap gap-2">
+                      {GROUP_COLORS.map(c => (
+                        <button key={c} onClick={() => setGroupForm(f => ({ ...f, color: c }))}
+                          className={`w-7 h-7 rounded-full border-2 transition-all ${groupForm.color === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-105'}`}
+                          style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Emoji icon */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 mb-1.5">Icon</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {GROUP_ICONS.map(ico => (
+                        <button key={ico} onClick={() => setGroupForm(f => ({ ...f, icon: ico }))}
+                          className={`w-8 h-8 flex items-center justify-center rounded-xl text-base border-2 transition-all ${groupForm.icon === ico ? 'border-brand-500 bg-brand-50' : 'border-transparent hover:border-slate-200 bg-white'}`}>
+                          {ico}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <input
+                    value={groupForm.description}
+                    onChange={e => setGroupForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Description (optional)"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+
+                  {/* Preview + Save */}
+                  <div className="flex items-center gap-2 pt-1">
+                    {groupForm.name && (
+                      <GroupBadge name={groupForm.name} color={groupForm.color} icon={groupForm.icon} />
+                    )}
+                    <div className="flex gap-2 ml-auto">
+                      {editingGroup && (
+                        <button onClick={() => { setEditingGroup(null); setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' }); }}
+                          className="px-3 py-1.5 rounded-xl bg-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-300 transition-colors">
+                          Cancel
+                        </button>
+                      )}
+                      <button
+                        disabled={!groupForm.name.trim() || savingGroup}
+                        onClick={async () => {
+                          if (!groupForm.name.trim()) return;
+                          setSavingGroup(true);
+                          try {
+                            if (editingGroup) {
+                              await groupsApi.update(editingGroup.id, groupForm);
+                              toast(`Group "${groupForm.name}" updated`, 'success');
+                              setEditingGroup(null);
+                            } else {
+                              await groupsApi.create(groupForm);
+                              toast(`Group "${groupForm.name}" created! 🎉`, 'success');
+                            }
+                            setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' });
+                            await loadGroups();
+                          } catch { toast('Failed to save group', 'error'); }
+                          finally { setSavingGroup(false); }
+                        }}
+                        className="px-4 py-1.5 rounded-xl bg-brand-600 text-white text-xs font-bold hover:bg-brand-700 transition-colors disabled:opacity-50 flex items-center gap-1.5">
+                        {savingGroup ? 'Saving…' : editingGroup ? '✓ Update' : '+ Create'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Existing groups list */}
+                {groups.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400 text-sm">
+                    No groups yet. Create your first group above.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Existing Groups</p>
+                    {groups.map(g => (
+                      <div key={g.id}
+                        className="flex items-center gap-3 bg-white border border-slate-100 rounded-2xl px-4 py-3 hover:border-slate-200 transition-colors">
+                        {/* Color dot */}
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0"
+                          style={{ backgroundColor: g.color + '20' }}>
+                          {g.icon}
+                        </div>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-800 truncate">{g.name}</p>
+                          <p className="text-[10px] text-slate-400">
+                            {g.member_count} customer{g.member_count !== 1 ? 's' : ''}
+                            {g.description ? ` · ${g.description}` : ''}
+                          </p>
+                        </div>
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => { setEditingGroup(g); setGroupForm({ name: g.name, color: g.color, icon: g.icon, description: g.description || '' }); }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            disabled={deletingGroupId === g.id}
+                            onClick={async () => {
+                              if (!window.confirm(`Delete "${g.name}"? Customers in this group will become ungrouped.`)) return;
+                              setDeletingGroupId(g.id);
+                              try {
+                                await groupsApi.delete(g.id);
+                                // Clear group from local customer list
+                                setCustomers(prev => prev.map(c => c.group_id === g.id ? { ...c, group_id: null, group_name: null, group_color: null, group_icon: null } : c));
+                                toast(`Group "${g.name}" deleted`, 'success');
+                                await loadGroups();
+                              } catch { toast('Failed to delete group', 'error'); }
+                              finally { setDeletingGroupId(null); }
+                            }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-400 transition-colors disabled:opacity-50">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };
+

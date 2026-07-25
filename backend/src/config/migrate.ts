@@ -468,6 +468,34 @@ export const runMigrations = async (): Promise<void> => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
+    // ── customer_groups table ────────────────────────────────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS customer_groups (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        name        VARCHAR(100) NOT NULL,
+        color       VARCHAR(20)  NOT NULL DEFAULT '#3B82F6',
+        icon        VARCHAR(10)  NOT NULL DEFAULT '👥',
+        description TEXT         NULL,
+        created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // ── users.group_id (FK → customer_groups) ────────────────────────────────
+    try {
+      await conn.query(`ALTER TABLE users ADD COLUMN group_id INT NULL`);
+      console.log('  ✅ Added users.group_id');
+    } catch (e: any) { if (e.errno !== 1060) throw e; }
+
+    // Add FK only if not already present
+    try {
+      await conn.query(`
+        ALTER TABLE users
+        ADD CONSTRAINT fk_users_group
+        FOREIGN KEY (group_id) REFERENCES customer_groups(id) ON DELETE SET NULL
+      `);
+      console.log('  ✅ Added FK users.group_id → customer_groups');
+    } catch (e: any) { if (e.errno !== 1826 && e.errno !== 1005) throw e; }
+
 console.log('✅ Migrations complete');  } catch (err) {
     console.error('❌ Migration error:', (err as Error).message);
     // Don't crash the server — log and continue

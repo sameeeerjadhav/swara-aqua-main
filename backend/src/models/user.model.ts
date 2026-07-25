@@ -56,7 +56,15 @@ export const createUser = async (
 
 export const getAllUsers = async (): Promise<Omit<User, 'password'>[]> => {
   const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT id, name, phone, role, status, jar_rate, prepaid_balance, advance_access, created_at FROM users WHERE deleted_at IS NULL'
+    `SELECT u.id, u.name, u.phone, u.role, u.status, u.jar_rate,
+            u.prepaid_balance, u.advance_access, u.created_at, u.profile_photo,
+            u.group_id,
+            g.name  AS group_name,
+            g.color AS group_color,
+            g.icon  AS group_icon
+     FROM users u
+     LEFT JOIN customer_groups g ON g.id = u.group_id
+     WHERE u.deleted_at IS NULL`
   );
   return rows as Omit<User, 'password'>[];
 };

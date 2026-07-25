@@ -135,6 +135,10 @@ export interface CustomerForStaff {
   profile_photo?: string | null;
   address: string | null;
   address_label: string | null;
+  group_id?: number | null;
+  group_name?: string | null;
+  group_color?: string | null;
+  group_icon?: string | null;
 }
 
 export const staffApi = {

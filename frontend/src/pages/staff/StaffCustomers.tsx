@@ -15,6 +15,7 @@ import { ordersApi, staffApi, CustomerForStaff } from '../../api/orders';
 import { useLang } from '../../context/LanguageContext';
 import { t } from '../../i18n/staff';
 import { customerOrderApi, applyOrder } from '../../api/customerOrder';
+import { groupsApi, type CustomerGroup } from '../../api/groups';
 
 type PaymentMode = 'cash' | 'online' | 'pay_later';
 
@@ -713,6 +714,10 @@ export const StaffCustomers = () => {
   const [savingOrder,   setSavingOrder]   = useState(false);
   const [orderSource,   setOrderSource]   = useState<'staff' | 'admin'>('admin');
 
+  // Customer Groups (read-only for staff)
+  const [groups,      setGroups]      = useState<CustomerGroup[]>([]);
+  const [groupFilter, setGroupFilter] = useState<number | 'ungrouped' | null>(null);
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -731,7 +736,10 @@ export const StaffCustomers = () => {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    groupsApi.list().then(({ data }) => setGroups(data.groups)).catch(() => {});
+  }, [load]);
 
   // Drag helpers
   const moveItem = useCallback((from: number, to: number) => {
@@ -773,10 +781,12 @@ export const StaffCustomers = () => {
     setReorderMode(false);
   };
 
-  const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search)
-  );
+  const filtered = customers.filter(c => {
+    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search);
+    if (groupFilter === 'ungrouped' && c.group_id) return false;
+    if (typeof groupFilter === 'number' && c.group_id !== groupFilter) return false;
+    return matchSearch;
+  });
 
   const handleSuccess = (data: typeof successData) => {
     const deliveredId = selected?.id;
@@ -844,7 +854,35 @@ export const StaffCustomers = () => {
         </div>
       )}
 
-      {/* ─── REORDER MODE ─── */}
+      {/* Group filter pills (read-only for staff) */}
+      {!reorderMode && groups.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          <span className="shrink-0 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Group:</span>
+          <button
+            onClick={() => setGroupFilter(null)}
+            className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
+              ${groupFilter === null ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>
+            All
+          </button>
+          <button
+            onClick={() => setGroupFilter(groupFilter === 'ungrouped' ? null : 'ungrouped')}
+            className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
+              ${groupFilter === 'ungrouped' ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}>
+            No Group
+          </button>
+          {groups.map(g => (
+            <button key={g.id}
+              onClick={() => setGroupFilter(groupFilter === g.id ? null : g.id)}
+              className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all"
+              style={groupFilter === g.id
+                ? { backgroundColor: g.color, color: '#fff', borderColor: g.color }
+                : { backgroundColor: g.color + '15', color: g.color, borderColor: g.color + '40' }}>
+              {g.icon} {g.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {reorderMode && (
         <div className="space-y-2">
           {/* Banner */}
@@ -941,7 +979,16 @@ export const StaffCustomers = () => {
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-900 truncate">{c.name}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-slate-900 truncate">{c.name}</p>
+                    {c.group_name && c.group_color && c.group_icon && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0"
+                        style={{ color: c.group_color, borderColor: c.group_color + '40', backgroundColor: c.group_color + '12' }}>
+                        {c.group_icon} {c.group_name}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3 mt-0.5">
                     <span className="flex items-center gap-1 text-xs text-slate-400">
                       <Phone className="w-3 h-3" /> {c.phone}

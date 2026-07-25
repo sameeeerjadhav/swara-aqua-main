@@ -219,16 +219,16 @@ export const AdminAdvanceRequests = () => {
         {cashTarget && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
             onClick={() => setCashTarget(null)}>
             <motion.div
-              initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+              initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
               onClick={e => e.stopPropagation()}
-              className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden">
+              className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
               {/* Header */}
-              <div className="bg-emerald-600 px-5 py-4 flex items-center justify-between">
+              <div className="bg-emerald-600 px-5 py-4 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <Banknote className="w-5 h-5 text-white" />
                   <div>
@@ -242,7 +242,8 @@ export const AdminAdvanceRequests = () => {
                 </button>
               </div>
 
-              <div className="px-5 py-4 space-y-4">
+              {/* Scrollable body */}
+              <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
                 {/* Current balance info */}
                 <div className="flex items-center justify-between bg-emerald-50 rounded-2xl px-4 py-3">
@@ -255,7 +256,7 @@ export const AdminAdvanceRequests = () => {
                 {/* Amount input */}
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1.5 block">Cash Amount Received (₹)</label>
-                  <div className="flex items-center gap-2 bg-slate-50 border-2 border-slate-200 rounded-2xl px-4 py-3 focus-within:border-emerald-500 transition-all">
+                  <div className="flex items-center gap-2 bg-white border-2 border-slate-200 rounded-2xl px-4 py-3 focus-within:border-emerald-500 transition-all">
                     <IndianRupee className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
                       type="number"
@@ -292,7 +293,7 @@ export const AdminAdvanceRequests = () => {
                     value={cashNote}
                     onChange={e => setCashNote(e.target.value)}
                     placeholder="e.g. Cash received on 26 July"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-emerald-400 transition-all"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-emerald-400 transition-all"
                   />
                 </div>
 
@@ -324,6 +325,7 @@ export const AdminAdvanceRequests = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
 
     </div>
   );

@@ -526,20 +526,6 @@ export const AdminCustomers = () => {
 
       </div>
 
-      {/* Pay Later outstanding total */}
-      {totalPayLater > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">⏳</span>
-            <div>
-              <p className="text-sm font-bold text-amber-800">Total Pay-Later Outstanding</p>
-              <p className="text-xs text-amber-600">Across all customers — not yet collected</p>
-            </div>
-          </div>
-          <span className="text-lg font-extrabold text-amber-700">₹{totalPayLater.toLocaleString('en-IN')}</span>
-        </div>
-      )}
-
       {/* ─── REORDER MODE: Framer Motion animated drag list ─── */}
       {reorderMode && (
         <div className="space-y-2">

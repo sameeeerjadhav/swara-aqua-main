@@ -64,6 +64,7 @@ export const AdminHome = () => {
   const [userStats,    setUserStats]    = useState<UserStats | null>(null);
   const [orderStats,   setOrderStats]   = useState<OrderStats | null>(null);
   const [pendingCash,  setPendingCash]  = useState(0);
+  const [totalPayLater, setTotalPayLater] = useState(0);
   const [expandedQR,   setExpandedQR]   = useState<{ src: string; label: string } | null>(null);
   const [pwdResetRequests, setPwdResetRequests] = useState<{ id: number; user_name: string; user_phone: string; created_at: string }[]>([]);
   const [pwdActionId, setPwdActionId] = useState<number | null>(null);
@@ -79,6 +80,10 @@ export const AdminHome = () => {
     // Load password reset requests
     api.get('/admin/password-reset-requests')
       .then(({ data }) => setPwdResetRequests(data.requests))
+      .catch(() => {});
+    // Load pay-later outstanding total
+    api.get('/admin/pay-later-total')
+      .then(({ data }) => setTotalPayLater(data.total_pending || 0))
       .catch(() => {});
   };
 
@@ -372,6 +377,27 @@ export const AdminHome = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* ── Pay-Later Outstanding ── */}
+      {totalPayLater > 0 && (
+        <motion.div variants={fadeUp}
+          onClick={() => navigate('/admin/customers')}
+          className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5 flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors active:scale-[0.98]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <span className="text-xl">⏳</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-800">Pay-Later Outstanding</p>
+              <p className="text-xs text-amber-600">Across all customers — tap to view</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-extrabold text-amber-700">₹{totalPayLater.toLocaleString('en-IN')}</span>
+            <ChevronRight className="w-4 h-4 text-amber-400" />
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Fullscreen QR overlay ── */}
       <AnimatePresence>

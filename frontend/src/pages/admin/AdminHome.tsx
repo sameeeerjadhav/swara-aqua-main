@@ -13,6 +13,7 @@ import { useToast } from '../../components/ui/Toast';
 import api from '../../api/axios';
 import { ordersApi } from '../../api/orders';
 import { inventoryApi } from '../../api/inventory';
+import { pendingApi } from '../../api/pending';
 import { useSSE, useSSEEventOnly } from '../../hooks/useSSE';
 
 interface UserStats  { total: number; pending: number; active: number; customers: number; staff: number; advance_requests: number; }
@@ -82,7 +83,7 @@ export const AdminHome = () => {
       .then(({ data }) => setPwdResetRequests(data.requests))
       .catch(() => {});
     // Load pay-later outstanding total
-    api.get('/admin/pay-later-total')
+    pendingApi.adminSummary()
       .then(({ data }) => setTotalPayLater(data.total_pending || 0))
       .catch(() => {});
   };
@@ -380,7 +381,9 @@ export const AdminHome = () => {
 
       {/* ── Pay-Later Outstanding ── */}
       {totalPayLater > 0 && (
-        <motion.div variants={fadeUp}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
           onClick={() => navigate('/admin/customers')}
           className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5 flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors active:scale-[0.98]">
           <div className="flex items-center gap-3">

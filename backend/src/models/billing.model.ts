@@ -285,10 +285,12 @@ export const recalculateBillForCustomer = async (
   }
 };
 
-/** Sync stale bills (0 jars) for a customer. Called on GET bills. */
+/** Sync stale bills for a customer. Called on GET /billing when customer fetches their bills.
+ *  Recalculates all unpaid/partial bills so any admin delivery adjustments are reflected. */
 export const syncStaleBills = async (customerId: number): Promise<void> => {
   const bills = await getBills({ customerId });
-  const stale = bills.filter(b => Number(b.total_jars) === 0);
+  // Recalculate any bill that isn't fully paid — delivery edits may have changed the totals
+  const stale = bills.filter(b => b.status !== 'paid');
   for (const b of stale) {
     await recalculateBillForCustomer(customerId, b.month, b.id);
   }

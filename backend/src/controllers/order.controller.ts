@@ -584,6 +584,32 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
     SSE.broadcastToRole('staff', 'order_updated', { orderId: del.order_id });
     SSE.broadcastToRole('admin', 'order_updated', { orderId: del.order_id });
 
+    // ── Recalculate bill if one already exists for this month ────────────────
+    // adjustDelivery changes jar counts and payment amounts, so the existing
+    // bill (total_jars, subtotal, cash_paid, pay_later_amount, total_amount)
+    // must be rebuilt from scratch to stay accurate.
+    const deliveryMonth = (() => {
+      const deliveredAt = del.delivered_at || del.created_at;
+      const d = new Date(deliveredAt);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    })();
+
+    pool.query<RowDataPacket[]>(
+      'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
+      [del.customer_id, deliveryMonth]
+    ).then(([billRows]) => {
+      if (!(billRows as RowDataPacket[]).length) return; // No bill yet — nothing to update
+      const billId = (billRows as RowDataPacket[])[0].id;
+      return BillingModel.recalculateBillForCustomer(del.customer_id, deliveryMonth, billId);
+    }).then(updated => {
+      if (updated) {
+        console.log(`[Billing] Recalculated bill for customer ${del.customer_id} / ${deliveryMonth} after delivery adjustment`);
+        // Push fresh bill data to customer and admin via SSE
+        SSE.sendToUser(del.customer_id, 'bill_updated', { month: deliveryMonth });
+        SSE.broadcastToRole('admin', 'bill_updated', { customerId: del.customer_id, month: deliveryMonth });
+      }
+    }).catch(e => console.warn('[Billing] Post-adjustment recalculate failed (non-fatal):', e?.message));
+
     res.json({
       message: 'Delivery adjusted successfully',
       deliveryId,

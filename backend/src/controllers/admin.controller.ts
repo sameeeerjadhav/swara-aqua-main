@@ -6,6 +6,8 @@ import pool from '../config/db';
 import { RowDataPacket } from 'mysql2';
 import bcrypt from 'bcryptjs';
 import * as NotifService from '../services/notification.service';
+import * as BillingModel from '../models/billing.model';
+import * as SSE from '../services/sse.service';
 
 const notify = (fn: () => Promise<void>) => {
   fn().catch(err => console.warn('FCM notification failed (non-fatal):', err?.message));
@@ -1071,6 +1073,23 @@ export const addManualDelivery = async (req: AuthRequest, res: Response): Promis
     );
 
     res.status(201).json({ message: 'Manual delivery entry added', id: result.insertId });
+
+    // ── Recalculate bill for this month (fire-and-forget) ──────────────────
+    const month = delivery_date.slice(0, 7); // YYYY-MM
+    pool.query<RowDataPacket[]>(
+      'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
+      [customerId, month]
+    ).then(([billRows]) => {
+      if (!(billRows as RowDataPacket[]).length) return;
+      const billId = (billRows as RowDataPacket[])[0].id;
+      return BillingModel.recalculateBillForCustomer(customerId, month, billId);
+    }).then(updated => {
+      if (updated) {
+        SSE.sendToUser(customerId, 'bill_updated', { month });
+        SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+      }
+    }).catch(e => console.warn('[Billing] addManualDelivery recalc failed:', e?.message));
+
   } catch (err) {
     console.error('addManualDelivery error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
@@ -1084,9 +1103,11 @@ export const updateManualDelivery = async (req: AuthRequest, res: Response): Pro
     const { jars, amount_collected, is_paid, payment_mode, delivery_date, delivery_time, notes } = req.body;
 
     const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT id FROM manual_delivery_entries WHERE id = ?', [entryId]
+      'SELECT id, customer_id, delivery_date FROM manual_delivery_entries WHERE id = ?', [entryId]
     );
     if (!rows.length) { res.status(404).json({ message: 'Entry not found' }); return; }
+    const existing = (rows as RowDataPacket[])[0];
+    const customerId = Number(existing.customer_id);
 
     // Reject future dates
     if (delivery_date) {
@@ -1113,6 +1134,29 @@ export const updateManualDelivery = async (req: AuthRequest, res: Response): Pro
     );
 
     res.json({ message: 'Manual delivery entry updated' });
+
+    // ── Recalculate bill for the affected month(s) ─────────────────────────
+    const months = new Set<string>();
+    months.add((delivery_date || existing.delivery_date).slice(0, 7));
+    if (delivery_date && delivery_date.slice(0, 7) !== String(existing.delivery_date).slice(0, 7)) {
+      months.add(String(existing.delivery_date).slice(0, 7)); // old month too
+    }
+    for (const month of months) {
+      pool.query<RowDataPacket[]>(
+        'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
+        [customerId, month]
+      ).then(([billRows]) => {
+        if (!(billRows as RowDataPacket[]).length) return;
+        const billId = (billRows as RowDataPacket[])[0].id;
+        return BillingModel.recalculateBillForCustomer(customerId, month, billId);
+      }).then(updated => {
+        if (updated) {
+          SSE.sendToUser(customerId, 'bill_updated', { month });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+        }
+      }).catch(e => console.warn('[Billing] updateManualDelivery recalc failed:', e?.message));
+    }
+
   } catch (err) {
     console.error('updateManualDelivery error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
@@ -1123,8 +1167,35 @@ export const updateManualDelivery = async (req: AuthRequest, res: Response): Pro
 export const deleteManualDelivery = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const entryId = Number(req.params.entryId);
+
+    // Fetch before deleting so we know which customer + month to recalculate
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT customer_id, delivery_date FROM manual_delivery_entries WHERE id = ?', [entryId]
+    );
+    const entry = (rows as RowDataPacket[])[0] ?? null;
+
     await pool.query('DELETE FROM manual_delivery_entries WHERE id = ?', [entryId]);
     res.json({ message: 'Manual delivery entry deleted' });
+
+    // ── Recalculate bill for the deleted entry's month ─────────────────────
+    if (entry) {
+      const customerId = Number(entry.customer_id);
+      const month      = String(entry.delivery_date).slice(0, 7);
+      pool.query<RowDataPacket[]>(
+        'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
+        [customerId, month]
+      ).then(([billRows]) => {
+        if (!(billRows as RowDataPacket[]).length) return;
+        const billId = (billRows as RowDataPacket[])[0].id;
+        return BillingModel.recalculateBillForCustomer(customerId, month, billId);
+      }).then(updated => {
+        if (updated) {
+          SSE.sendToUser(customerId, 'bill_updated', { month });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+        }
+      }).catch(e => console.warn('[Billing] deleteManualDelivery recalc failed:', e?.message));
+    }
+
   } catch (err) {
     console.error('deleteManualDelivery error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });

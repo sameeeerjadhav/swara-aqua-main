@@ -57,9 +57,10 @@ export const AdminBilling = () => {
   const [searchQ,      setSearchQ]      = useState('');
 
   // ── Generate ─────────────────────────────────────────────────────────────────
-  const [genMonth,      setGenMonth]      = useState(thisMonth);
-  const [genCustomerId, setGenCustomerId] = useState('');  // '' = all customers
-  const [generating,    setGenerating]    = useState(false);
+  const [genMonth,         setGenMonth]         = useState(thisMonth);
+  const [genCustomerId,    setGenCustomerId]    = useState('');  // '' = all customers
+  const [generating,       setGenerating]       = useState(false);
+  const [confirmGenerate,  setConfirmGenerate]  = useState(false);
 
   // ── Pay modal ────────────────────────────────────────────────────────────────
   const [payBill,   setPayBill]   = useState<Bill | null>(null);
@@ -121,6 +122,7 @@ export const AdminBilling = () => {
 
   // ── Generate ──────────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
+    setConfirmGenerate(false);
     setGenerating(true);
     try {
       const custId = genCustomerId ? Number(genCustomerId) : undefined;
@@ -236,13 +238,51 @@ export const AdminBilling = () => {
               ))}
             </select>
           </div>
-          <Button size="sm" loading={generating} icon={<Plus className="w-3.5 h-3.5" />} onClick={handleGenerate}>
+          <Button size="sm" loading={generating} icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={() => setConfirmGenerate(true)}>
             {genCustomerId
               ? `Generate for ${customers.find(c => String(c.id) === genCustomerId)?.name || 'Customer'}`
               : 'Generate All'}
           </Button>
         </div>
       </div>
+
+      {/* ── Confirm Generate Dialog ── */}
+      {confirmGenerate && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={() => setConfirmGenerate(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center shrink-0">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800">Generate Bills?</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {genCustomerId
+                    ? `For ${customers.find(c => String(c.id) === genCustomerId)?.name || 'selected customer'}`
+                    : 'For all active customers'} · <strong>{genMonth}</strong>
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 bg-slate-50 rounded-2xl px-4 py-3">
+              Existing bills for this month will be <strong>recalculated</strong> from fresh delivery data.
+              Months with no deliveries will be skipped automatically.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmGenerate(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button onClick={handleGenerate} disabled={generating}
+                className="flex-1 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-bold hover:bg-brand-700 disabled:opacity-50">
+                {generating ? 'Generating…' : 'Yes, Generate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════
           SUMMARY STRIP

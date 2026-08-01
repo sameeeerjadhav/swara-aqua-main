@@ -151,11 +151,8 @@ export const generateBillForCustomer = async (
     if ((existing as RowDataPacket[]).length) {
       const row = (existing as RowDataPacket[])[0];
       await conn.commit();
-      // Recalculate stale bills (0 jars or 0 paid)
-      if (Number(row.total_jars) === 0 || Number(row.paid_amount) === 0) {
-        return recalculateBillForCustomer(customerId, month, row.id);
-      }
-      return null; // Already up to date
+      // Always recalculate so the latest delivery data is reflected
+      return recalculateBillForCustomer(customerId, month, row.id);
     }
 
     // Customer info
@@ -171,6 +168,18 @@ export const generateBillForCustomer = async (
     const totalJars      = await countJars(conn, customerId, month);
     const prevPending    = await previousPending(conn, customerId, month);
     const breakdown      = await computePaymentBreakdown(conn, customerId, month);
+
+    // ⚠️ SKIP bill creation if there is NO activity this month.
+    // A bill with 0 jars and 0 payments would only contain previous_pending
+    // which is already tracked by the original month’s bill, causing double-counting.
+    const hasActivity = totalJars > 0
+      || breakdown.cash_paid > 0
+      || breakdown.online_paid > 0
+      || breakdown.pay_later_amount > 0;
+    if (!hasActivity) {
+      await conn.rollback();
+      return null; // Nothing to bill this month
+    }
 
     const jarRate: number  = Number(cust.jar_rate);
     const subtotal: number = parseFloat((totalJars * jarRate).toFixed(2));
@@ -244,6 +253,18 @@ export const recalculateBillForCustomer = async (
     const totalJars   = await countJars(conn, customerId, month);
     const prevPending = await previousPending(conn, customerId, month);
     const breakdown   = await computePaymentBreakdown(conn, customerId, month);
+
+    // If there’s no activity this month, delete this bill (it was an empty carry-forward artifact)
+    const hasActivity = totalJars > 0
+      || breakdown.cash_paid > 0
+      || breakdown.online_paid > 0
+      || breakdown.pay_later_amount > 0;
+    if (!hasActivity && Number(existing.paid_amount) === 0) {
+      await conn.query('DELETE FROM bills WHERE id = ?', [billId]);
+      await conn.commit();
+      console.log(`[Billing] Deleted empty carry-forward bill #${billId} for customer ${customerId} / ${month}`);
+      return null;
+    }
 
     const jarRate       = Number(existing.jar_rate);
     const subtotal      = parseFloat((totalJars * jarRate).toFixed(2));

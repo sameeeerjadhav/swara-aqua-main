@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UsersRound, Package, Bell, Warehouse, CreditCard, FileText, BarChart2, Image, UserRound, Wallet } from 'lucide-react';
+import { LayoutDashboard, Users, UsersRound, Package, Bell, Warehouse, CreditCard, FileText, BarChart2, Image, UserRound, Wallet, Tag } from 'lucide-react';
 import { DashboardLayout } from '../components/layouts/DashboardLayout';
 import { AdminHome } from './admin/AdminHome';
 import { AdminUsers } from './admin/AdminUsers';
@@ -16,6 +16,7 @@ import { AdminProfile } from './admin/AdminProfile';
 import { AdminBanners } from './admin/AdminBanners';
 import { AdminCasualDeliveries } from './admin/AdminCasualDeliveries';
 import { AdminAdvanceRequests } from './admin/AdminAdvanceRequests';
+import { AdminGroups } from './admin/AdminGroups';
 
 const NAV = [
   // ── Bottom nav primary (index 0-3, center is index 2) ──
@@ -26,6 +27,7 @@ const NAV = [
   // ── Overflow (More drawer) ──
   { label: 'Orders',     icon: Package,          to: '/admin/orders' },
   { label: 'Customers',  icon: UsersRound,       to: '/admin/customers' },
+  { label: 'Groups',     icon: Tag,              to: '/admin/groups' },
   { label: 'Staff',      icon: Users,            to: '/admin/staff' },
   { label: 'Inventory',  icon: Warehouse,        to: '/admin/inventory' },
   { label: 'Transactions', icon: CreditCard,     to: '/admin/transactions' },
@@ -48,6 +50,7 @@ const TITLES: Record<string, string> = {
   '/admin/advance-requests':  'Advance Payment Requests',
   '/admin/banners':       'Banner Management',
   '/admin/profile':       'My Profile',
+  '/admin/groups':        'Customer Groups',
 };
 
 export default function AdminDashboard() {
@@ -72,6 +75,7 @@ export default function AdminDashboard() {
         <Route path="wallet-requests"    element={<Navigate to="/admin/advance-requests" replace />} />
         <Route path="advance-requests"   element={<AdminAdvanceRequests />} />
         <Route path="casual-deliveries"  element={<AdminCasualDeliveries />} />
+        <Route path="groups"             element={<AdminGroups />} />
         <Route path="profile"       element={<AdminProfile />} />
         {/* Legacy redirect */}
         <Route path="users"         element={<Navigate to="/admin/staff" replace />} />

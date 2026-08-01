@@ -494,16 +494,9 @@ export const AdminCustomers = () => {
           Add Customer
         </Button>
 
+
         {/* ── Secondary actions — right side, scrolls on small screens ── */}
         <div className="flex items-center justify-end gap-2 flex-1 min-w-0 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => { setEditingGroup(null); setGroupForm({ name: '', color: '#3B82F6', icon: '👥', description: '' }); setShowManageGroups(true); }}
-            title="Manage Groups"
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all text-xs font-semibold shadow-sm">
-            <Tag className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Groups</span>
-          </button>
-
           <button
             onClick={() => { if (reorderMode) { cancelReorder(); } else { setReorderedList([...customers]); setReorderMode(true); } }}
             title={reorderMode ? 'Cancel reorder' : 'Reorder customers'}

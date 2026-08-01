@@ -372,6 +372,7 @@ export const generateMonthlyBills = async (
   }
 
   return { generated, recalculated, deleted, skipped, errors };
+};
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 

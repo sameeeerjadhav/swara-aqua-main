@@ -127,14 +127,18 @@ export const AdminBilling = () => {
     try {
       const custId = genCustomerId ? Number(genCustomerId) : undefined;
       const { data } = await billingApi.generate(genMonth, custId);
-      const recalc = data.recalculated ?? 0;
+      const recalc   = data.recalculated ?? 0;
+      const cleaned  = data.deleted      ?? 0;
       const custName = custId
         ? customers.find(c => c.id === custId)?.name || `#${custId}`
         : 'All Customers';
-      toast(
-        `${custName} — Generated: ${data.generated}, Updated: ${recalc}, Skipped: ${data.skipped}`,
-        data.errors > 0 ? 'warning' : 'success'
-      );
+      const parts = [
+        data.generated  > 0 ? `Generated: ${data.generated}`  : null,
+        recalc          > 0 ? `Updated: ${recalc}`            : null,
+        cleaned         > 0 ? `Cleaned: ${cleaned}`           : null,
+        data.skipped    > 0 ? `Skipped: ${data.skipped}`      : null,
+      ].filter(Boolean).join(' · ');
+      toast(`${custName} — ${parts || 'No changes'}`, data.errors > 0 ? 'warning' : 'success');
       refresh();
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Generation failed', 'error');

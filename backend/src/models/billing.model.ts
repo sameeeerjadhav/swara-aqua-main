@@ -317,12 +317,14 @@ export const syncStaleBills = async (customerId: number): Promise<void> => {
   }
 };
 
-// ── Generate bills for ALL customers or one ───────────────────────────────────
+// ── Generate / Replace bills for ALL customers or one ─────────────────────────
+// "Replace" mode: existing bills are always recalculated from fresh delivery data.
+// Empty bills (0 jars, 0 payments) are deleted to prevent double-counting.
 
 export const generateMonthlyBills = async (
   month: string,
-  customerId?: number   // if provided, generate only for that customer
-): Promise<{ generated: number; recalculated: number; skipped: number; errors: number }> => {
+  customerId?: number
+): Promise<{ generated: number; recalculated: number; deleted: number; skipped: number; errors: number }> => {
   const [customers] = await pool.query<RowDataPacket[]>(
     customerId
       ? `SELECT id FROM users WHERE id = ? AND role = 'customer' AND status = 'active'`
@@ -331,24 +333,37 @@ export const generateMonthlyBills = async (
   );
 
   if (!(customers as RowDataPacket[]).length) {
-    return { generated: 0, recalculated: 0, skipped: 0, errors: 0 };
+    return { generated: 0, recalculated: 0, deleted: 0, skipped: 0, errors: 0 };
   }
 
-  let generated = 0, recalculated = 0, skipped = 0, errors = 0;
+  let generated = 0, recalculated = 0, deleted = 0, skipped = 0, errors = 0;
 
   for (const c of customers as RowDataPacket[]) {
     try {
-      const [existing] = await pool.query<RowDataPacket[]>(
-        'SELECT id, total_jars, paid_amount FROM bills WHERE customer_id = ? AND month = ?',
+      // Check for existing bill
+      const [existingRows] = await pool.query<RowDataPacket[]>(
+        'SELECT id, paid_amount FROM bills WHERE customer_id = ? AND month = ?',
         [c.id, month]
       );
-      const hadBill = (existing as RowDataPacket[]).length > 0;
+      const existingBill = (existingRows as RowDataPacket[])[0] ?? null;
 
-      const bill = await generateBillForCustomer(c.id, month);
-      if (bill) {
-        hadBill ? recalculated++ : generated++;
+      if (existingBill) {
+        // ── REPLACE path: recalculate existing bill from fresh data ──
+        const updated = await recalculateBillForCustomer(c.id, month, existingBill.id);
+        if (updated) {
+          recalculated++;
+        } else {
+          // recalculateBillForCustomer returned null → empty bill was deleted
+          deleted++;
+        }
       } else {
-        skipped++;
+        // ── CREATE path: only create if there is activity this month ──
+        const bill = await generateBillForCustomer(c.id, month);
+        if (bill) {
+          generated++;
+        } else {
+          skipped++; // no activity → skip
+        }
       }
     } catch (err) {
       errors++;
@@ -356,8 +371,7 @@ export const generateMonthlyBills = async (
     }
   }
 
-  return { generated, recalculated, skipped, errors };
-};
+  return { generated, recalculated, deleted, skipped, errors };
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 

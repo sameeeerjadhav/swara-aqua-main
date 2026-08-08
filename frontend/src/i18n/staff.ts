@@ -7,6 +7,7 @@ const translations = {
   nav_dashboard:   { en: 'Dashboard',  mr: 'डॅशबोर्ड' },
   nav_deliveries:  { en: 'Deliveries', mr: 'डिलिव्हरी' },
   nav_customers:   { en: 'Customers',  mr: 'ग्राहक' },
+  nav_groups:      { en: 'Groups',     mr: 'गट' },
   nav_casual:      { en: 'Casual',     mr: 'सामान्य' },
   nav_inventory:   { en: 'Inventory',  mr: 'साठा' },
 

@@ -246,39 +246,101 @@ const AdminBottomNav = ({ items }: { items: NavItem[] }) => {
   );
 };
 
-// ── Staff bottom nav — all 5 items identical flat tabs ───────────────────────
-const StaffBottomNav = ({ items }: { items: NavItem[] }) => (
-  <nav
-    className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-[0_-1px_12px_rgba(0,0,0,0.06)]"
-    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-  >
-    <div className="flex justify-around items-end px-1 pt-2 pb-2">
-      {items.map(({ label, icon: Icon, to }) => (
-        <NavLink key={to} to={to} end
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${isActive ? 'text-brand-600' : 'text-slate-400'}`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <span className={`flex items-center justify-center w-10 h-6 rounded-full transition-all duration-200 ${isActive ? 'bg-brand-100' : ''}`}>
-                <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-brand-600 scale-110' : 'text-slate-400'}`} />
+// ── Staff bottom nav — 4 primary flat tabs + More drawer for overflow ─────────
+const StaffBottomNav = ({ items }: { items: NavItem[] }) => {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  const primary  = items.slice(0, 4);   // Deliveries | Customers | Dashboard | Groups
+  const overflow = items.slice(4);       // Casual | Inventory → go into "More"
+  const overflowActive = overflow.some(i => pathname === i.to || pathname.startsWith(i.to + '/'));
+
+  return (
+    <>
+      {/* Backdrop */}
+      <AnimatePresence>
+        {drawerOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onPointerDown={() => setDrawerOpen(false)}
+            className="md:hidden fixed inset-0 z-30 bg-black/30 backdrop-blur-sm"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Overflow slide-up drawer */}
+      <AnimatePresence>
+        {drawerOpen && overflow.length > 0 && (
+          <motion.div
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 340, damping: 32 }}
+            className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white rounded-t-3xl shadow-2xl border-t border-slate-100"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="flex items-center justify-between px-5 py-3">
+              <p className="text-sm font-bold text-slate-800">More</p>
+              <button onClick={() => setDrawerOpen(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-1 px-4 pb-6">
+              {overflow.map(({ label, icon: Icon, to }) => (
+                <NavLink key={to} to={to} end onClick={() => setDrawerOpen(false)}
+                  className={({ isActive }) =>
+                    `flex flex-col items-center gap-1.5 py-3 px-1 rounded-2xl transition-all ${isActive ? 'bg-brand-50 text-brand-600' : 'text-slate-500 hover:bg-slate-50'}`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-slate-500'}`} />
+                      <span className={`text-[10px] font-semibold text-center leading-tight ${isActive ? 'text-brand-600' : 'text-slate-500'}`}>
+                        {label}
+                      </span>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom bar */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-[0_-1px_12px_rgba(0,0,0,0.06)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex justify-around items-end px-1 pt-2 pb-2">
+          {primary.map(({ label, icon: Icon, to }) => (
+            <NavTab key={to} to={to} label={label} Icon={Icon} />
+          ))}
+
+          {/* More button — only when there are overflow items */}
+          {overflow.length > 0 && (
+            <button onClick={() => setDrawerOpen(true)}
+              className={`flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all duration-200 ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`}>
+              <span className={`flex items-center justify-center w-10 h-6 rounded-full transition-all duration-200 ${overflowActive ? 'bg-brand-100' : ''}`}>
+                <MoreHorizontal className={`w-5 h-5 ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`} />
               </span>
-              <span className={`text-[9px] font-semibold leading-none ${isActive ? 'text-brand-600' : 'text-slate-400'}`}>
-                {label}
+              <span className={`text-[9px] font-semibold leading-none ${overflowActive ? 'text-brand-600' : 'text-slate-400'}`}>
+                More
               </span>
-            </>
+            </button>
           )}
-        </NavLink>
-      ))}
-    </div>
-  </nav>
-);
+        </div>
+      </nav>
+    </>
+  );
+};
 
 export const BottomNav = ({ items, onOrderPress }: Props) => {
-  // Customer always has an onOrderPress FAB; admin does not
+  // Customer always has an onOrderPress FAB
   if (onOrderPress) return <SimpleBottomNav items={items} onOrderPress={onOrderPress} />;
-  // Staff: 5 items, show all flat without More overflow
-  if (items.length <= 5 && items.every(i => !i.to.startsWith('/admin'))) return <StaffBottomNav items={items} />;
+  // Staff: identified by /staff prefix on any nav item
+  if (items.some(i => i.to.startsWith('/staff'))) return <StaffBottomNav items={items} />;
   return <AdminBottomNav items={items} />;
 };

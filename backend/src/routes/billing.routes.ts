@@ -4,6 +4,7 @@ import {
   generateBills, getBills, getBillById, downloadBillPDF, recordPayment, payBillWithAdvance,
   getDeliveryReport, getDeliveryReportPDF, getBillingSummary, getSummaryBillPDF,
   clearDuesAdvance, clearDuesOrder, clearDuesVerify, getFeeConfig,
+  payBillOrder, payBillVerify, payBillAdvanceSingle,
 } from '../controllers/billing.controller';
 import {
   getRevenue, getPendingPayments, getStaffPerformance, getCustomerGrowth,
@@ -41,5 +42,10 @@ router.get('/:id/pdf',       authenticate, downloadBillPDF);
 router.get('/:id',           authenticate, getBillById);
 router.patch('/:id/pay',    ...allowAdmin, recordPayment);
 router.patch('/:id/pay-advance', authenticate, payBillWithAdvance);
+
+// ── Single-bill payment (customer) ────────────────────────────────────────────
+router.post('/:id/pay/order',          authenticate, payBillOrder);
+router.post('/:id/pay/verify',         authenticate, payBillVerify);
+router.patch('/:id/pay-advance-single', authenticate, payBillAdvanceSingle);
 
 export default router;

@@ -706,3 +706,185 @@ export const getSummaryBillPDF = async (req: AuthRequest, res: Response): Promis
     if (!res.headersSent) res.status(500).json({ message: 'Failed to generate PDF' });
   }
 };
+
+// ── POST /api/billing/:id/pay/order  (customer) ────────────────────────────────
+// Create a Razorpay order for paying a specific bill's remaining due amount.
+export const payBillOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const billId = Number(req.params.id);
+    const userId = req.user!.id;
+
+    const bill = await BillingModel.getBillById(billId);
+    if (!bill) { res.status(404).json({ message: 'Bill not found' }); return; }
+    if (bill.customer_id !== userId) { res.status(403).json({ message: 'Access denied' }); return; }
+
+    const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
+    if (due <= 0) { res.status(400).json({ message: 'This bill is already fully paid' }); return; }
+
+    const Razorpay = (await import('razorpay')).default;
+    const { withPlatformFee: wpf } = await import('../utils/platformFee');
+
+    const { fee: platformFee, total: chargeAmount } = await wpf(due);
+    const key_id     = process.env.RAZORPAY_KEY_ID     || '';
+    const key_secret = process.env.RAZORPAY_KEY_SECRET || '';
+    if (!key_id || !key_secret) { res.status(500).json({ message: 'Razorpay not configured' }); return; }
+
+    const rzp = new Razorpay({ key_id, key_secret });
+    const rzpOrder = await rzp.orders.create({
+      amount:   Math.round(chargeAmount * 100),
+      currency: 'INR',
+      receipt:  `bill_${billId}_${userId}_${Date.now()}`,
+      notes:    {
+        userId:      String(userId),
+        billId:      String(billId),
+        month:       bill.month,
+        purpose:     'bill_payment',
+        platformFee: String(platformFee),
+        baseAmount:  String(due),
+      },
+    });
+
+    res.json({
+      rzpOrderId:  rzpOrder.id,
+      amount:      rzpOrder.amount,
+      currency:    rzpOrder.currency,
+      keyId:       key_id,
+      due,
+      platformFee,
+      month:       bill.month,
+    });
+  } catch (err) {
+    console.error('payBillOrder error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── POST /api/billing/:id/pay/verify  (customer) ──────────────────────────────
+// Verify Razorpay payment for a single bill and update its paid_amount / status.
+export const payBillVerify = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const crypto = await import('crypto');
+
+    const billId = Number(req.params.id);
+    const userId = req.user!.id;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, amount } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !amount) {
+      res.status(400).json({ message: 'Missing payment verification fields' }); return;
+    }
+
+    // Signature verification
+    const expectedSig = crypto.default
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+    if (expectedSig !== razorpay_signature) {
+      res.status(400).json({ message: 'Payment verification failed — invalid signature' }); return;
+    }
+
+    const bill = await BillingModel.getBillById(billId);
+    if (!bill) { res.status(404).json({ message: 'Bill not found' }); return; }
+    if (bill.customer_id !== userId) { res.status(403).json({ message: 'Access denied' }); return; }
+
+    // The base amount paid (without platform fee)
+    const baseAmount = parseFloat(String(amount));
+    const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
+    const paying = Math.min(baseAmount, due); // never over-pay
+
+    // Record payment on the bill (updates paid_amount, status, online_paid column)
+    await BillingModel.recordBillPayment(billId, paying, 'online');
+
+    // Record transaction for audit trail
+    await pool.query(
+      `INSERT INTO transactions
+         (customer_id, order_id, amount, mode, type, collected_by, status, note)
+       VALUES (?, NULL, ?, 'online', 'credit', NULL, 'completed', ?)`,
+      [userId, paying, `Bill payment for ${bill.month} via Razorpay (${razorpay_payment_id})`]
+    );
+
+    const newPaid = parseFloat((Number(bill.paid_amount) + paying).toFixed(2));
+    const newDue  = Math.max(0, parseFloat((Number(bill.total_amount) - newPaid).toFixed(2)));
+
+    notify(() =>
+      NotifService.sendToUser({
+        userId,
+        title: '✅ Bill Payment Received',
+        body:  `₹${paying.toFixed(0)} paid for ${bill.month} bill. ${newDue > 0 ? `₹${newDue.toFixed(0)} remaining.` : 'Bill fully cleared! 🎉'}`,
+        type:  'payment',
+        data:  {},
+      })
+    );
+
+    res.json({
+      message:    newDue <= 0 ? 'Bill fully paid!' : 'Partial payment recorded',
+      paid:       paying,
+      remaining:  newDue,
+      billStatus: newDue <= 0 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid',
+    });
+  } catch (err) {
+    console.error('payBillVerify error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── PATCH /api/billing/:id/pay-advance-single  (customer) ─────────────────────
+// Pay a specific bill using the customer's advance (prepaid) balance.
+export const payBillAdvanceSingle = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const billId = Number(req.params.id);
+    const userId = req.user!.id;
+
+    const bill = await BillingModel.getBillById(billId);
+    if (!bill) { res.status(404).json({ message: 'Bill not found' }); return; }
+    if (bill.customer_id !== userId) { res.status(403).json({ message: 'Access denied' }); return; }
+
+    const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
+    if (due <= 0) { res.status(400).json({ message: 'This bill is already fully paid' }); return; }
+
+    const [[user]] = await pool.query<RowDataPacket[]>(
+      'SELECT prepaid_balance FROM users WHERE id = ?', [userId]
+    );
+    const advance = parseFloat((Number(user?.prepaid_balance) || 0).toFixed(2));
+    if (advance <= 0) { res.status(400).json({ message: 'No advance balance available' }); return; }
+
+    const paying  = Math.min(advance, due);
+    const newAdv  = parseFloat((advance - paying).toFixed(2));
+
+    // Deduct from advance balance
+    await pool.query('UPDATE users SET prepaid_balance = ? WHERE id = ?', [newAdv, userId]);
+
+    // Record on bill
+    await BillingModel.recordBillPayment(billId, paying, 'advance');
+
+    // Audit transaction
+    await pool.query(
+      `INSERT INTO transactions
+         (customer_id, order_id, amount, mode, type, collected_by, status, note)
+       VALUES (?, NULL, ?, 'advance', 'credit', NULL, 'completed', ?)`,
+      [userId, paying, `Bill payment for ${bill.month} via Advance Balance`]
+    );
+
+    const newDue = Math.max(0, parseFloat((due - paying).toFixed(2)));
+
+    notify(() =>
+      NotifService.sendToUser({
+        userId,
+        title: '✅ Bill Payment via Advance',
+        body:  `₹${paying.toFixed(0)} deducted from advance for ${bill.month} bill. ${newDue > 0 ? `₹${newDue.toFixed(0)} remaining.` : 'Bill fully cleared! 🎉'}`,
+        type:  'payment',
+        data:  {},
+      })
+    );
+
+    res.json({
+      message:          newDue <= 0 ? 'Bill fully paid via advance!' : 'Partial advance payment recorded',
+      paid:             paying,
+      remaining:        newDue,
+      advanceRemaining: newAdv,
+      billStatus:       newDue <= 0 ? 'paid' : paying > 0 ? 'partial' : 'unpaid',
+    });
+  } catch (err) {
+    console.error('payBillAdvanceSingle error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};

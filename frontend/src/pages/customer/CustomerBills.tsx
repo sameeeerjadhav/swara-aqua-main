@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { billingApi, Bill, Transaction, ClearDuesBill, ClearDuesOrderResponse } from '../../api/billing';
+import { billingApi, Bill, Transaction } from '../../api/billing';
 import { advanceApi } from '../../api/advance';
 import { eachDateInRange } from '../../utils/date';
 import { loadRazorpay } from '../../utils/razorpay';
@@ -53,6 +53,207 @@ const BILL_STATUS = {
   paid:    { label: 'Paid',    bg: 'bg-green-50 border-green-200',  text: 'text-green-700',  icon: CheckCircle2 },
   partial: { label: 'Partial', bg: 'bg-amber-50 border-amber-200',  text: 'text-amber-700',  icon: Clock },
   unpaid:  { label: 'Unpaid',  bg: 'bg-red-50 border-red-200',      text: 'text-red-600',    icon: AlertCircle },
+};
+
+// ── Pay Single Bill Modal ──────────────────────────────────────────────────────────
+interface PayBillModalProps {
+  bill: Bill;
+  due: number;
+  advanceBalance: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const PayBillModal = ({ bill, due, advanceBalance, onClose, onSuccess }: PayBillModalProps) => {
+  const { toast } = useToast();
+  const [mode, setMode] = useState<'advance' | 'razorpay'>(
+    advanceBalance >= due ? 'advance' : 'razorpay'
+  );
+  const [paying, setPaying] = useState(false);
+
+  const feeInfo      = usePlatformFee(mode === 'razorpay' ? due : 0);
+  const platformFee  = feeInfo.fee;
+  const totalCharged = mode === 'razorpay' ? feeInfo.total : due;
+  const canUseAdvance = advanceBalance > 0; // partial advance also allowed
+
+  const MONTH_NAMES_L = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthLabel = (() => {
+    const [y, m] = bill.month.split('-');
+    return `${MONTH_NAMES_L[Number(m) - 1]} ${y}`;
+  })();
+
+  const handlePay = async () => {
+    setPaying(true);
+    try {
+      if (mode === 'advance') {
+        await billingApi.payBillAdvanceSingle(bill.id);
+        toast(`✅ ₹${Math.min(advanceBalance, due).toFixed(0)} paid via Advance Balance!`, 'success');
+        onSuccess();
+      } else {
+        const rzpLoaded = await loadRazorpay();
+        if (!rzpLoaded) { toast('Razorpay failed to load', 'error'); return; }
+
+        const { data } = await billingApi.payBillOrder(bill.id);
+        await new Promise<void>((resolve, reject) => {
+          const options = {
+            key:         data.keyId,
+            amount:      data.amount,
+            currency:    data.currency,
+            name:        'Swara Aqua',
+            description: `${monthLabel} bill · ₹${due.toFixed(0)} due`,
+            order_id:    data.rzpOrderId,
+            handler: async (response: any) => {
+              try {
+                await billingApi.payBillVerify(bill.id, {
+                  razorpay_order_id:   response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature:  response.razorpay_signature,
+                  amount:              data.due,
+                });
+                toast(`✅ ₹${data.due.toFixed(0)} paid for ${monthLabel} bill!`, 'success');
+                resolve();
+              } catch { reject(new Error('Verification failed')); }
+            },
+            modal: { ondismiss: () => reject(new Error('dismissed')) },
+            theme: { color: '#2563eb' },
+          };
+          const rzp = new (window as any).Razorpay(options);
+          rzp.open();
+        });
+        onSuccess();
+      }
+    } catch (err: any) {
+      if (err?.message !== 'dismissed') {
+        toast(err?.response?.data?.message || err?.message || 'Payment failed', 'error');
+      }
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+      onClick={onClose}>
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="bg-slate-900 px-5 pt-6 pb-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-brand-500/20 flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-brand-400" />
+              </div>
+              <div>
+                <h2 className="text-white font-bold text-base">Pay Bill</h2>
+                <p className="text-slate-400 text-xs mt-0.5">{monthLabel} bill</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Bill summary */}
+          <div className="bg-slate-800 rounded-2xl px-4 py-3 space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 text-xs">Total Bill</span>
+              <span className="text-white text-sm font-bold">₹{Number(bill.total_amount).toFixed(0)}</span>
+            </div>
+            {Number(bill.paid_amount) > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-green-400 text-xs">Already Paid</span>
+                <span className="text-green-400 text-sm font-bold">−₹{Number(bill.paid_amount).toFixed(0)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center border-t border-slate-700 pt-1.5">
+              <span className="text-red-400 text-xs font-semibold">Outstanding</span>
+              <span className="text-red-400 text-lg font-extrabold">₹{due.toFixed(0)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment method + pay button */}
+        <div className="px-5 py-4 space-y-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pay via</p>
+
+          <div className="grid grid-cols-2 gap-2">
+            {/* Advance Balance */}
+            <button disabled={!canUseAdvance} onClick={() => setMode('advance')}
+              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border transition-all text-left relative
+                ${!canUseAdvance ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200' :
+                  mode === 'advance' ? 'bg-green-50 border-green-400 ring-2 ring-green-400/20' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+              <Wallet className={`w-5 h-5 ${mode === 'advance' && canUseAdvance ? 'text-green-600' : 'text-slate-400'}`} />
+              <div>
+                <p className={`text-xs font-bold ${mode === 'advance' && canUseAdvance ? 'text-green-700' : 'text-slate-700'}`}>Advance</p>
+                <p className="text-[10px] text-slate-400">Balance: ₹{advanceBalance.toFixed(0)}</p>
+              </div>
+              {!canUseAdvance && <span className="text-[9px] text-red-500 font-bold">No balance</span>}
+            </button>
+
+            {/* Razorpay */}
+            <button onClick={() => setMode('razorpay')}
+              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border transition-all text-left
+                ${mode === 'razorpay' ? 'bg-brand-50 border-brand-400 ring-2 ring-brand-400/20' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+              <CreditCard className={`w-5 h-5 ${mode === 'razorpay' ? 'text-brand-600' : 'text-slate-400'}`} />
+              <div>
+                <p className={`text-xs font-bold ${mode === 'razorpay' ? 'text-brand-700' : 'text-slate-700'}`}>Online</p>
+                <p className="text-[10px] text-slate-400">Razorpay</p>
+              </div>
+              {mode === 'razorpay' && <span className="text-[9px] text-amber-600 font-bold">+₹{platformFee} fee</span>}
+            </button>
+          </div>
+
+          {/* Fee notice */}
+          {mode === 'razorpay' && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+              <CreditCard className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <p className="text-[11px] text-amber-700 font-medium">
+                ₹{platformFee} platform fee · you pay ₹{Math.round(totalCharged)} total
+                {feeInfo.mode === 'percent' && <span className="ml-1 text-[10px] text-amber-500">(2%)</span>}
+              </p>
+            </div>
+          )}
+
+          {/* Advance partial notice */}
+          {mode === 'advance' && advanceBalance < due && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+              <Wallet className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <p className="text-[11px] text-amber-700 font-medium">
+                ₹{advanceBalance.toFixed(0)} will be applied · ₹{(due - advanceBalance).toFixed(0)} will remain due
+              </p>
+            </div>
+          )}
+
+          {/* Pay button */}
+          <button
+            onClick={handlePay}
+            disabled={paying}
+            className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]
+              ${paying
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : mode === 'advance'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-brand-600 text-white hover:bg-brand-700'}`}>
+            {paying ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Processing…</>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                {mode === 'advance'
+                  ? `Pay ₹${Math.min(advanceBalance, due).toFixed(0)} via Advance`
+                  : `Pay ₹${Math.round(totalCharged)} via Razorpay`}
+              </>
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
 };
 
 // ── Clear All Dues modal ──────────────────────────────────────────────────────
@@ -284,6 +485,7 @@ export const CustomerBills = () => {
   const [expandedTx,   setExpandedTx]  = useState<number | null>(null);
   const [expandedBill, setExpandedBill] = useState<number | null>(null);
   const [showClearDues, setShowClearDues] = useState(false);
+  const [payingBill,   setPayingBill]   = useState<Bill | null>(null);
 
   // ── Report ──────────────────────────────────────────────────────────────────
   const [reportMode,   setReportMode]  = useState<ReportMode>('monthly');
@@ -897,6 +1099,16 @@ export const CustomerBills = () => {
                                 Due: {new Date(b.due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
                               </p>
 
+                              {/* Pay Bill button — only if there's an outstanding amount */}
+                              {due > 0 && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); setPayingBill(b); }}
+                                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-700 text-white text-sm font-bold hover:from-brand-700 hover:to-brand-800 active:scale-[0.98] transition-all shadow-lg shadow-brand-500/20">
+                                  <CreditCard className="w-4 h-4" />
+                                  Pay ₹{due.toFixed(0)} Now
+                                </button>
+                              )}
+
                               {/* Download PDF */}
                               <button
                                 onClick={e => { e.stopPropagation(); window.open(billingApi.pdfUrl(b.id), '_blank'); }}
@@ -927,6 +1139,22 @@ export const CustomerBills = () => {
             onSuccess={() => { setShowClearDues(false); loadAll(); }}
           />
         )}
+      </AnimatePresence>
+
+      {/* ── Pay Single Bill modal ── */}
+      <AnimatePresence>
+        {payingBill && (() => {
+          const due = Math.max(0, Number(payingBill.total_amount) - Number(payingBill.paid_amount));
+          return (
+            <PayBillModal
+              bill={payingBill}
+              due={due}
+              advanceBalance={advanceBal}
+              onClose={() => setPayingBill(null)}
+              onSuccess={() => { setPayingBill(null); loadAll(); }}
+            />
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

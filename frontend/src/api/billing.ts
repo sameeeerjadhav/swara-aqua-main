@@ -197,6 +197,26 @@ export const billingApi = {
   clearDuesAdvance: () =>
     api.post<{ message: string; totalPaid: number; billsCleared: number }>('/billing/clear-dues/advance'),
 
+  // ── Single Bill Payment (customer) ─────────────────────────────────────────
+  payBillOrder: (billId: number) =>
+    api.post<{
+      rzpOrderId: string; amount: number; currency: string; keyId: string;
+      due: number; platformFee: number; month: string;
+    }>(`/billing/${billId}/pay/order`),
+
+  payBillVerify: (billId: number, data: {
+    razorpay_order_id: string; razorpay_payment_id: string;
+    razorpay_signature: string; amount: number;
+  }) =>
+    api.post<{ message: string; paid: number; remaining: number; billStatus: string }>(
+      `/billing/${billId}/pay/verify`, data
+    ),
+
+  payBillAdvanceSingle: (billId: number) =>
+    api.patch<{ message: string; paid: number; remaining: number; advanceRemaining: number; billStatus: string }>(
+      `/billing/${billId}/pay-advance-single`
+    ),
+
   // Reports
   revenue: (params?: Record<string, string>) =>
     api.get<{ data: RevenuePoint[]; summary: RevenueSummary; period: string }>(

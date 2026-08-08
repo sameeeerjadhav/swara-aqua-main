@@ -115,21 +115,28 @@ const computePaymentBreakdown = async (
     [customerId, month]
   );
 
-  // Pay-later: deliveries where customer owes at door (not yet collected)
-  // Use pending_payments table for accurate amount
+  // ── Pay-later split ────────────────────────────────────────────────────────
+  // Only count STILL-UNPAID pending_payments as pay_later_amount.
+  // If a pending_payment has been cleared (status='paid'), count it as online_paid
+  // matched to the bill month by the delivery's delivered_at date.
   const [plRows] = await conn.query<RowDataPacket[]>(
-    `SELECT COALESCE(SUM(pp.amount), 0) AS pay_later_total
+    `SELECT
+       COALESCE(SUM(CASE WHEN pp.status = 'pending' THEN pp.amount ELSE 0 END), 0) AS pay_later_unpaid,
+       COALESCE(SUM(CASE WHEN pp.status = 'paid'    THEN pp.amount ELSE 0 END), 0) AS pay_later_cleared
      FROM pending_payments pp
      JOIN orders o ON o.id = pp.order_id
+     JOIN deliveries d ON d.order_id = o.id
      WHERE o.customer_id = ?
-       AND DATE_FORMAT(pp.created_at, '%Y-%m') = ?`,
+       AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?`,
     [customerId, month]
   );
 
   return {
     cash_paid:        Number(deliveryRows[0].cash_paid)   + Number(manualRows[0].cash_paid),
-    online_paid:      Number(deliveryRows[0].online_door) + Number(manualRows[0].online_paid) + Number(txRows[0].online_bill_pay),
-    pay_later_amount: Number(plRows[0].pay_later_total),
+    online_paid:      Number(deliveryRows[0].online_door) + Number(manualRows[0].online_paid)
+                    + Number(txRows[0].online_bill_pay)
+                    + Number(plRows[0].pay_later_cleared), // cleared pay-later counts as online payment
+    pay_later_amount: Number(plRows[0].pay_later_unpaid), // only still-unpaid items
   };
 };
 

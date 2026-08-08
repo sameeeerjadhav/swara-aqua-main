@@ -3,6 +3,7 @@ import pool from '../config/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { withPlatformFee } from '../utils/platformFee';
+import * as BillingModel from '../models/billing.model';
 
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -127,6 +128,17 @@ export const verifyPendingPayment = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
+    // Collect affected bill months BEFORE marking as paid
+    // Join through deliveries to get the correct delivery month for each order
+    const [affectedMonths] = await pool.query<RowDataPacket[]>(
+      `SELECT DISTINCT DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') AS month
+       FROM pending_payments pp
+       JOIN orders o ON o.id = pp.order_id
+       JOIN deliveries d ON d.order_id = o.id
+       WHERE pp.customer_id = ? AND pp.status = 'pending'`,
+      [customerId]
+    );
+
     // Mark all pending items as paid
     await pool.query(
       `UPDATE pending_payments
@@ -159,6 +171,25 @@ export const verifyPendingPayment = async (req: AuthRequest, res: Response): Pro
     );
 
     res.json({ message: 'Pending balance cleared successfully', amount: pendingBalance });
+
+    // ── Recalculate bills for all affected months (fire-and-forget) ──────────
+    // Now that pending_payments are 'paid', computePaymentBreakdown will:
+    //   • pay_later_amount = 0  (no more unpaid pending_payments)
+    //   • online_paid += cleared amount (counted via pay_later_cleared)
+    // This may flip the bill status from partial → paid if fully covered.
+    for (const row of affectedMonths as RowDataPacket[]) {
+      const month = row.month as string;
+      const [billRows] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
+        [customerId, month]
+      );
+      const bill = (billRows as RowDataPacket[])[0];
+      if (bill) {
+        BillingModel.recalculateBillForCustomer(customerId, month, bill.id)
+          .catch(e => console.warn('[Billing] pay-later recalc failed:', e?.message));
+      }
+    }
+
   } catch (err) {
     res.status(500).json({ message: 'Internal server error' });
   }

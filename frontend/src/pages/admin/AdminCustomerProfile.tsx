@@ -417,6 +417,7 @@ export const AdminCustomerProfile = () => {
   const [editingEntry,   setEditingEntry]   = useState<DayDelivery | null>(null);
   const [deletingId,     setDeletingId]     = useState<number | null>(null);
   const [editingPayment, setEditingPayment] = useState<DayDelivery | null>(null); // for non-manual order deliveries
+  const [editingOrderPayment, setEditingOrderPayment] = useState<any | null>(null); // for Recent Orders row payment edit
 
   const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
 
@@ -940,9 +941,10 @@ export const AdminCustomerProfile = () => {
                           <span className="text-[11px] font-semibold text-slate-600">
                             {d.is_manual ? (d.notes ? `📝 ${d.notes}` : `By ${d.staff_name}`) : `Delivered by ${d.staff_name}`}
                           </span>
-                          {d.is_manual && (
-                            <div className="flex items-center gap-1.5">
-                              {d.is_paid ? (
+                          {/* Always show payment badge — manual gets paid/unpaid, non-manual gets mode */}
+                          <div className="flex items-center gap-1.5">
+                            {d.is_manual ? (
+                              d.is_paid ? (
                                 <span className="flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
                                   {PM_ICON[d.payment_mode] || <Check className="w-3 h-3" />}
                                   ₹{d.amount_collected} · {d.payment_mode}
@@ -951,9 +953,22 @@ export const AdminCustomerProfile = () => {
                                 <span className="text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full">
                                   Unpaid
                                 </span>
-                              )}
-                            </div>
-                          )}
+                              )
+                            ) : d.payment_mode && d.payment_mode !== 'none' ? (() => {
+                              const pmMap: Record<string, { label: string; cls: string }> = {
+                                cash:      { label: '💵 Cash',      cls: 'bg-green-100 text-green-700 border-green-200' },
+                                online:    { label: '📱 Online',    cls: 'bg-blue-100 text-blue-700 border-blue-200' },
+                                pay_later: { label: '🕒 Pay Later', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+                                advance:   { label: '💰 Advance',   cls: 'bg-purple-100 text-purple-700 border-purple-200' },
+                              };
+                              const pm = pmMap[d.payment_mode];
+                              return pm ? (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${pm.cls}`}>
+                                  {pm.label} · ₹{d.amount_collected}
+                                </span>
+                              ) : null;
+                            })() : null}
+                          </div>
                         </div>
                         {/* Payment edit form for regular deliveries */}
                         {!d.is_manual && editingPayment?.id === d.id && (
@@ -1022,23 +1037,91 @@ export const AdminCustomerProfile = () => {
           <div className="p-6 text-center text-sm text-slate-400">No orders yet</div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {orders.map((o: any) => (
-              <div key={o.id} className="px-5 py-3.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400">#{o.id}</span>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">{o.quantity} jars · <span className="capitalize text-slate-500">{o.type}</span></p>
-                    <p className="text-xs text-slate-400">
-                      {new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </p>
+            {orders.map((o: any) => {
+              const pmLabel: Record<string, { label: string; icon: string; cls: string }> = {
+                cash:      { label: 'Cash',      icon: '💵', cls: 'bg-green-50 text-green-700 border-green-200' },
+                online:    { label: 'Online',    icon: '📱', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                pay_later: { label: 'Pay Later', icon: '🕒', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+                advance:   { label: 'Advance',   icon: '💰', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+                none:      { label: 'N/A',       icon: '—',  cls: 'bg-slate-50 text-slate-400 border-slate-200' },
+              };
+              const pm  = pmLabel[o.payment_mode] ?? pmLabel['none'];
+              const canEdit = o.delivery_id && o.delivery_status === 'delivered';
+              const isEditing = editingOrderPayment?.id === o.id;
+
+              // Build a DayDelivery-shaped object so PaymentEditForm can reuse it
+              const asDayDelivery: DayDelivery = {
+                id: o.id,
+                delivery_id: o.delivery_id,
+                jars: o.quantity,
+                time: new Date(o.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                period: 'morning',
+                staff_name: o.staff_name || '',
+                is_manual: false,
+                is_paid: o.delivery_status === 'delivered',
+                payment_mode: o.payment_mode || 'none',
+                amount_collected: Number(o.collected_amount ?? o.total_amount ?? 0),
+              };
+
+              return (
+                <div key={o.id}>
+                  <div className="px-5 py-3.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-slate-400">#{o.id}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">{o.quantity} jars · <span className="capitalize text-slate-500">{o.type}</span></p>
+                        <p className="text-xs text-slate-400">
+                          {new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* Payment mode badge */}
+                      {o.payment_mode && o.payment_mode !== 'none' && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${pm.cls}`}>
+                          {pm.icon} {pm.label}
+                        </span>
+                      )}
+                      <p className="text-sm font-bold text-brand-600">₹{o.total_amount}</p>
+                      <OrderStatusBadge status={o.status} />
+                      {/* Edit payment button — only for delivered orders */}
+                      {canEdit && (
+                        <button
+                          onClick={() => setEditingOrderPayment(isEditing ? null : o)}
+                          title="Correct payment mode"
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isEditing ? 'bg-brand-100 text-brand-600' : 'hover:bg-slate-100 text-slate-400 hover:text-brand-600'
+                          }`}>
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {/* Inline payment edit form */}
+                  <AnimatePresence>
+                    {isEditing && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden px-5 pb-4">
+                        <PaymentEditForm
+                          delivery={asDayDelivery}
+                          onSaved={async () => {
+                            setEditingOrderPayment(null);
+                            // Reload profile to get updated pending/stats
+                            const [profileRes] = await Promise.all([
+                              calendarApi.getCustomerProfile(Number(id)),
+                            ]);
+                            setStats(profileRes.data.stats);
+                            setOrders(profileRes.data.orders);
+                          }}
+                          onCancel={() => setEditingOrderPayment(null)}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-sm font-bold text-brand-600">₹{o.total_amount}</p>
-                  <OrderStatusBadge status={o.status} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

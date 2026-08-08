@@ -218,10 +218,20 @@ export const getCustomerProfile = async (req: AuthRequest, res: Response): Promi
       [id]
     );
 
-    // Recent orders
+    // Recent orders (join latest delivery per order for payment editing)
     const [orders] = await pool.query<RowDataPacket[]>(
-      `SELECT o.*, s.name AS staff_name
-       FROM orders o LEFT JOIN users s ON s.id = o.staff_id
+      `SELECT o.*,
+              s.name AS staff_name,
+              d.id            AS delivery_id,
+              d.payment_mode  AS payment_mode,
+              d.collected_amount AS collected_amount,
+              d.status        AS delivery_status
+       FROM orders o
+       LEFT JOIN users s ON s.id = o.staff_id
+       LEFT JOIN deliveries d ON d.id = (
+         SELECT id FROM deliveries WHERE order_id = o.id
+         ORDER BY created_at DESC LIMIT 1
+       )
        WHERE o.customer_id = ? ORDER BY o.created_at DESC LIMIT 15`,
       [id]
     );

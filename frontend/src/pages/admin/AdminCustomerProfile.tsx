@@ -1045,7 +1045,7 @@ export const AdminCustomerProfile = () => {
                 advance:   { label: 'Advance',   icon: '💰', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
                 none:      { label: 'N/A',       icon: '—',  cls: 'bg-slate-50 text-slate-400 border-slate-200' },
               };
-              const pm  = pmLabel[o.payment_mode] ?? pmLabel['none'];
+              const pm  = pmLabel[o.delivery_payment_mode] ?? pmLabel['none'];
               const canEdit = o.delivery_id && o.delivery_status === 'delivered';
               const isEditing = editingOrderPayment?.id === o.id;
 
@@ -1059,8 +1059,8 @@ export const AdminCustomerProfile = () => {
                 staff_name: o.staff_name || '',
                 is_manual: false,
                 is_paid: o.delivery_status === 'delivered',
-                payment_mode: o.payment_mode || 'none',
-                amount_collected: Number(o.collected_amount ?? o.total_amount ?? 0),
+                payment_mode: o.delivery_payment_mode || 'none',
+                amount_collected: Number(o.delivery_collected_amount ?? o.total_amount ?? 0),
               };
 
               return (
@@ -1077,7 +1077,7 @@ export const AdminCustomerProfile = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       {/* Payment mode badge */}
-                      {o.payment_mode && o.payment_mode !== 'none' && (
+                      {o.delivery_payment_mode && o.delivery_payment_mode !== 'none' && (
                         <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${pm.cls}`}>
                           {pm.icon} {pm.label}
                         </span>

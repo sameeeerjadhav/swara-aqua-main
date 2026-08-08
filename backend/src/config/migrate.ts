@@ -496,6 +496,19 @@ export const runMigrations = async (): Promise<void> => {
       console.log('  ✅ Added FK users.group_id → customer_groups');
     } catch (e: any) { if (e.errno !== 1826 && e.errno !== 1005) throw e; }
 
+    // ── group_customer_order — delivery order within a group ──────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS group_customer_order (
+        group_id   INT NOT NULL,
+        owner_id   INT NOT NULL DEFAULT 0,
+        owner_role ENUM('admin','staff') NOT NULL DEFAULT 'admin',
+        ordered_ids JSON NOT NULL,
+        updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (group_id, owner_id, owner_role)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('  ✅ group_customer_order table ready');
+
 console.log('✅ Migrations complete');  } catch (err) {
     console.error('❌ Migration error:', (err as Error).message);
     // Don't crash the server — log and continue

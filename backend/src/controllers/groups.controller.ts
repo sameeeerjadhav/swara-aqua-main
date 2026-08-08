@@ -155,3 +155,69 @@ export const bulkAssignGroup = async (req: AuthRequest, res: Response): Promise<
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };
+
+// ── GET /admin/groups/:id/order ───────────────────────────────────────────────
+// Get saved delivery order within a group for the calling user
+export const getGroupOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const groupId  = Number(req.params.id);
+    const callerId = req.user!.id;
+    const callerRole = req.user!.role as 'admin' | 'staff';
+
+    let orderedIds: number[] = [];
+
+    // Staff: try personal order first
+    if (callerRole === 'staff') {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT ordered_ids FROM group_customer_order WHERE group_id = ? AND owner_id = ? AND owner_role = 'staff'`,
+        [groupId, callerId]
+      );
+      if (rows.length) orderedIds = JSON.parse(rows[0].ordered_ids as string);
+    }
+
+    // Fallback: admin global order
+    if (!orderedIds.length) {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT ordered_ids FROM group_customer_order WHERE group_id = ? AND owner_id = 0 AND owner_role = 'admin'`,
+        [groupId]
+      );
+      if (rows.length) orderedIds = JSON.parse(rows[0].ordered_ids as string);
+    }
+
+    const source = callerRole === 'staff' ? 'staff' : 'admin';
+    res.json({ ordered_ids: orderedIds, source });
+  } catch (err) {
+    console.error('getGroupOrder error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── PUT /admin/groups/:id/order ───────────────────────────────────────────────
+// Save delivery order within a group
+// Admin → saves global (owner_id=0); Staff → saves personal
+export const saveGroupOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const groupId    = Number(req.params.id);
+    const callerId   = req.user!.id;
+    const callerRole = req.user!.role as 'admin' | 'staff';
+    const { ordered_ids } = req.body as { ordered_ids: number[] };
+
+    if (!Array.isArray(ordered_ids)) {
+      res.status(400).json({ message: 'ordered_ids array is required' }); return;
+    }
+
+    const ownerId = callerRole === 'admin' ? 0 : callerId;
+    const role    = callerRole;
+
+    await pool.query(
+      `INSERT INTO group_customer_order (group_id, owner_id, owner_role, ordered_ids)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE ordered_ids = VALUES(ordered_ids)`,
+      [groupId, ownerId, role, JSON.stringify(ordered_ids)]
+    );
+    res.json({ message: 'Group order saved' });
+  } catch (err) {
+    console.error('saveGroupOrder error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};

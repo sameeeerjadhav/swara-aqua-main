@@ -29,4 +29,12 @@ export const groupsApi = {
   /** Bulk-assign multiple customers to a group */
   bulkAssign: (groupId: number, customerIds: number[]) =>
     api.patch<{ message: string }>(`/admin/groups/${groupId}/assign`, { customer_ids: customerIds }),
+
+  /** Get delivery order within a group */
+  getGroupOrder: (groupId: number) =>
+    api.get<{ ordered_ids: number[]; source: 'admin' | 'staff' }>(`/admin/groups/${groupId}/order`),
+
+  /** Save delivery order within a group */
+  saveGroupOrder: (groupId: number, ordered_ids: number[]) =>
+    api.put<{ message: string }>(`/admin/groups/${groupId}/order`, { ordered_ids }),
 };

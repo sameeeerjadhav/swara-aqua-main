@@ -15,6 +15,7 @@ import {
 import {
   listGroups, createGroup, updateGroup, deleteGroup,
   setCustomerGroup, bulkAssignGroup,
+  getGroupOrder, saveGroupOrder,
 } from '../controllers/groups.controller';
 import { upload as photoUpload, uploadCustomerPhoto } from '../controllers/photo.controller';
 import { getStatus as getFirebaseStatus, uploadCredentials, reloadCredentials } from '../controllers/firebase-setup.controller';
@@ -72,5 +73,8 @@ router.put('/groups/:id',               ...allowAdmin, updateGroup);
 router.delete('/groups/:id',            ...allowAdmin, deleteGroup);
 router.patch('/customers/:id/group',    ...allowAdmin, setCustomerGroup); // single customer assign
 router.patch('/groups/:id/assign',      ...allowAdmin, bulkAssignGroup);  // bulk assign
+// Group delivery order (admin saves global; staff saves personal)
+router.get('/groups/:id/order',         authenticate,  getGroupOrder);
+router.put('/groups/:id/order',         authenticate,  saveGroupOrder);
 
 export default router;

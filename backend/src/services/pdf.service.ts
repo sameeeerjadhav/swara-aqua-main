@@ -66,15 +66,31 @@ interface DailyJar { day: number; jars: number; }
 
 const getDailyDeliveries = async (customerId: number, month: string): Promise<DailyJar[]> => {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT DAY(COALESCE(d.delivered_at, d.created_at)) AS day, SUM(d.delivered_quantity) AS jars
-     FROM deliveries d
-     JOIN orders o ON o.id = d.order_id
-     WHERE o.customer_id = ?
-       AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?
-       AND d.status = 'delivered'
-     GROUP BY DAY(COALESCE(d.delivered_at, d.created_at))
+    // Merge regular order deliveries + admin calendar manual entries into a single per-day sum
+    `SELECT day, SUM(jars) AS jars FROM (
+       -- Regular order deliveries
+       SELECT DAY(COALESCE(d.delivered_at, d.created_at)) AS day,
+              SUM(d.delivered_quantity) AS jars
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       WHERE o.customer_id = ?
+         AND DATE_FORMAT(COALESCE(d.delivered_at, d.created_at), '%Y-%m') = ?
+         AND d.status = 'delivered'
+       GROUP BY DAY(COALESCE(d.delivered_at, d.created_at))
+
+       UNION ALL
+
+       -- Admin calendar manual delivery entries
+       SELECT DAY(m.delivery_date) AS day,
+              SUM(m.jars) AS jars
+       FROM manual_delivery_entries m
+       WHERE m.customer_id = ?
+         AND DATE_FORMAT(m.delivery_date, '%Y-%m') = ?
+       GROUP BY DAY(m.delivery_date)
+     ) AS combined
+     GROUP BY day
      ORDER BY day ASC`,
-    [customerId, month]
+    [customerId, month, customerId, month]
   );
   return rows.map(r => ({ day: Number(r.day), jars: Number(r.jars) }));
 };

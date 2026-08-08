@@ -226,7 +226,6 @@ const GroupMemberPage = ({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-bold text-slate-900 truncate">{c.name}</p>
-                        <GroupBadge name={group.name} color={group.color} icon={group.icon} />
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1 text-xs text-slate-400">
@@ -537,7 +536,6 @@ export const AdminGroups = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold text-slate-800">{g.name}</p>
-                        <GroupBadge name={g.name} color={g.color} icon={g.icon} />
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {count} member{count !== 1 ? "s" : ""}

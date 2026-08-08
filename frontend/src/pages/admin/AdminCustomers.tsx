@@ -457,7 +457,7 @@ export const AdminCustomers = () => {
   const selPayLater = selectedCustomer ? (payLaterMap[selectedCustomer.id] ?? 0) : 0;
 
   return (
-    <div className="max-w-4xl space-y-5">
+    <div className="space-y-5 w-full">
 
       {/* Reorder mode banner */}
       <AnimatePresence>

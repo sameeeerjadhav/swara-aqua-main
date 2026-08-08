@@ -65,6 +65,7 @@ export const AdminBilling = () => {
   // ── Pay modal ────────────────────────────────────────────────────────────────
   const [payBill,   setPayBill]   = useState<Bill | null>(null);
   const [payAmount, setPayAmount] = useState('');
+  const [payMode,   setPayMode]   = useState<'cash' | 'online'>('cash');
   const [paying,    setPaying]    = useState(false);
 
   // ── Customer view ─────────────────────────────────────────────────────────────
@@ -151,9 +152,9 @@ export const AdminBilling = () => {
     if (!payBill || !payAmount || Number(payAmount) <= 0) { toast('Enter valid amount', 'error'); return; }
     setPaying(true);
     try {
-      await billingApi.recordPayment(payBill.id, Number(payAmount));
-      toast('Payment recorded ✅', 'success');
-      setPayBill(null); setPayAmount('');
+      await billingApi.recordPayment(payBill.id, Number(payAmount), payMode);
+      toast(`${payMode === 'cash' ? '💵 Cash' : '💳 Online'} payment of ₹${payAmount} recorded ✅`, 'success');
+      setPayBill(null); setPayAmount(''); setPayMode('cash');
       refresh();
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Payment failed', 'error');
@@ -410,13 +411,13 @@ export const AdminBilling = () => {
                       </div>
                     </div>
 
-                    {/* Amounts */}
-                    <div className="hidden sm:flex items-center gap-6 shrink-0 text-right">
-                      <div>
+                    {/* Amounts — always visible including mobile */}
+                    <div className="flex items-center gap-3 sm:gap-6 shrink-0 text-right">
+                      <div className="hidden sm:block">
                         <p className="text-[10px] text-slate-400">Billed</p>
                         <p className="text-sm font-bold text-slate-700">{fmt(c.total_billed)}</p>
                       </div>
-                      <div>
+                      <div className="hidden sm:block">
                         <p className="text-[10px] text-slate-400">Paid</p>
                         <p className="text-sm font-bold text-green-600">{fmt(c.total_paid)}</p>
                       </div>
@@ -470,12 +471,13 @@ export const AdminBilling = () => {
                                       <p className="text-[10px] text-slate-400">{b.total_jars} jars × ₹{b.jar_rate}</p>
                                     </div>
 
-                                    <div className="hidden sm:flex items-center gap-4 text-right shrink-0">
-                                      <div>
+                                    {/* Amounts — visible on all screen sizes */}
+                                    <div className="flex items-center gap-2 sm:gap-4 text-right shrink-0">
+                                      <div className="hidden sm:block">
                                         <p className="text-[9px] text-slate-400">Total</p>
                                         <p className="text-xs font-bold text-slate-800">{fmt(b.total_amount)}</p>
                                       </div>
-                                      <div>
+                                      <div className="hidden sm:block">
                                         <p className="text-[9px] text-slate-400">Collected</p>
                                         <p className="text-xs font-bold text-green-600">{fmt(b.paid_amount)}</p>
                                       </div>
@@ -487,16 +489,20 @@ export const AdminBilling = () => {
                                       </div>
                                     </div>
 
-                                    {/* Actions */}
+                                    {/* Actions — always visible */}
                                     <div className="flex items-center gap-1 shrink-0">
                                       <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
                                         className="p-1.5 rounded-lg hover:bg-brand-50 text-brand-500 transition-colors" title="PDF">
                                         <Download className="w-3.5 h-3.5" />
                                       </button>
                                       {b.status !== 'paid' && (
-                                        <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); }}
-                                          className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 transition-colors" title="Record payment">
-                                          <IndianRupee className="w-3.5 h-3.5" />
+                                        <button
+                                          onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); setPayMode('cash'); }}
+                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold transition-colors"
+                                          title="Record payment">
+                                          <IndianRupee className="w-3 h-3" />
+                                          <span className="hidden sm:inline">Record</span>
+                                          <span className="sm:hidden">{fmt(due)}</span>
                                         </button>
                                       )}
                                     </div>
@@ -975,46 +981,86 @@ export const AdminBilling = () => {
       <AnimatePresence>
         {payBill && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
             onClick={() => setPayBill(null)}>
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+            <motion.div
+              initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={e => e.stopPropagation()}
-              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6">
+              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
 
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Record Payment</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">{payBill.customer_name} · {payBill.month}</p>
-                </div>
-                <button onClick={() => setPayBill(null)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mb-5">
-                {[
-                  { label: 'Total',   value: fmt(payBill.total_amount), color: 'text-slate-800' },
-                  { label: 'Paid',    value: fmt(payBill.paid_amount),  color: 'text-green-600' },
-                  { label: 'Due',     value: fmt(billDue(payBill)),     color: 'text-red-600'   },
-                ].map(item => (
-                  <div key={item.label} className="bg-slate-50 rounded-xl p-3 text-center">
-                    <p className="text-[10px] text-slate-400">{item.label}</p>
-                    <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
+              {/* Header */}
+              <div className="bg-slate-900 px-5 pt-5 pb-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-green-500/20 flex items-center justify-center">
+                      <IndianRupee className="w-4 h-4 text-green-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-bold text-sm">Record Payment</h3>
+                      <p className="text-slate-400 text-xs mt-0.5">{payBill.customer_name} · {payBill.month}</p>
+                    </div>
                   </div>
-                ))}
+                  <button onClick={() => setPayBill(null)} className="w-7 h-7 flex items-center justify-center rounded-xl bg-slate-800 text-slate-400 hover:text-white">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Bill summary */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Total',     value: fmt(payBill.total_amount), color: 'text-white' },
+                    { label: 'Collected', value: fmt(payBill.paid_amount),  color: 'text-green-400' },
+                    { label: 'Due',       value: fmt(billDue(payBill)),     color: 'text-red-400'   },
+                  ].map(item => (
+                    <div key={item.label} className="bg-slate-800 rounded-xl p-2.5 text-center">
+                      <p className="text-[9px] text-slate-400">{item.label}</p>
+                      <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <form onSubmit={handlePay} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Amount (₹)</label>
-                  <input type="number" min={0.01} step="0.01" value={payAmount}
-                    onChange={e => setPayAmount(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-lg font-bold outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
-                </div>
-                <Button type="submit" loading={paying} size="lg" className="w-full" icon={<CheckCircle className="w-4 h-4" />}>
-                  Record ₹{payAmount || '0'}
-                </Button>
-              </form>
+              {/* Body */}
+              <div className="px-5 py-4">
+                <form onSubmit={handlePay} className="space-y-4">
+
+                  {/* Payment Mode */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Payment Mode</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setPayMode('cash')}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm transition-all
+                          ${payMode === 'cash'
+                            ? 'bg-green-50 border-green-400 text-green-700 ring-2 ring-green-400/20'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                        💵 Cash
+                      </button>
+                      <button type="button" onClick={() => setPayMode('online')}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm transition-all
+                          ${payMode === 'online'
+                            ? 'bg-blue-50 border-blue-400 text-blue-700 ring-2 ring-blue-400/20'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                        💳 Online
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount (₹)</label>
+                    <input type="number" min={0.01} step="0.01" value={payAmount}
+                      onChange={e => setPayAmount(e.target.value)}
+                      placeholder={`Due: ₹${billDue(payBill).toFixed(0)}`}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xl font-bold outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                  </div>
+
+                  <Button type="submit" loading={paying} size="lg" className="w-full"
+                    icon={<CheckCircle className="w-4 h-4" />}>
+                    Record {payMode === 'cash' ? '💵 Cash' : '💳 Online'} ₹{payAmount || '0'}
+                  </Button>
+                </form>
+              </div>
             </motion.div>
           </motion.div>
         )}

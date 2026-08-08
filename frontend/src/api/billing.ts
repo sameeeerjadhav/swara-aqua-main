@@ -184,8 +184,8 @@ export const billingApi = {
     return `/api/billing/summary-bill/pdf?month=${encodeURIComponent(month)}&token=${encodeURIComponent(token)}`;
   },
 
-  recordPayment: (id: number, amount: number) =>
-    api.patch(`/billing/${id}/pay`, { amount }),
+  recordPayment: (id: number, amount: number, mode: 'cash' | 'online' = 'cash') =>
+    api.patch(`/billing/${id}/pay`, { amount, mode }),
 
   // ── Clear All Dues ──────────────────────────────────────────────────────────
   clearDuesOrder: () =>

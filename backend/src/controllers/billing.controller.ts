@@ -124,20 +124,32 @@ export const downloadBillPDF = async (req: AuthRequest, res: Response): Promise<
 // PATCH /api/billing/:id/pay  (admin)
 export const recordPayment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const schema = z.object({ amount: z.number().positive() });
-    const { amount } = schema.parse(req.body);
+    const schema = z.object({
+      amount: z.number().positive(),
+      mode:   z.enum(['cash', 'online']).default('cash'),
+    });
+    const { amount, mode } = schema.parse(req.body);
 
     const bill = await BillingModel.getBillById(Number(req.params.id));
     if (!bill) { res.status(404).json({ message: 'Bill not found' }); return; }
     if (bill.status === 'paid') { res.status(400).json({ message: 'Bill already paid' }); return; }
 
-    await BillingModel.recordBillPayment(bill.id, amount, 'cash');
+    await BillingModel.recordBillPayment(bill.id, amount, mode);
+
+    // Audit transaction
+    await pool.query(
+      `INSERT INTO transactions
+         (customer_id, order_id, amount, mode, type, collected_by, status, note)
+       VALUES (?, NULL, ?, ?, 'credit', ?, 'completed', ?)`,
+      [bill.customer_id, amount, mode, req.user!.id,
+       `Bill payment for ${bill.month} recorded by admin (${mode})`]
+    );
 
     notify(() =>
       NotifService.sendToUser({
         userId: bill.customer_id,
         title:  '✅ Payment Recorded',
-        body:   `₹${amount} payment recorded for your ${bill.month} bill.`,
+        body:   `₹${amount} ${mode === 'cash' ? 'cash' : 'online'} payment recorded for your ${bill.month} bill.`,
         type:   'payment',
       })
     );

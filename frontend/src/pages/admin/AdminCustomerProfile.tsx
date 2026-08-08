@@ -15,7 +15,7 @@ import { useToast } from '../../components/ui/Toast';
 import { EditProfileModal } from '../../components/ui/EditProfileModal';
 import {
   calendarApi, DayDelivery, CustomerProfile, CustomerProfileStats,
-  ManualDeliveryPayload,
+  ManualDeliveryPayload, DeliveryPaymentPayload,
 } from '../../api/calendar';
 import { customerOrderApi } from '../../api/customerOrder';
 import api from '../../api/axios';
@@ -60,6 +60,98 @@ const PhoneLink = ({ phone, className = '' }: { phone: string; className?: strin
         <Copy className="w-3 h-3 text-slate-400" />
       </button>
     </span>
+  );
+};
+
+// ── Payment Edit Form (for regular order deliveries) ─────────────────────────
+interface PaymentEditFormProps {
+  delivery: DayDelivery;
+  onSaved: () => void;
+  onCancel: () => void;
+}
+
+const PAYMENT_MODES: { value: 'cash' | 'online' | 'advance' | 'pay_later'; label: string; icon: string }[] = [
+  { value: 'cash',      label: 'Cash',      icon: '💵' },
+  { value: 'online',    label: 'Online',    icon: '📱' },
+  { value: 'advance',   label: 'Advance',   icon: '💰' },
+  { value: 'pay_later', label: 'Pay Later', icon: '🕒' },
+];
+
+const PaymentEditForm = ({ delivery, onSaved, onCancel }: PaymentEditFormProps) => {
+  const { toast } = useToast();
+  const [mode,    setMode]   = useState<'cash' | 'online' | 'advance' | 'pay_later'>(
+    delivery.payment_mode === 'none' ? 'cash' : delivery.payment_mode as any
+  );
+  const [amount,  setAmount] = useState(delivery.amount_collected);
+  const [saving,  setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!delivery.delivery_id) { toast('Cannot edit this delivery', 'error'); return; }
+    setSaving(true);
+    try {
+      const payload: DeliveryPaymentPayload = { payment_mode: mode, collected_amount: amount };
+      await calendarApi.updateDeliveryPayment(delivery.delivery_id, payload);
+      toast('Payment updated successfully', 'success');
+      onSaved();
+    } catch (err: any) {
+      toast(err?.response?.data?.message || 'Failed to update payment', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="bg-gradient-to-br from-brand-50 to-indigo-50 border border-brand-200 rounded-2xl p-4 space-y-3 mt-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-brand-800">✏️ Correct Payment Mode</p>
+        <button onClick={onCancel} className="p-1 rounded-lg hover:bg-white/70 transition-colors">
+          <X className="w-4 h-4 text-slate-400" />
+        </button>
+      </div>
+
+      {/* Mode picker */}
+      <div>
+        <label className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2 block">Payment Mode</label>
+        <div className="grid grid-cols-2 gap-2">
+          {PAYMENT_MODES.map(pm => (
+            <button key={pm.value}
+              onClick={() => setMode(pm.value)}
+              className={`flex items-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all ${
+                mode === pm.value
+                  ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+              }`}>
+              <span>{pm.icon}</span> {pm.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Amount — hidden for pay_later */}
+      {mode !== 'pay_later' && (
+        <div>
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5 block">Amount Collected (₹)</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+            <input
+              type="number" min={0} value={amount}
+              onChange={e => setAmount(parseFloat(e.target.value) || 0)}
+              className="w-full bg-white border border-slate-200 rounded-xl pl-7 pr-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Save */}
+      <button
+        onClick={handleSave} disabled={saving}
+        className="w-full py-2.5 rounded-xl bg-brand-600 text-white text-sm font-bold flex items-center justify-center gap-2 hover:bg-brand-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+        {saving ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+        {saving ? 'Saving...' : 'Save Changes'}
+      </button>
+    </motion.div>
   );
 };
 
@@ -321,9 +413,10 @@ export const AdminCustomerProfile = () => {
   const [dayLoading, setDayLoading]       = useState(false);
 
   // Add/edit delivery form state
-  const [showAddForm,  setShowAddForm]  = useState(false);
-  const [editingEntry, setEditingEntry] = useState<DayDelivery | null>(null);
-  const [deletingId,   setDeletingId]   = useState<number | null>(null);
+  const [showAddForm,    setShowAddForm]    = useState(false);
+  const [editingEntry,   setEditingEntry]   = useState<DayDelivery | null>(null);
+  const [deletingId,     setDeletingId]     = useState<number | null>(null);
+  const [editingPayment, setEditingPayment] = useState<DayDelivery | null>(null); // for non-manual order deliveries
 
   const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
 
@@ -796,6 +889,17 @@ export const AdminCustomerProfile = () => {
                         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.05 }}
                         className={`rounded-2xl border px-4 py-3.5 ${p.bg} ${p.border} relative`}>
+                        {/* Non-manual badge + payment edit button */}
+                        {!d.is_manual && (
+                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                            <button
+                              onClick={() => { setEditingPayment(editingPayment?.id === d.id ? null : d); setEditingEntry(null); setShowAddForm(false); }}
+                              className="p-1 rounded-lg hover:bg-white/80 transition-colors"
+                              title="Edit payment mode">
+                              <Edit3 className="w-3.5 h-3.5 text-slate-400 hover:text-brand-600" />
+                            </button>
+                          </div>
+                        )}
                         {/* Manual badge + actions */}
                         {d.is_manual && (
                           <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
@@ -851,6 +955,14 @@ export const AdminCustomerProfile = () => {
                             </div>
                           )}
                         </div>
+                        {/* Payment edit form for regular deliveries */}
+                        {!d.is_manual && editingPayment?.id === d.id && (
+                          <PaymentEditForm
+                            delivery={d}
+                            onSaved={() => { setEditingPayment(null); handleDeliverySaved(); }}
+                            onCancel={() => setEditingPayment(null)}
+                          />
+                        )}
                       </motion.div>
                     );
                   })}

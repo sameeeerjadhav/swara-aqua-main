@@ -10,6 +10,7 @@ import {
   resetUserPassword,
   getPasswordResetRequests, approvePasswordReset, rejectPasswordReset,
   addManualDelivery, updateManualDelivery, deleteManualDelivery,
+  updateDeliveryPayment,
 } from '../controllers/admin.controller';
 import {
   listGroups, createGroup, updateGroup, deleteGroup,
@@ -45,6 +46,9 @@ router.get('/customer-deliveries/:id/day', authenticate, getCustomerDayDeliverie
 router.post('/customers/:id/manual-delivery',    ...allowAdmin, addManualDelivery);
 router.put('/manual-deliveries/:entryId',         ...allowAdmin, updateManualDelivery);
 router.delete('/manual-deliveries/:entryId',      ...allowAdmin, deleteManualDelivery);
+
+// Admin: edit order-based delivery payment (correct staff mistakes)
+router.patch('/deliveries/:id/payment',           ...allowAdmin, updateDeliveryPayment);
 
 router.get('/customer-order',         ...allowAdmin, getCustomerOrder);
 router.put('/customer-order',         ...allowAdmin, saveCustomerOrder);

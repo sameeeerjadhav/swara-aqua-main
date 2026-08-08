@@ -738,6 +738,7 @@ export const getCustomerDayDeliveries = async (req: AuthRequest, res: Response):
       const period = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
       return {
         id:               r.id,
+        delivery_id:      r.is_manual ? null : r.id, // real deliveries.id for non-manual
         jars:             Number(r.jars),
         time:             r.time_str,
         period,
@@ -1185,6 +1186,89 @@ export const deleteManualDelivery = async (req: AuthRequest, res: Response): Pro
 
   } catch (err) {
     console.error('deleteManualDelivery error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
+// ── PATCH /admin/deliveries/:id/payment — Admin corrects staff payment mistake ──
+export const updateDeliveryPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const deliveryId = Number(req.params.id);
+    const { payment_mode, collected_amount } = req.body as {
+      payment_mode: 'cash' | 'online' | 'advance' | 'pay_later';
+      collected_amount: number;
+    };
+
+    if (!['cash', 'online', 'advance', 'pay_later'].includes(payment_mode)) {
+      res.status(400).json({ message: 'Invalid payment_mode' });
+      return;
+    }
+
+    // Fetch current delivery to get old values + customer_id + month
+    const [dRows] = await pool.query<RowDataPacket[]>(`
+      SELECT d.id, d.payment_mode AS old_mode, d.collected_amount AS old_amount,
+             o.customer_id,
+             DATE(COALESCE(d.delivered_at, d.created_at)) AS delivery_date
+      FROM deliveries d
+      JOIN orders o ON o.id = d.order_id
+      WHERE d.id = ? AND d.status = 'delivered'
+    `, [deliveryId]);
+
+    if (!dRows.length) {
+      res.status(404).json({ message: 'Delivery not found or not yet delivered' });
+      return;
+    }
+
+    const row          = dRows[0];
+    const customerId   = Number(row.customer_id);
+    const oldMode      = row.old_mode as string;
+    const oldAmount    = Number(row.old_amount);
+    const deliveryDate = String(row.delivery_date);
+    const month        = deliveryDate.slice(0, 7);
+    const newAmount    = Number(collected_amount);
+
+    // ── Update the delivery row ───────────────────────────────────────────────
+    await pool.query(
+      `UPDATE deliveries
+         SET payment_mode = ?, collected_amount = ?
+       WHERE id = ?`,
+      [payment_mode, newAmount, deliveryId]
+    );
+
+    // ── Adjust pending_balance when pay_later is involved ────────────────────
+    // If old was pay_later and new is not → reduce pending balance (debt cleared)
+    // If old was not pay_later and new is pay_later → increase pending balance (new debt)
+    const wasPayLater = oldMode === 'pay_later';
+    const isPayLater  = payment_mode === 'pay_later';
+
+    if (wasPayLater && !isPayLater) {
+      // Staff had incorrectly set pay_later; now corrected → remove that debt
+      await pool.query(
+        `UPDATE users SET pending_balance = GREATEST(0, pending_balance - ?) WHERE id = ?`,
+        [oldAmount, customerId]
+      );
+    } else if (!wasPayLater && isPayLater) {
+      // Changing to pay_later → customer owes this new amount
+      await pool.query(
+        `UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?`,
+        [newAmount, customerId]
+      );
+    }
+
+    res.json({ message: 'Delivery payment updated', deliveryId, payment_mode, collected_amount: newAmount });
+
+    // ── Fire-and-forget bill recalculation ────────────────────────────────────
+    BillingModel.generateBillForCustomer(customerId, month)
+      .then(updated => {
+        if (updated) {
+          SSE.sendToUser(customerId, 'bill_updated', { month });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+        }
+      })
+      .catch(e => console.warn('[Billing] updateDeliveryPayment recalc failed:', e?.message));
+
+  } catch (err) {
+    console.error('updateDeliveryPayment error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };

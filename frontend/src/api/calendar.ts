@@ -32,13 +32,14 @@ export interface CustomerProfileStats {
 
 export interface DayDelivery {
   id: number;
+  delivery_id: number | null; // non-null for regular order deliveries; null for manual entries
   jars: number;
   time: string;
   period: 'morning' | 'afternoon' | 'evening';
   staff_name: string;
   // extended fields
   amount_collected: number;
-  payment_mode: 'cash' | 'online' | 'advance' | 'none';
+  payment_mode: 'cash' | 'online' | 'advance' | 'pay_later' | 'none';
   is_paid: boolean;
   is_manual: boolean;
   notes: string | null;
@@ -52,6 +53,11 @@ export interface ManualDeliveryPayload {
   delivery_date: string;   // YYYY-MM-DD
   delivery_time: string;   // HH:MM:SS
   notes?: string;
+}
+
+export interface DeliveryPaymentPayload {
+  payment_mode: 'cash' | 'online' | 'advance' | 'pay_later';
+  collected_amount: number;
 }
 
 export const calendarApi = {
@@ -97,4 +103,8 @@ export const calendarApi = {
 
   deleteManualDelivery: (entryId: number) =>
     api.delete(`/admin/manual-deliveries/${entryId}`),
+
+  // Admin: correct a staff delivery's payment mode / amount
+  updateDeliveryPayment: (deliveryId: number, payload: DeliveryPaymentPayload) =>
+    api.patch<{ message: string }>(`/admin/deliveries/${deliveryId}/payment`, payload),
 };

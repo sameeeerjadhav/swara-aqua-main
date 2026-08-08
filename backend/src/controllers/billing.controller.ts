@@ -829,6 +829,7 @@ export const payBillVerify = async (req: AuthRequest, res: Response): Promise<vo
 
 // ── PATCH /api/billing/:id/pay-advance-single  (customer) ─────────────────────
 // Pay a specific bill using the customer's advance (prepaid) balance.
+// All DB operations run in a single atomic transaction to prevent partial failures.
 export const payBillAdvanceSingle = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const billId = Number(req.params.id);
@@ -841,30 +842,55 @@ export const payBillAdvanceSingle = async (req: AuthRequest, res: Response): Pro
     const due = parseFloat((Number(bill.total_amount) - Number(bill.paid_amount)).toFixed(2));
     if (due <= 0) { res.status(400).json({ message: 'This bill is already fully paid' }); return; }
 
-    const [[user]] = await pool.query<RowDataPacket[]>(
-      'SELECT prepaid_balance FROM users WHERE id = ?', [userId]
-    );
-    const advance = parseFloat((Number(user?.prepaid_balance) || 0).toFixed(2));
-    if (advance <= 0) { res.status(400).json({ message: 'No advance balance available' }); return; }
+    // ── Single atomic transaction: balance deduction + bill update + audit ───
+    const conn = await pool.getConnection();
+    let paying = 0;
+    let newAdv  = 0;
+    let newDue  = 0;
+    try {
+      await conn.beginTransaction();
 
-    const paying  = Math.min(advance, due);
-    const newAdv  = parseFloat((advance - paying).toFixed(2));
+      // Lock user row to get current balance
+      const [[user]] = await conn.query<RowDataPacket[]>(
+        'SELECT prepaid_balance FROM users WHERE id = ? FOR UPDATE', [userId]
+      );
+      const advance = parseFloat((Number(user?.prepaid_balance) || 0).toFixed(2));
+      if (advance <= 0) {
+        await conn.rollback();
+        res.status(400).json({ message: 'No advance balance available' });
+        return;
+      }
 
-    // Deduct from advance balance
-    await pool.query('UPDATE users SET prepaid_balance = ? WHERE id = ?', [newAdv, userId]);
+      paying = Math.min(advance, due);
+      newAdv  = parseFloat((advance - paying).toFixed(2));
+      newDue  = Math.max(0, parseFloat((due - paying).toFixed(2)));
 
-    // Record on bill
-    await BillingModel.recordBillPayment(billId, paying, 'advance');
+      // 1. Deduct from advance balance
+      await conn.query('UPDATE users SET prepaid_balance = ? WHERE id = ?', [newAdv, userId]);
 
-    // Audit transaction
-    await pool.query(
-      `INSERT INTO transactions
-         (customer_id, order_id, amount, mode, type, collected_by, status, note)
-       VALUES (?, NULL, ?, 'advance', 'credit', NULL, 'completed', ?)`,
-      [userId, paying, `Bill payment for ${bill.month} via Advance Balance`]
-    );
+      // 2. Update bill (paid_amount, advance_paid column, status)
+      const newPaid   = parseFloat((Number(bill.paid_amount) + paying).toFixed(2));
+      const newStatus = newDue <= 0 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid';
+      await conn.query(
+        `UPDATE bills SET paid_amount = ?, status = ?, advance_paid = advance_paid + ? WHERE id = ?`,
+        [newPaid, newStatus, paying, billId]
+      );
 
-    const newDue = Math.max(0, parseFloat((due - paying).toFixed(2)));
+      // 3. Audit transaction record
+      await conn.query(
+        `INSERT INTO transactions
+           (customer_id, order_id, amount, mode, type, collected_by, status, note)
+         VALUES (?, NULL, ?, 'advance', 'credit', NULL, 'completed', ?)`,
+        [userId, paying, `Bill payment for ${bill.month} via Advance Balance`]
+      );
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
 
     notify(() =>
       NotifService.sendToUser({

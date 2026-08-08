@@ -165,27 +165,19 @@ export const verifyPendingPayment = async (req: AuthRequest, res: Response): Pro
 };
 
 // ── GET /api/pending/admin ────────────────────────────────────────────────────
-// Admin: all customers with their full outstanding balance
-// outstanding = pending_balance (pay-later orders) + bill_outstanding + manual_unpaid (unbilled)
+// Admin: customers with outstanding pay-later balance at the door
+// pending_balance = amount customer owes from deliveries where they paid later
+// This is separate from bill_outstanding which is shown in the Bill Pending column
 export const getAdminPendingSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    // 1. pending_balance from users table (pay-later order debt)
+    // 1. pending_balance from users table (pay-later order debt not yet cleared)
     const [userRows] = await pool.query<RowDataPacket[]>(
       `SELECT id, name, phone, pending_balance FROM users
        WHERE role = 'customer' AND deleted_at IS NULL`
     );
 
-    // 2. Unpaid/partial bill outstanding per customer
-    const [billRows] = await pool.query<RowDataPacket[]>(
-      `SELECT customer_id, SUM(total_amount - paid_amount) AS bill_outstanding
-       FROM bills WHERE status IN ('unpaid', 'partial')
-       GROUP BY customer_id`
-    );
-    const billMap: Record<number, number> = {};
-    for (const r of billRows) billMap[r.customer_id] = Number(r.bill_outstanding);
-
-    // 3. Unbilled unpaid manual delivery entries (jars × jar_rate for months not in bills)
-    //    Uses LEFT JOIN instead of NOT IN to avoid correlated subquery in derived table
+    // 2. Unbilled unpaid manual delivery entries (months where no bill exists yet)
+    //    These are not yet in any bill so they're genuinely untracked
     const [manualRows] = await pool.query<RowDataPacket[]>(
       `SELECT m.customer_id,
               SUM(m.jars * u.jar_rate) AS manual_unpaid
@@ -201,29 +193,27 @@ export const getAdminPendingSummary = async (req: AuthRequest, res: Response): P
     const manualMap: Record<number, number> = {};
     for (const r of manualRows) manualMap[r.customer_id] = Number(r.manual_unpaid);
 
-    // Merge: only return customers with any outstanding amount
+    // Only include customers who have actual un-cleared pay-later balance
+    // Note: bill_outstanding is intentionally excluded here — it's shown in the
+    // separate "Bill Pending" column already. Including it here would double-count.
     let totalPending = 0;
     const result: RowDataPacket[] = [];
     for (const u of userRows) {
-      const pendingBal = Number(u.pending_balance)   || 0;
-      const billOut    = billMap[u.id]               || 0;
-      const manualOut  = manualMap[u.id]             || 0;
-      const total      = pendingBal + billOut + manualOut;
+      const pendingBal = Number(u.pending_balance) || 0;
+      const manualOut  = manualMap[u.id]           || 0;
+      const total      = pendingBal + manualOut;
       totalPending += total;
       if (total > 0) {
         result.push({
           id:              u.id,
           name:            u.name,
           phone:           u.phone,
-          // expose as pending_balance so frontend needs no changes
           pending_balance: total,
         } as RowDataPacket);
       }
     }
 
-    // Sort by descending outstanding
     result.sort((a, b) => b.pending_balance - a.pending_balance);
-
     res.json({ customers: result, total_pending: totalPending });
   } catch (err) {
     console.error('getAdminPendingSummary error:', err);

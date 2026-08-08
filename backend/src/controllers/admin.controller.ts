@@ -584,19 +584,19 @@ export const getCustomersForStaff = async (req: AuthRequest, res: Response): Pro
         g.color AS group_color,
         g.icon  AS group_icon,
         COALESCE((
-          SELECT SUM(q) FROM (
-            SELECT SUM(d.delivered_quantity) AS q
-            FROM deliveries d
-            JOIN orders o ON o.id = d.order_id
-            WHERE o.customer_id = u.id
-              AND d.status = 'delivered'
-              AND DATE(COALESCE(d.delivered_at, d.created_at)) = CURDATE()
-            UNION ALL
-            SELECT SUM(m.jars) AS q
-            FROM manual_delivery_entries m
-            WHERE m.customer_id = u.id
-              AND m.delivery_date = CURDATE()
-          ) t
+          SELECT SUM(d.delivered_quantity)
+          FROM deliveries d
+          JOIN orders o ON o.id = d.order_id
+          WHERE o.customer_id = u.id
+            AND d.status = 'delivered'
+            AND DATE(COALESCE(d.delivered_at, d.created_at)) = CURDATE()
+        ), 0)
+        +
+        COALESCE((
+          SELECT SUM(m.jars)
+          FROM manual_delivery_entries m
+          WHERE m.customer_id = u.id
+            AND m.delivery_date = CURDATE()
         ), 0) AS today_jars
       FROM users u
       LEFT JOIN customer_groups g ON g.id = u.group_id

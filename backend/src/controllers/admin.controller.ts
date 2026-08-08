@@ -1074,21 +1074,18 @@ export const addManualDelivery = async (req: AuthRequest, res: Response): Promis
 
     res.status(201).json({ message: 'Manual delivery entry added', id: result.insertId });
 
-    // ── Recalculate bill for this month (fire-and-forget) ──────────────────
+    // ── Create or recalculate bill for this month (fire-and-forget) ──────────
+    // generateBillForCustomer handles both cases: creates new bill if none exists,
+    // or recalculates the existing one — so calendar additions always reflect in billing.
     const month = delivery_date.slice(0, 7); // YYYY-MM
-    pool.query<RowDataPacket[]>(
-      'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
-      [customerId, month]
-    ).then(([billRows]) => {
-      if (!(billRows as RowDataPacket[]).length) return;
-      const billId = (billRows as RowDataPacket[])[0].id;
-      return BillingModel.recalculateBillForCustomer(customerId, month, billId);
-    }).then(updated => {
-      if (updated) {
-        SSE.sendToUser(customerId, 'bill_updated', { month });
-        SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
-      }
-    }).catch(e => console.warn('[Billing] addManualDelivery recalc failed:', e?.message));
+    BillingModel.generateBillForCustomer(customerId, month)
+      .then(updated => {
+        if (updated) {
+          SSE.sendToUser(customerId, 'bill_updated', { month });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+        }
+      })
+      .catch(e => console.warn('[Billing] addManualDelivery recalc failed:', e?.message));
 
   } catch (err) {
     console.error('addManualDelivery error:', err);
@@ -1135,26 +1132,21 @@ export const updateManualDelivery = async (req: AuthRequest, res: Response): Pro
 
     res.json({ message: 'Manual delivery entry updated' });
 
-    // ── Recalculate bill for the affected month(s) ─────────────────────────
+    // ── Create or recalculate bill for affected month(s) ──────────────────────
     const months = new Set<string>();
     months.add((delivery_date || existing.delivery_date).slice(0, 7));
     if (delivery_date && delivery_date.slice(0, 7) !== String(existing.delivery_date).slice(0, 7)) {
-      months.add(String(existing.delivery_date).slice(0, 7)); // old month too
+      months.add(String(existing.delivery_date).slice(0, 7)); // old month too if date moved
     }
     for (const month of months) {
-      pool.query<RowDataPacket[]>(
-        'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
-        [customerId, month]
-      ).then(([billRows]) => {
-        if (!(billRows as RowDataPacket[]).length) return;
-        const billId = (billRows as RowDataPacket[])[0].id;
-        return BillingModel.recalculateBillForCustomer(customerId, month, billId);
-      }).then(updated => {
-        if (updated) {
-          SSE.sendToUser(customerId, 'bill_updated', { month });
-          SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
-        }
-      }).catch(e => console.warn('[Billing] updateManualDelivery recalc failed:', e?.message));
+      BillingModel.generateBillForCustomer(customerId, month)
+        .then(updated => {
+          if (updated) {
+            SSE.sendToUser(customerId, 'bill_updated', { month });
+            SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+          }
+        })
+        .catch(e => console.warn('[Billing] updateManualDelivery recalc failed:', e?.message));
     }
 
   } catch (err) {
@@ -1177,23 +1169,18 @@ export const deleteManualDelivery = async (req: AuthRequest, res: Response): Pro
     await pool.query('DELETE FROM manual_delivery_entries WHERE id = ?', [entryId]);
     res.json({ message: 'Manual delivery entry deleted' });
 
-    // ── Recalculate bill for the deleted entry's month ─────────────────────
+    // ── Create or recalculate bill for the deleted entry's month ─────────────
     if (entry) {
       const customerId = Number(entry.customer_id);
       const month      = String(entry.delivery_date).slice(0, 7);
-      pool.query<RowDataPacket[]>(
-        'SELECT id FROM bills WHERE customer_id = ? AND month = ?',
-        [customerId, month]
-      ).then(([billRows]) => {
-        if (!(billRows as RowDataPacket[]).length) return;
-        const billId = (billRows as RowDataPacket[])[0].id;
-        return BillingModel.recalculateBillForCustomer(customerId, month, billId);
-      }).then(updated => {
-        if (updated) {
-          SSE.sendToUser(customerId, 'bill_updated', { month });
-          SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
-        }
-      }).catch(e => console.warn('[Billing] deleteManualDelivery recalc failed:', e?.message));
+      BillingModel.generateBillForCustomer(customerId, month)
+        .then(updated => {
+          if (updated) {
+            SSE.sendToUser(customerId, 'bill_updated', { month });
+            SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+          }
+        })
+        .catch(e => console.warn('[Billing] deleteManualDelivery recalc failed:', e?.message));
     }
 
   } catch (err) {

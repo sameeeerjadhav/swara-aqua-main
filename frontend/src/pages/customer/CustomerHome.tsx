@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package, Droplets, ArrowRight, Plus,
   ChevronLeft, ChevronRight as ChevronRightIcon,
-  TrendingUp, AlertTriangle,
+  TrendingUp, AlertTriangle, Receipt, Sparkles, X, CreditCard,
 } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { TouchEvent } from 'react';
@@ -16,6 +16,9 @@ import { subscriptionApi, Subscription } from '../../api/subscription';
 import { pendingApi } from '../../api/pending';
 import { loadRazorpay } from '../../utils/razorpay';
 import { advanceApi } from '../../api/advance';
+import { billingApi } from '../../api/billing';
+import { usePlatformFee } from '../../hooks/usePlatformFee';
+import type { Bill } from '../../api/billing';
 
 const LOW_ADVANCE_THRESHOLD = 60;
 
@@ -43,10 +46,8 @@ const BannerCarousel = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  // Single interval — start once banners load, clear on unmount
   useEffect(() => {
     if (banners.length < 2) return;
-    // Clear any existing interval before starting a new one
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setCurrent(c => (c + 1) % bannersRef.current.length);
@@ -127,8 +128,8 @@ const PROMO_IMAGES = [
   '/show/image3.png',
 ];
 
-const SLIDE_WIDTH_PERCENT = 72; // each slide takes 72% of container
-const SLIDE_GAP = 12;           // px gap between slides
+const SLIDE_WIDTH_PERCENT = 72;
+const SLIDE_GAP = 12;
 
 const PromoCarousel = () => {
   const [current, setCurrent] = useState(0);
@@ -139,7 +140,6 @@ const PromoCarousel = () => {
 
   const goTo = useCallback((index: number) => {
     setCurrent(index);
-    // Scroll the container to the correct position
     if (scrollRef.current) {
       const containerWidth = scrollRef.current.offsetWidth;
       const slideWidth = (containerWidth * SLIDE_WIDTH_PERCENT) / 100;
@@ -173,7 +173,6 @@ const PromoCarousel = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [resetTimer]);
 
-  // Touch handling for manual swipe
   const handleTouchStart = (e: TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     if (timerRef.current) clearInterval(timerRef.current);
@@ -190,7 +189,6 @@ const PromoCarousel = () => {
     resetTimer();
   };
 
-  // Sync current index on manual scroll
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const containerWidth = scrollRef.current.offsetWidth;
@@ -224,8 +222,6 @@ const PromoCarousel = () => {
           </div>
         ))}
       </div>
-
-      {/* Dot indicators */}
       <div className="promo-carousel-dots">
         {PROMO_IMAGES.map((_, i) => (
           <button
@@ -236,6 +232,176 @@ const PromoCarousel = () => {
         ))}
       </div>
     </div>
+  );
+};
+
+// ── Inline Pay Bill Modal (reuses same logic as CustomerBills PayBillModal) ────
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+interface HomeBillPayModalProps {
+  bill: Bill;
+  due: number;
+  advanceBalance: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const HomeBillPayModal = ({ bill, due, advanceBalance, onClose, onSuccess }: HomeBillPayModalProps) => {
+  const { toast } = useToast();
+  const [mode, setMode] = useState<'advance' | 'razorpay'>(advanceBalance >= due ? 'advance' : 'razorpay');
+  const [paying, setPaying] = useState(false);
+
+  const feeInfo      = usePlatformFee(mode === 'razorpay' ? due : 0);
+  const platformFee  = feeInfo.fee;
+  const totalCharged = mode === 'razorpay' ? feeInfo.total : due;
+  const canUseAdvance = advanceBalance > 0;
+
+  const [y, m] = bill.month.split('-');
+  const monthLabel = `${MONTHS_SHORT[Number(m) - 1]} ${y}`;
+
+  const handlePay = async () => {
+    setPaying(true);
+    try {
+      if (mode === 'advance') {
+        await billingApi.payBillAdvanceSingle(bill.id);
+        toast(`✅ ₹${Math.min(advanceBalance, due).toFixed(0)} paid via Advance Balance!`, 'success');
+        onSuccess();
+      } else {
+        const rzpLoaded = await loadRazorpay();
+        if (!rzpLoaded) { toast('Razorpay failed to load', 'error'); return; }
+        const { data } = await billingApi.payBillOrder(bill.id);
+        await new Promise<void>((resolve, reject) => {
+          const options = {
+            key:         data.keyId,
+            amount:      data.amount,
+            currency:    data.currency,
+            name:        'Swara Aqua',
+            description: `${monthLabel} bill · ₹${due.toFixed(0)} due`,
+            order_id:    data.rzpOrderId,
+            handler: async (response: any) => {
+              try {
+                await billingApi.payBillVerify(bill.id, {
+                  razorpay_order_id:   response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature:  response.razorpay_signature,
+                  amount:              data.due,
+                });
+                toast(`✅ ₹${data.due.toFixed(0)} paid for ${monthLabel} bill!`, 'success');
+                resolve();
+              } catch { reject(new Error('Verification failed')); }
+            },
+            modal: { ondismiss: () => reject(new Error('dismissed')) },
+            theme: { color: '#2563eb' },
+          };
+          const rzp = new (window as any).Razorpay(options);
+          rzp.open();
+        });
+        onSuccess();
+      }
+    } catch (err: any) {
+      if (err?.message !== 'dismissed') {
+        toast(err?.response?.data?.message || err?.message || 'Payment failed', 'error');
+      }
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+      onClick={onClose}>
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="bg-slate-900 px-5 pt-6 pb-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-brand-500/20 flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-brand-400" />
+              </div>
+              <div>
+                <h2 className="text-white font-bold text-base">Pay Bill</h2>
+                <p className="text-slate-400 text-xs mt-0.5">{monthLabel} bill</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Bill summary */}
+          <div className="bg-slate-800 rounded-2xl px-4 py-3 space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 text-xs">Total Bill</span>
+              <span className="text-white text-sm font-bold">₹{Number(bill.total_amount).toFixed(0)}</span>
+            </div>
+            {Number(bill.paid_amount) > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-green-400 text-xs">Already Paid</span>
+                <span className="text-green-400 text-sm font-bold">−₹{Number(bill.paid_amount).toFixed(0)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center pt-1 border-t border-slate-700">
+              <span className="text-red-400 text-xs font-bold">Amount Due</span>
+              <span className="text-red-400 text-sm font-bold">₹{due.toFixed(0)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4">
+          {/* Payment mode */}
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Pay via</p>
+            <div className="grid grid-cols-2 gap-2">
+              {canUseAdvance && (
+                <button type="button" onClick={() => setMode('advance')}
+                  className={`flex flex-col items-center py-3 rounded-2xl border font-bold text-sm transition-all
+                    ${mode === 'advance'
+                      ? 'bg-green-50 border-green-400 text-green-700 ring-2 ring-green-400/20'
+                      : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                  <span className="text-lg">💰</span>
+                  <span className="text-xs mt-0.5">Advance</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">₹{advanceBalance.toFixed(0)} available</span>
+                </button>
+              )}
+              <button type="button" onClick={() => setMode('razorpay')}
+                className={`flex flex-col items-center py-3 rounded-2xl border font-bold text-sm transition-all col-span-${canUseAdvance ? '1' : '2'}
+                  ${mode === 'razorpay'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700 ring-2 ring-blue-400/20'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                <span className="text-lg">💳</span>
+                <span className="text-xs mt-0.5">Razorpay</span>
+                {mode === 'razorpay' && platformFee > 0 && (
+                  <span className="text-[10px] text-slate-400 mt-0.5">+₹{platformFee.toFixed(0)} fee</span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Amount due summary */}
+          <div className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center justify-between">
+            <span className="text-xs text-slate-500">You'll pay</span>
+            <span className="text-base font-extrabold text-slate-900">₹{totalCharged.toFixed(0)}</span>
+          </div>
+
+          {/* Pay button */}
+          <button onClick={handlePay} disabled={paying}
+            className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 active:scale-[0.97] text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-brand-600/20 disabled:opacity-60">
+            {paying ? (
+              <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</span>
+            ) : (
+              <><Sparkles className="w-4 h-4" /> Pay ₹{totalCharged.toFixed(0)}</>
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -281,7 +447,7 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
     advanceBalance <= LOW_ADVANCE_THRESHOLD
   );
 
-  // Pending balance
+  // Pending balance (pay-later door debt)
   const [pendingBalance, setPendingBalance] = useState(0);
   const [payingPending, setPayingPending] = useState(false);
 
@@ -328,6 +494,32 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
     } finally { setPayingPending(false); }
   };
 
+  // ── Current month bill ──────────────────────────────────────────────────────
+  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const [currentBill,    setCurrentBill]    = useState<Bill | null>(null);
+  const [billAdvanceBal, setBillAdvanceBal] = useState(0);
+  const [payingBillHome, setPayingBillHome] = useState(false);
+
+  const loadCurrentBill = useCallback(() => {
+    billingApi.list()
+      .then(({ data }) => {
+        const bills: Bill[] = data.bills || [];
+        const thisMonth = bills.find((b: Bill) => b.month === currentMonth);
+        setCurrentBill(thisMonth ?? null);
+      })
+      .catch(() => {});
+    advanceApi.get()
+      .then(({ data }) => setBillAdvanceBal(Number(data.balance ?? 0)))
+      .catch(() => {});
+  }, [currentMonth]);
+
+  useEffect(() => { loadCurrentBill(); }, [loadCurrentBill]);
+
+  // Computed bill due
+  const billDue = currentBill
+    ? Math.max(0, Number(currentBill.total_amount) - Number(currentBill.paid_amount))
+    : 0;
+
   return (
     <div className="space-y-5 max-w-2xl">
 
@@ -357,7 +549,7 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
         </motion.div>
       )}
 
-      {/* ―― Outstanding Balance Alert ―― */}
+      {/* ―― Outstanding Balance Alert (pay-later door debt) ―― */}
       {pendingBalance > 0 && (
         <motion.div
           initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
@@ -381,6 +573,87 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
           </button>
         </motion.div>
       )}
+
+      {/* ―― Monthly Bill Payment Card ―― */}
+      {currentBill && billDue > 0 && (() => {
+        const [y, m] = currentBill.month.split('-');
+        const monthLabel = `${MONTHS_SHORT[Number(m) - 1]} ${y}`;
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 shadow-xl border border-slate-700/50"
+          >
+            {/* Glow accents */}
+            <div className="absolute top-0 right-0 w-40 h-40 bg-brand-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative px-5 pt-4 pb-5">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
+                    <Receipt className="w-4 h-4 text-brand-400" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm">{monthLabel} Bill Generated</p>
+                    <p className="text-slate-400 text-[11px]">{currentBill.total_jars} jars × ₹{currentBill.jar_rate}/jar</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full animate-pulse">
+                  ₹{billDue.toLocaleString('en-IN')} DUE
+                </span>
+              </div>
+
+              {/* Amount breakdown */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-slate-800/70 rounded-2xl px-3 py-2.5 text-center">
+                  <p className="text-[9px] text-slate-400 mb-0.5">Total Bill</p>
+                  <p className="text-white text-sm font-bold">₹{Number(currentBill.total_amount).toFixed(0)}</p>
+                </div>
+                <div className="bg-slate-800/70 rounded-2xl px-3 py-2.5 text-center">
+                  <p className="text-[9px] text-slate-400 mb-0.5">Paid</p>
+                  <p className="text-green-400 text-sm font-bold">₹{Number(currentBill.paid_amount).toFixed(0)}</p>
+                </div>
+                <div className="bg-red-500/10 border border-red-500/20 rounded-2xl px-3 py-2.5 text-center">
+                  <p className="text-[9px] text-red-400 mb-0.5">Remaining</p>
+                  <p className="text-red-400 text-sm font-bold">₹{billDue.toFixed(0)}</p>
+                </div>
+              </div>
+
+              {/* CTA row */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPayingBillHome(true)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 active:scale-[0.97] text-white font-bold text-sm py-3 rounded-2xl transition-all shadow-lg shadow-brand-600/20"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Pay ₹{billDue.toLocaleString('en-IN')} Now
+                </button>
+                <button
+                  onClick={() => navigate('/customer/bills')}
+                  className="w-11 h-11 rounded-2xl bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors"
+                  title="View all bills"
+                >
+                  <Receipt className="w-4 h-4 text-slate-300" />
+                </button>
+              </div>
+            </div>
+
+            {/* Pay modal portal */}
+            <AnimatePresence>
+              {payingBillHome && (
+                <HomeBillPayModal
+                  bill={currentBill}
+                  due={billDue}
+                  advanceBalance={billAdvanceBal}
+                  onClose={() => setPayingBillHome(false)}
+                  onSuccess={() => { setPayingBillHome(false); loadCurrentBill(); }}
+                />
+              )}
+            </AnimatePresence>
+          </motion.div>
+        );
+      })()}
 
       {/* ── Section: We Serve At ── */}
       <div className="flex items-center gap-3">
@@ -427,7 +700,9 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
       </motion.div>
 
       {/* ── Active Plan Card ── HIDDEN: client doesn't need this feature */}
-      {false && plan && plan.status === 'active' && (
+      {false && plan && plan.status === 'active' && (() => {
+        const p = plan!;
+        return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           onClick={() => navigate('/customer/subscription')}
           className="bg-white rounded-2xl border border-purple-100 shadow-card overflow-hidden cursor-pointer active:scale-[0.98] transition-transform">
@@ -440,7 +715,7 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
           </div>
           <div className="px-4 py-3">
             <div className="flex items-center gap-3 flex-wrap">
-              {plan.slots?.map(slot => (
+              {p.slots?.map(slot => (
                 <div key={slot.id} className="flex items-center gap-1.5 bg-purple-50 rounded-lg px-2.5 py-1.5">
                   <span className="text-xs font-bold text-purple-700">{slot.slot_label}</span>
                   <span className="text-[10px] text-purple-500">{slot.delivery_time}</span>
@@ -450,7 +725,7 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
             </div>
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-slate-400">
-                {plan.slots?.reduce((s, sl) => s + sl.quantity, 0)} jars/day · ₹{(plan.slots?.reduce((s, sl) => s + sl.quantity, 0) || 0) * (user?.jar_rate || 50)}/day
+                {p.slots?.reduce((s, sl) => s + sl.quantity, 0)} jars/day · ₹{(p.slots?.reduce((s, sl) => s + sl.quantity, 0) || 0) * (user?.jar_rate || 50)}/day
               </p>
               <span className="text-[10px] font-semibold text-purple-500 flex items-center gap-0.5">
                 View Plan <ArrowRight className="w-3 h-3" />
@@ -458,7 +733,8 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
             </div>
           </div>
         </motion.div>
-      )}
+        );
+      })()}
 
       {/* ── Section: Quick Actions ── */}
       <div className="flex items-center gap-3 mt-2">
@@ -514,9 +790,9 @@ export const CustomerHome = ({ onOrderPress }: { onOrderPress?: () => void }) =>
 
           {/* iOS / Web QR */}
           <div className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 shadow-md cursor-pointer active:scale-95 transition-transform"
-            onClick={() => setExpandedQR({ src: '/permanentqr.png', label: ' iOS / Web' })}>
+            onClick={() => setExpandedQR({ src: '/permanentqr.png', label: ' iOS / Web' })}>
             <div className="flex items-center gap-1 bg-blue-100 rounded-full px-2 py-0.5">
-              <span className="text-blue-700 text-[10px] font-bold"> iOS / Web</span>
+              <span className="text-blue-700 text-[10px] font-bold"> iOS / Web</span>
             </div>
             <img src="/permanentqr.png" alt="iOS / Web QR Code" className="w-24 h-24 object-contain" />
             <div className="text-center">

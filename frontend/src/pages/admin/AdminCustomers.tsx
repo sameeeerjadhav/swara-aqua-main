@@ -587,75 +587,7 @@ export const AdminCustomers = () => {
       </div>
 
       {/* ── Group filter pills ── */}
-      {groups.length > 0 && (
-        <div className="space-y-2">
-          {/* Pills row */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
-            <span className="shrink-0 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Group:</span>
-            <button
-              onClick={() => setGroupFilter(null)}
-              className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
-                ${groupFilter === null ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>
-              All
-            </button>
-            <button
-              onClick={() => setGroupFilter(groupFilter === 'ungrouped' ? null : 'ungrouped')}
-              className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
-                ${groupFilter === 'ungrouped' ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}>
-              No Group
-            </button>
-            {groups.map(g => {
-              const count = customers.filter(c => c.group_id === g.id).length;
-              const isActive = groupFilter === g.id;
-              return (
-                <button key={g.id}
-                  onClick={() => setGroupFilter(isActive ? null : g.id)}
-                  className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all"
-                  style={isActive
-                    ? { backgroundColor: g.color, color: '#fff', borderColor: g.color }
-                    : { backgroundColor: g.color + '15', color: g.color, borderColor: g.color + '40' }}>
-                  {g.icon} {g.name}
-                  <span className="text-[10px] opacity-75">{count}</span>
-                </button>
-              );
-            })}
-          </div>
 
-          {/* Contextual bar — appears when a specific group is active */}
-          <AnimatePresence>
-            {typeof groupFilter === 'number' && (() => {
-              const activeGroup = groups.find(g => g.id === groupFilter);
-              if (!activeGroup) return null;
-              const count = customers.filter(c => c.group_id === activeGroup.id).length;
-              return (
-                <motion.div
-                  key={`manage-bar-${activeGroup.id}`}
-                  initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex items-center justify-between rounded-2xl px-4 py-2.5 border"
-                  style={{ backgroundColor: activeGroup.color + '12', borderColor: activeGroup.color + '35' }}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-base shrink-0">{activeGroup.icon}</span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold truncate" style={{ color: activeGroup.color }}>
-                        {activeGroup.name}
-                      </p>
-                      <p className="text-[10px] text-slate-400">{count} member{count !== 1 ? 's' : ''}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => { setManagingMembersOf(activeGroup); setMemberSearch(''); setShowManageGroups(true); }}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border-2 ml-3 transition-all hover:scale-105 active:scale-95"
-                    style={{ color: activeGroup.color, borderColor: activeGroup.color, backgroundColor: activeGroup.color + '15' }}>
-                    <User className="w-3 h-3" />
-                    Manage Members
-                  </button>
-                </motion.div>
-              );
-            })()}
-          </AnimatePresence>
-        </div>
-      )}
 
       {/* Search */}
       <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-card focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/10 transition-all">
@@ -696,9 +628,7 @@ export const AdminCustomers = () => {
                         <Avatar name={u.name} photo={u.profile_photo} size="xs" className="w-8 h-8" />
                         <div>
                           <p className="text-sm font-semibold text-slate-800">{u.name}</p>
-                          {u.group_name && u.group_color && u.group_icon && (
-                            <GroupBadge name={u.group_name} color={u.group_color} icon={u.group_icon} small />
-                          )}
+
                           {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-0.5">
                               ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
@@ -822,9 +752,7 @@ export const AdminCustomers = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
                   <PhoneLink phone={u.phone} className="text-[11px] text-slate-400 mt-0.5" />
-                  {u.group_name && u.group_color && u.group_icon && (
-                    <GroupBadge name={u.group_name} color={u.group_color} icon={u.group_icon} small />
-                  )}
+
                   {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-1">
                       ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}

@@ -854,34 +854,7 @@ export const StaffCustomers = () => {
         </div>
       )}
 
-      {/* Group filter pills (read-only for staff) */}
-      {!reorderMode && groups.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
-          <span className="shrink-0 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Group:</span>
-          <button
-            onClick={() => setGroupFilter(null)}
-            className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
-              ${groupFilter === null ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>
-            All
-          </button>
-          <button
-            onClick={() => setGroupFilter(groupFilter === 'ungrouped' ? null : 'ungrouped')}
-            className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
-              ${groupFilter === 'ungrouped' ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}>
-            No Group
-          </button>
-          {groups.map(g => (
-            <button key={g.id}
-              onClick={() => setGroupFilter(groupFilter === g.id ? null : g.id)}
-              className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all"
-              style={groupFilter === g.id
-                ? { backgroundColor: g.color, color: '#fff', borderColor: g.color }
-                : { backgroundColor: g.color + '15', color: g.color, borderColor: g.color + '40' }}>
-              {g.icon} {g.name}
-            </button>
-          ))}
-        </div>
-      )}
+
 
       {reorderMode && (
         <div className="space-y-2">
@@ -981,13 +954,6 @@ export const StaffCustomers = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-bold text-slate-900 truncate">{c.name}</p>
-                    {c.group_name && c.group_color && c.group_icon && (
-                      <span
-                        className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0"
-                        style={{ color: c.group_color, borderColor: c.group_color + '40', backgroundColor: c.group_color + '12' }}>
-                        {c.group_icon} {c.group_name}
-                      </span>
-                    )}
                   </div>
                   <div className="flex items-center gap-3 mt-0.5">
                     <span className="flex items-center gap-1 text-xs text-slate-400">

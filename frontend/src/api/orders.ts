@@ -22,6 +22,11 @@ export interface Order {
   staff_phone?: string;
   paid_online?: boolean; // true if a completed online payment exists
   cancel_request_status?: string | null;
+  // Delivery info (joined from deliveries table — only for delivered orders)
+  delivery_id?: number | null;
+  delivery_payment_mode?: 'cash' | 'online' | 'advance' | 'pay_later' | null;
+  delivery_collected_amount?: number | null;
+  delivery_status?: string | null;
 }
 
 export interface Delivery {

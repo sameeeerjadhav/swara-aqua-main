@@ -57,7 +57,11 @@ const orderQuery = (where: string, suffix = '') => `
     cr.id         AS cancel_request_id,
     cr.status     AS cancel_request_status,
     cr.reason     AS cancel_request_reason,
-    cr.created_at AS cancel_requested_at
+    cr.created_at AS cancel_requested_at,
+    d.id               AS delivery_id,
+    d.payment_mode     AS delivery_payment_mode,
+    d.collected_amount AS delivery_collected_amount,
+    d.status           AS delivery_status
   FROM orders o
   JOIN  users c ON c.id = o.customer_id
   LEFT JOIN users s ON s.id = o.staff_id
@@ -69,6 +73,9 @@ const orderQuery = (where: string, suffix = '') => `
   LEFT JOIN cancel_requests cr
     ON  cr.order_id = o.id
     AND cr.status   = 'pending'
+  LEFT JOIN deliveries d
+    ON  d.order_id = o.id
+    AND d.status   = 'delivered'
   ${where}
   ORDER BY o.created_at DESC
   ${suffix}

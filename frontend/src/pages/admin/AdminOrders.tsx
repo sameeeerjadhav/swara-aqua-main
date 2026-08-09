@@ -682,11 +682,11 @@ export const AdminOrders = () => {
                     <div className="flex items-center gap-1.5">
                       {new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       {/* Edit payment — only for delivered orders */}
-                      {o.delivery_id && o.delivery_status === 'delivered' && (
+                      {(o.status === 'completed' || o.status === 'delivered') && (
                         <button
                           onClick={e => { e.stopPropagation(); setEditingPaymentOrder({
-                            delivery_id: o.delivery_id!,
                             order_id: o.id,
+                            delivery_id: o.delivery_id,
                             customer_name: o.customer_name,
                             quantity: o.quantity,
                             total_amount: o.total_amount,
@@ -762,12 +762,12 @@ export const AdminOrders = () => {
                   className="flex-1 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-brand-300 transition-all active:scale-95">
                   View Details
                 </button>
-                {/* Edit payment — only for delivered orders */}
-                {o.delivery_id && o.delivery_status === 'delivered' && (
+                {/* Edit payment — for all completed/delivered orders */}
+                {(o.status === 'completed' || o.status === 'delivered') && (
                   <button
                     onClick={() => setEditingPaymentOrder({
-                      delivery_id: o.delivery_id!,
                       order_id: o.id,
+                      delivery_id: o.delivery_id,
                       customer_name: o.customer_name,
                       quantity: o.quantity,
                       total_amount: o.total_amount,

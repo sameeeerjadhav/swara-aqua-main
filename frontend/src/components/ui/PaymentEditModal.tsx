@@ -1,8 +1,8 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Save } from 'lucide-react';
 import { useToast } from './Toast';
-import { calendarApi, DeliveryPaymentPayload } from '../../api/calendar';
+import api from '../../api/axios';
 
 export const PM_LABEL: Record<string, { label: string; icon: string; cls: string }> = {
   cash:      { label: 'Cash',      icon: '💵', cls: 'bg-green-50 text-green-700 border-green-200' },
@@ -19,8 +19,8 @@ const PAYMENT_MODES: { value: 'cash' | 'online' | 'advance' | 'pay_later'; label
 ];
 
 export interface PaymentEditTarget {
-  delivery_id: number;
-  order_id?: number;
+  order_id: number;           // primary key — always required
+  delivery_id?: number | null; // optional, used as fallback
   customer_name?: string;
   quantity?: number;
   total_amount?: number;
@@ -47,11 +47,12 @@ export const PaymentEditModal = ({ target, onSaved, onClose }: Props) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload: DeliveryPaymentPayload = {
+      const payload = {
         payment_mode: mode,
         collected_amount: mode === 'pay_later' ? 0 : amount,
       };
-      await calendarApi.updateDeliveryPayment(target.delivery_id, payload);
+      // Prefer order-centric endpoint (works even without a delivery record)
+      await api.patch(`/admin/orders/${target.order_id}/payment`, payload);
       toast('Payment updated successfully', 'success');
       onSaved();
     } catch (err: any) {

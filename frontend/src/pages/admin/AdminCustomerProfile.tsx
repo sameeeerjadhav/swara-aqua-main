@@ -1041,7 +1041,7 @@ export const AdminCustomerProfile = () => {
           <div className="divide-y divide-slate-50">
             {orders.map((o: any) => {
                const pm  = PM_LABEL[o.delivery_payment_mode] ?? { label: 'N/A', icon: '—', cls: 'bg-slate-50 text-slate-400 border-slate-200' };
-              const canEdit = o.delivery_id && o.delivery_status === 'delivered';
+              const canEdit = o.status === 'completed' || o.status === 'delivered';
 
               return (
                 <div key={o.id}>

@@ -1200,6 +1200,101 @@ export const deleteManualDelivery = async (req: AuthRequest, res: Response): Pro
   }
 };
 
+// ── PATCH /admin/orders/:id/payment — Admin corrects payment by ORDER id ──────
+// Finds the delivery record by order_id, then applies the same logic as
+// updateDeliveryPayment. This avoids needing delivery_id on the frontend.
+export const updateOrderPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orderId = Number(req.params.id);
+    const { payment_mode, collected_amount } = req.body as {
+      payment_mode: 'cash' | 'online' | 'advance' | 'pay_later';
+      collected_amount: number;
+    };
+
+    if (!['cash', 'online', 'advance', 'pay_later'].includes(payment_mode)) {
+      res.status(400).json({ message: 'Invalid payment_mode' });
+      return;
+    }
+
+    // Find the delivery for this order
+    const [dRows] = await pool.query<RowDataPacket[]>(`
+      SELECT d.id, d.payment_mode AS old_mode, d.collected_amount AS old_amount,
+             o.customer_id, o.total_amount,
+             DATE(COALESCE(d.delivered_at, d.created_at)) AS delivery_date
+      FROM orders o
+      LEFT JOIN deliveries d ON d.order_id = o.id AND d.status = 'delivered'
+      WHERE o.id = ? AND o.status IN ('completed', 'delivered')
+    `, [orderId]);
+
+    if (!dRows.length) {
+      res.status(404).json({ message: 'Order not found or not yet completed' });
+      return;
+    }
+
+    const row        = dRows[0];
+    const customerId = Number(row.customer_id);
+    const newAmount  = Number(collected_amount);
+
+    // If no delivery record exists yet, create one
+    if (!row.id) {
+      await pool.query(
+        `INSERT INTO deliveries (order_id, staff_id, delivered_quantity, collected_amount, payment_mode, status, delivered_at)
+         SELECT id, COALESCE(staff_id, 1), quantity, ?, ?, 'delivered', updated_at
+         FROM orders WHERE id = ?`,
+        [newAmount, payment_mode, orderId]
+      );
+    } else {
+      // Update existing delivery
+      await pool.query(
+        `UPDATE deliveries SET payment_mode = ?, collected_amount = ? WHERE id = ?`,
+        [payment_mode, newAmount, row.id]
+      );
+
+      // Adjust pending_balance if pay_later is involved
+      const oldMode    = row.old_mode as string;
+      const oldAmount  = Number(row.old_amount);
+      const wasPayLater = oldMode === 'pay_later';
+      const isPayLater  = payment_mode === 'pay_later';
+
+      if (wasPayLater && !isPayLater) {
+        await pool.query(
+          `UPDATE users SET pending_balance = GREATEST(0, pending_balance - ?) WHERE id = ?`,
+          [oldAmount, customerId]
+        );
+      } else if (!wasPayLater && isPayLater) {
+        await pool.query(
+          `UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?`,
+          [Number(row.total_amount), customerId]
+        );
+      }
+    }
+
+    // If changing TO pay_later, add pending balance
+    if (!row.id && payment_mode === 'pay_later') {
+      await pool.query(
+        'UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?',
+        [Number(row.total_amount), customerId]
+      );
+    }
+
+    const month = String(row.delivery_date ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
+    res.json({ message: 'Order payment updated', orderId, payment_mode, collected_amount: newAmount });
+
+    BillingModel.generateBillForCustomer(customerId, month)
+      .then(updated => {
+        if (updated) {
+          SSE.sendToUser(customerId, 'bill_updated', { month });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId, month });
+        }
+      })
+      .catch(e => console.warn('[Billing] updateOrderPayment recalc failed:', e?.message));
+
+  } catch (err) {
+    console.error('updateOrderPayment error:', err);
+    res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
+  }
+};
+
 // ── PATCH /admin/deliveries/:id/payment — Admin corrects staff payment mistake ──
 export const updateDeliveryPayment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

@@ -41,9 +41,10 @@ export const AdminStaffProfile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Smart back: use history if available, otherwise go to staff list
+  // Smart back: go to history if we have a previous page in the SPA,
+  // otherwise fall back safely to the staff list.
   const goBack = () => {
-    if (window.history.state?.idx > 0) navigate(-1);
+    if (window.history.state?.idx >= 1) navigate(-1);
     else navigate('/admin/staff', { replace: true });
   };
 

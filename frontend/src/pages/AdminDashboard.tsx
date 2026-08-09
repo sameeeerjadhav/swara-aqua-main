@@ -51,11 +51,22 @@ const TITLES: Record<string, string> = {
   '/admin/banners':       'Banner Management',
   '/admin/profile':       'My Profile',
   '/admin/groups':        'Customer Groups',
+  '/admin/customers/:id': 'Customer Profile',
+  '/admin/staff/:id':     'Staff Profile',
+};
+
+// Resolve title — handles dynamic segments like /admin/customers/42
+const resolveTitle = (pathname: string): string => {
+  if (TITLES[pathname]) return TITLES[pathname];
+  // Dynamic: /admin/customers/\d+ → Customer Profile
+  if (/^\/admin\/customers\/\d+/.test(pathname)) return 'Customer Profile';
+  if (/^\/admin\/staff\/\d+/.test(pathname))     return 'Staff Profile';
+  return 'Dashboard';
 };
 
 export default function AdminDashboard() {
   const { pathname } = useLocation();
-  const title = TITLES[pathname] || 'Dashboard';
+  const title = resolveTitle(pathname);
 
   return (
     <DashboardLayout navItems={NAV} title={title}>

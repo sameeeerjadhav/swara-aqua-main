@@ -1201,8 +1201,8 @@ export const deleteManualDelivery = async (req: AuthRequest, res: Response): Pro
 };
 
 // ── PATCH /admin/orders/:id/payment — Admin corrects payment by ORDER id ──────
-// Finds the delivery record by order_id, then applies the same logic as
-// updateDeliveryPayment. This avoids needing delivery_id on the frontend.
+// Finds the delivery record by order_id, then fixes all related financial tables:
+//   deliveries, pending_payments, transactions, users.pending_balance
 export const updateOrderPayment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const orderId = Number(req.params.id);
@@ -1212,74 +1212,127 @@ export const updateOrderPayment = async (req: AuthRequest, res: Response): Promi
     };
 
     if (!['cash', 'online', 'advance', 'pay_later'].includes(payment_mode)) {
-      res.status(400).json({ message: 'Invalid payment_mode' });
-      return;
+      res.status(400).json({ message: 'Invalid payment_mode' }); return;
     }
 
-    // Find the delivery for this order
+    // Fetch order + its delivery (if any)
     const [dRows] = await pool.query<RowDataPacket[]>(`
-      SELECT d.id, d.payment_mode AS old_mode, d.collected_amount AS old_amount,
-             o.customer_id, o.total_amount,
-             DATE(COALESCE(d.delivered_at, d.created_at)) AS delivery_date
+      SELECT d.id          AS delivery_id,
+             d.payment_mode AS old_mode,
+             d.collected_amount AS old_amount,
+             o.customer_id, o.total_amount, o.staff_id,
+             DATE(COALESCE(d.delivered_at, d.created_at, o.updated_at)) AS delivery_date
       FROM orders o
       LEFT JOIN deliveries d ON d.order_id = o.id AND d.status = 'delivered'
       WHERE o.id = ? AND o.status IN ('completed', 'delivered')
     `, [orderId]);
 
     if (!dRows.length) {
-      res.status(404).json({ message: 'Order not found or not yet completed' });
-      return;
+      res.status(404).json({ message: 'Order not found or not yet completed' }); return;
     }
 
-    const row        = dRows[0];
-    const customerId = Number(row.customer_id);
-    const newAmount  = Number(collected_amount);
+    const row         = dRows[0];
+    const customerId  = Number(row.customer_id);
+    const totalAmount = Number(row.total_amount);
+    const newAmount   = Number(collected_amount);
+    const newMode     = payment_mode;
+    const deliveryId  = row.delivery_id as number | null;
+    const oldMode     = (row.old_mode as string | null) ?? null;
+    const month       = String(row.delivery_date ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
 
-    // If no delivery record exists yet, create one
-    if (!row.id) {
+    // ── 1. Create or update the delivery record ───────────────────────────────
+    if (!deliveryId) {
+      // No delivery exists — create one
       await pool.query(
         `INSERT INTO deliveries (order_id, staff_id, delivered_quantity, collected_amount, payment_mode, status, delivered_at)
          SELECT id, COALESCE(staff_id, 1), quantity, ?, ?, 'delivered', updated_at
          FROM orders WHERE id = ?`,
-        [newAmount, payment_mode, orderId]
+        [newMode === 'pay_later' ? 0 : newAmount, newMode, orderId]
       );
     } else {
-      // Update existing delivery
       await pool.query(
         `UPDATE deliveries SET payment_mode = ?, collected_amount = ? WHERE id = ?`,
-        [payment_mode, newAmount, row.id]
+        [newMode, newMode === 'pay_later' ? 0 : newAmount, deliveryId]
       );
+    }
 
-      // Adjust pending_balance if pay_later is involved
-      const oldMode    = row.old_mode as string;
-      const oldAmount  = Number(row.old_amount);
-      const wasPayLater = oldMode === 'pay_later';
-      const isPayLater  = payment_mode === 'pay_later';
+    const wasPayLater = oldMode === 'pay_later';
+    const isPayLater  = newMode  === 'pay_later';
 
-      if (wasPayLater && !isPayLater) {
+    // ── 2. pending_payments table ─────────────────────────────────────────────
+    if (wasPayLater && !isPayLater) {
+      // Was pay_later → now paid: delete the pending_payment row so billing stops counting it
+      await pool.query(
+        `DELETE FROM pending_payments WHERE order_id = ? AND status = 'pending'`,
+        [orderId]
+      );
+      // Also reduce pending_balance by the order's total_amount
+      await pool.query(
+        `UPDATE users SET pending_balance = GREATEST(0, pending_balance - ?) WHERE id = ?`,
+        [totalAmount, customerId]
+      );
+    } else if (!wasPayLater && isPayLater) {
+      // Changing to pay_later → create pending_payment (only if not already existing)
+      await pool.query(
+        `INSERT INTO pending_payments (customer_id, order_id, amount)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE amount = VALUES(amount)`,
+        [customerId, orderId, totalAmount]
+      );
+      // Increase pending_balance
+      await pool.query(
+        `UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?`,
+        [totalAmount, customerId]
+      );
+    }
+
+    // ── 3. transactions table ────────────────────────────────────────────────
+    // Remove any old transaction tied to this order (from original delivery)
+    // so we don't double-count cash/online in billing
+    if (oldMode && oldMode !== 'pay_later' && !isPayLater) {
+      // Just update the existing transaction if one exists
+      const [txRows] = await pool.query<RowDataPacket[]>(
+        `SELECT id FROM transactions WHERE order_id = ? AND type = 'credit' LIMIT 1`,
+        [orderId]
+      );
+      if (txRows.length) {
         await pool.query(
-          `UPDATE users SET pending_balance = GREATEST(0, pending_balance - ?) WHERE id = ?`,
-          [oldAmount, customerId]
+          `UPDATE transactions SET mode = ?, amount = ?, status = ? WHERE id = ?`,
+          [newMode === 'online' ? 'online' : newMode,
+           newAmount,
+           newMode === 'online' ? 'completed' : 'pending',
+           txRows[0].id]
         );
-      } else if (!wasPayLater && isPayLater) {
+      } else {
+        // No transaction existed — create one for the correct mode
         await pool.query(
-          `UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?`,
-          [Number(row.total_amount), customerId]
+          `INSERT INTO transactions (customer_id, order_id, amount, mode, type, collected_by, status)
+           VALUES (?, ?, ?, ?, 'credit', ?, ?)`,
+          [customerId, orderId, newAmount, newMode,
+           row.staff_id ?? null,
+           newMode === 'online' ? 'completed' : 'pending']
         );
       }
-    }
-
-    // If changing TO pay_later, add pending balance
-    if (!row.id && payment_mode === 'pay_later') {
+    } else if (!oldMode && !isPayLater) {
+      // Brand-new delivery (no old delivery) and not pay_later → create transaction
       await pool.query(
-        'UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?',
-        [Number(row.total_amount), customerId]
+        `INSERT INTO transactions (customer_id, order_id, amount, mode, type, collected_by, status)
+         VALUES (?, ?, ?, ?, 'credit', ?, ?)`,
+        [customerId, orderId, newAmount, newMode,
+         row.staff_id ?? null,
+         newMode === 'online' ? 'completed' : 'pending']
+      );
+    } else if (oldMode && !wasPayLater && isPayLater) {
+      // Switching to pay_later — delete old transaction (no cash/online collected anymore)
+      await pool.query(
+        `DELETE FROM transactions WHERE order_id = ? AND type = 'credit'`,
+        [orderId]
       );
     }
 
-    const month = String(row.delivery_date ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
-    res.json({ message: 'Order payment updated', orderId, payment_mode, collected_amount: newAmount });
+    res.json({ message: 'Order payment updated', orderId, payment_mode: newMode, collected_amount: newAmount });
 
+    // ── 4. Regenerate bill ────────────────────────────────────────────────────
     BillingModel.generateBillForCustomer(customerId, month)
       .then(updated => {
         if (updated) {
@@ -1312,7 +1365,7 @@ export const updateDeliveryPayment = async (req: AuthRequest, res: Response): Pr
     // Fetch current delivery to get old values + customer_id + month
     const [dRows] = await pool.query<RowDataPacket[]>(`
       SELECT d.id, d.payment_mode AS old_mode, d.collected_amount AS old_amount,
-             o.customer_id,
+             o.id AS order_id, o.customer_id, o.total_amount, o.staff_id,
              DATE(COALESCE(d.delivered_at, d.created_at)) AS delivery_date
       FROM deliveries d
       JOIN orders o ON o.id = d.order_id
@@ -1324,43 +1377,79 @@ export const updateDeliveryPayment = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const row          = dRows[0];
-    const customerId   = Number(row.customer_id);
-    const oldMode      = row.old_mode as string;
-    const oldAmount    = Number(row.old_amount);
+    const row         = dRows[0];
+    const customerId  = Number(row.customer_id);
+    const orderId     = Number(row.order_id);
+    const totalAmount = Number(row.total_amount);
+    const oldMode     = row.old_mode as string;
     const deliveryDate = String(row.delivery_date);
     const month        = deliveryDate.slice(0, 7);
     const newAmount    = Number(collected_amount);
+    const newMode      = payment_mode;
+    const wasPayLater  = oldMode === 'pay_later';
+    const isPayLater   = newMode  === 'pay_later';
 
     // ── Update the delivery row ───────────────────────────────────────────────
     await pool.query(
-      `UPDATE deliveries
-         SET payment_mode = ?, collected_amount = ?
-       WHERE id = ?`,
-      [payment_mode, newAmount, deliveryId]
+      `UPDATE deliveries SET payment_mode = ?, collected_amount = ? WHERE id = ?`,
+      [newMode, isPayLater ? 0 : newAmount, deliveryId]
     );
 
-    // ── Adjust pending_balance when pay_later is involved ────────────────────
-    // If old was pay_later and new is not → reduce pending balance (debt cleared)
-    // If old was not pay_later and new is pay_later → increase pending balance (new debt)
-    const wasPayLater = oldMode === 'pay_later';
-    const isPayLater  = payment_mode === 'pay_later';
-
+    // ── pending_payments table ────────────────────────────────────────────────
     if (wasPayLater && !isPayLater) {
-      // Staff had incorrectly set pay_later; now corrected → remove that debt
+      // Remove the pending_payment — debt cleared
+      await pool.query(
+        `DELETE FROM pending_payments WHERE order_id = ? AND status = 'pending'`,
+        [orderId]
+      );
       await pool.query(
         `UPDATE users SET pending_balance = GREATEST(0, pending_balance - ?) WHERE id = ?`,
-        [oldAmount, customerId]
+        [totalAmount, customerId]
       );
     } else if (!wasPayLater && isPayLater) {
-      // Changing to pay_later → customer owes this new amount
+      // Add pending_payment — new debt
+      await pool.query(
+        `INSERT INTO pending_payments (customer_id, order_id, amount)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE amount = VALUES(amount)`,
+        [customerId, orderId, totalAmount]
+      );
       await pool.query(
         `UPDATE users SET pending_balance = pending_balance + ? WHERE id = ?`,
-        [newAmount, customerId]
+        [totalAmount, customerId]
       );
     }
 
-    res.json({ message: 'Delivery payment updated', deliveryId, payment_mode, collected_amount: newAmount });
+    // ── transactions table ────────────────────────────────────────────────────
+    if (!wasPayLater && !isPayLater) {
+      // Both old and new are non-pay_later: update existing transaction if present
+      const [txRows] = await pool.query<RowDataPacket[]>(
+        `SELECT id FROM transactions WHERE order_id = ? AND type = 'credit' LIMIT 1`,
+        [orderId]
+      );
+      if (txRows.length) {
+        await pool.query(
+          `UPDATE transactions SET mode = ?, amount = ?, status = ? WHERE id = ?`,
+          [newMode, newAmount, newMode === 'online' ? 'completed' : 'pending', txRows[0].id]
+        );
+      }
+    } else if (wasPayLater && !isPayLater) {
+      // Was pay_later (no transaction) → now has payment: create transaction
+      await pool.query(
+        `INSERT INTO transactions (customer_id, order_id, amount, mode, type, collected_by, status)
+         VALUES (?, ?, ?, ?, 'credit', ?, ?)`,
+        [customerId, orderId, newAmount, newMode, row.staff_id ?? null,
+         newMode === 'online' ? 'completed' : 'pending']
+      );
+    } else if (!wasPayLater && isPayLater) {
+      // Had payment → switching to pay_later: remove transaction
+      await pool.query(
+        `DELETE FROM transactions WHERE order_id = ? AND type = 'credit'`,
+        [orderId]
+      );
+    }
+
+    res.json({ message: 'Delivery payment updated', deliveryId, payment_mode: newMode, collected_amount: newAmount });
 
     // ── Fire-and-forget bill recalculation ────────────────────────────────────
     BillingModel.generateBillForCustomer(customerId, month)
@@ -1377,3 +1466,4 @@ export const updateDeliveryPayment = async (req: AuthRequest, res: Response): Pr
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
   }
 };
+

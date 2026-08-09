@@ -61,9 +61,13 @@ export const getAllUsers = async (): Promise<Omit<User, 'password'>[]> => {
             u.group_id,
             g.name  AS group_name,
             g.color AS group_color,
-            g.icon  AS group_icon
+            g.icon  AS group_icon,
+            ua.address       AS address,
+            ua.label         AS address_label
      FROM users u
      LEFT JOIN customer_groups g ON g.id = u.group_id
+     LEFT JOIN user_addresses ua
+       ON ua.user_id = u.id AND ua.is_default = 1
      WHERE u.deleted_at IS NULL`
   );
   return rows as Omit<User, 'password'>[];

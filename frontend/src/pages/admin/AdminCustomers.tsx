@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered, KeyRound, Tag } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered, KeyRound, Tag, Phone, Navigation } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -13,7 +13,7 @@ import { pendingApi } from '../../api/pending';
 import { customerOrderApi, applyOrder } from '../../api/customerOrder';
 import { groupsApi, type CustomerGroup } from '../../api/groups';
 
-interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; profile_photo?: string | null; group_id?: number | null; group_name?: string | null; group_color?: string | null; group_icon?: string | null; }
+interface CustomerRow { id: number; name: string; phone: string; role: string; status: string; jar_rate: number; prepaid_balance: number; advance_access: string; created_at: string; profile_photo?: string | null; group_id?: number | null; group_name?: string | null; group_color?: string | null; group_icon?: string | null; address?: string | null; address_label?: string | null; }
 interface MonthBill { month: string; total_amount: number; paid_amount: number; pending: number; status: string; }
 interface BalanceInfo { total: number; months: MonthBill[]; }
 interface SavedAddress { label: string; address: string; is_default: number; }
@@ -720,60 +720,90 @@ export const AdminCustomers = () => {
           </table>
         </div>
 
-        {/* ─── Mobile: tappable cards ─── */}
-        <div className="md:hidden divide-y divide-slate-100">
+        {/* ─── Mobile: Groups-style cards ─── */}
+        <div className="md:hidden p-3 space-y-3">
           {loading ? (
             [0,1,2,3].map(i => (
-              <div key={i} className="p-4 flex items-center gap-3">
-                <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
-                <div className="flex-1 space-y-2">
+              <div key={i} className="bg-white rounded-3xl border border-slate-100 p-4 flex gap-3">
+                <Skeleton className="w-14 h-14 rounded-2xl shrink-0" />
+                <div className="flex-1 space-y-2 pt-1">
                   <Skeleton className="h-4 w-32" />
                   <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-20" />
                 </div>
               </div>
             ))
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-sm">No customers found</div>
-          ) : filtered.map(u => {
+            <div className="py-10 text-center text-slate-400 text-sm">No customers found</div>
+          ) : filtered.map((u, i) => {
             const bal = balances[u.id];
             const hasPending = bal && bal.total > 0;
+            const payLater = payLaterMap[u.id] || 0;
             return (
-              <motion.button
-                key={u.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+              <motion.div key={u.id}
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
                 onClick={() => u.status === 'pending' ? fetchPendingDetail(u) : setSelectedCustomer(u)}
-                className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50 transition-colors">
+                className="bg-white rounded-3xl border border-slate-100 shadow-sm px-4 py-4 cursor-pointer hover:shadow-md hover:border-slate-200 active:scale-[0.99] transition-all">
+                <div className="flex items-start gap-3">
+                  {/* Avatar */}
+                  <Avatar name={u.name} photo={u.profile_photo} size="lg" className="shrink-0" />
 
-                {/* Avatar */}
-                <Avatar name={u.name} photo={u.profile_photo} size="sm" className="w-10 h-10" />
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-bold text-slate-900 truncate">{u.name}</p>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border capitalize ${statusColor[u.status] || 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                        {u.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      <span className="flex items-center gap-1 text-xs text-slate-400">
+                        <Phone className="w-3 h-3" /> {u.phone}
+                      </span>
+                      {u.address && (
+                        <span className="flex items-center gap-1 text-xs text-slate-400 truncate max-w-[130px]">
+                          <MapPin className="w-3 h-3 shrink-0" /> {u.address_label || u.address}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="flex items-center gap-1 text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">
+                        <Package className="w-2.5 h-2.5" /> ₹{u.jar_rate || 50}/jar
+                      </span>
+                      {hasPending && (
+                        <span className="flex items-center gap-1 text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold border border-red-100">
+                          ₹{bal.total.toLocaleString('en-IN')} due
+                        </span>
+                      )}
+                      {payLater > 0 && (
+                        <span className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-100">
+                          ⏳ ₹{payLater.toLocaleString('en-IN')} later
+                        </span>
+                      )}
+                      {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
+                        <span className="flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">
+                          ⚠️ Low Adv ₹{Number(u.prepaid_balance ?? 0)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                {/* Name + phone */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
-                  <PhoneLink phone={u.phone} className="text-[11px] text-slate-400 mt-0.5" />
-
-                  {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full mt-1">
-                      ⚠️ Low Advance ₹{Number(u.prepaid_balance ?? 0)}
-                    </span>
-                  )}
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {u.address && (
+                      <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(u.address)}`}
+                        target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 active:scale-95 transition-all"
+                        title="Navigate">
+                        <Navigation className="w-4 h-4" />
+                      </a>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                  </div>
                 </div>
-
-                {/* Right: balance pill + status + arrow */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {hasPending ? (
-                    <span className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1 rounded-full border border-red-100">
-                      ₹{bal.total.toLocaleString('en-IN')}
-                    </span>
-                  ) : (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border capitalize ${statusColor[u.status] || 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                      {u.status}
-                    </span>
-                  )}
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
-                </div>
-              </motion.button>
+              </motion.div>
             );
           })}
         </div>

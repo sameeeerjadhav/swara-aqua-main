@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, RefreshCw, Plus, X, IndianRupee, CheckCircle, FileText,
-  Banknote, CreditCard, AlertCircle, Clock, ChevronDown, ChevronUp,
-  User, Search, TrendingDown, BarChart3, Wallet, Printer, List, LayoutGrid,
+import {
+  Download, RefreshCw, Plus, X, IndianRupee, CheckCircle, FileText,
+  Banknote, CreditCard, ChevronDown, ChevronUp, User, Search,
+  BarChart3, Printer, Zap, CalendarDays, AlertCircle,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -13,80 +14,91 @@ import {
 import { eachDateInRange } from '../../utils/date';
 import api from '../../api/axios';
 
-// ── Config ─────────────────────────────────────────────────────────────────────
-const STATUS_CFG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  paid:    { label: 'Paid',    bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-  partial: { label: 'Partial', bg: 'bg-amber-50',  text: 'text-amber-700', border: 'border-amber-200' },
-  unpaid:  { label: 'Unpaid',  bg: 'bg-red-50',    text: 'text-red-600',   border: 'border-red-200'   },
-};
-
+// ── Helpers ────────────────────────────────────────────────────────────────────
 const fmt = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const thisMonth = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// ── Summary Card ───────────────────────────────────────────────────────────────
-const SCard = ({ label, value, sub, color = 'text-white', accent = '' }: {
-  label: string; value: string; sub?: string; color?: string; accent?: string;
+const STATUS_CFG: Record<string, { label: string; dot: string; bg: string; text: string; border: string }> = {
+  paid:    { label: 'Paid',    dot: 'bg-emerald-400', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  partial: { label: 'Partial', dot: 'bg-amber-400',   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200'   },
+  unpaid:  { label: 'Unpaid',  dot: 'bg-red-400',     bg: 'bg-red-50',     text: 'text-red-600',     border: 'border-red-200'     },
+};
+
+// ── Stat Tile ──────────────────────────────────────────────────────────────────
+const StatTile = ({ label, value, sub, valueColor = 'text-white', icon: Icon }: {
+  label: string; value: string; sub?: string; valueColor?: string; icon?: React.ElementType;
 }) => (
-  <div className={`rounded-xl p-3.5 ${accent || 'bg-slate-800'}`}>
-    <p className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">{label}</p>
-    <p className={`text-xl font-extrabold leading-none ${color}`}>{value}</p>
-    {sub && <p className="text-[10px] text-slate-500 mt-1">{sub}</p>}
+  <div className="flex flex-col gap-1">
+    <div className="flex items-center gap-1.5 mb-0.5">
+      {Icon && <Icon className="w-3 h-3 text-white/40" />}
+      <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest">{label}</p>
+    </div>
+    <p className={`text-xl font-extrabold leading-none ${valueColor}`}>{value}</p>
+    {sub && <p className="text-white/30 text-[10px] mt-0.5">{sub}</p>}
   </div>
 );
 
-// ── Main component ─────────────────────────────────────────────────────────────
+// ── Status Badge ──────────────────────────────────────────────────────────────
+const StatusBadge = ({ status }: { status: string }) => {
+  const cfg = STATUS_CFG[status] || STATUS_CFG.unpaid;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  );
+};
+
+// ── Payment Pills ─────────────────────────────────────────────────────────────
+const PayPills = ({ b }: { b: Bill }) => (
+  <div className="flex flex-wrap gap-1">
+    {Number(b.cash_paid)        > 0 && <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">💵 {fmt(b.cash_paid)}</span>}
+    {Number(b.online_paid)      > 0 && <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">💳 {fmt(b.online_paid)}</span>}
+    {Number(b.advance_paid)     > 0 && <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-2 py-0.5">🏦 {fmt(b.advance_paid)}</span>}
+    {Number(b.pay_later_amount) > 0 && <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">⏳ {fmt(b.pay_later_amount)}</span>}
+  </div>
+);
+
+// ── Main Component ─────────────────────────────────────────────────────────────
 export const AdminBilling = () => {
   const { toast } = useToast();
 
-  // ── Bills state ─────────────────────────────────────────────────────────────
   const [bills,        setBills]        = useState<Bill[]>([]);
   const [billsLoading, setBillsLoading] = useState(true);
+  const [summary,      setSummary]      = useState<BillingSummary | null>(null);
+  const [custSums,     setCustSums]     = useState<CustomerSummary[]>([]);
+  const [sumLoading,   setSumLoading]   = useState(true);
+  const [customers,    setCustomers]    = useState<{ id: number; name: string; phone: string }[]>([]);
 
-  // ── Summary state ───────────────────────────────────────────────────────────
-  const [summary,    setSummary]    = useState<BillingSummary | null>(null);
-  const [custSums,   setCustSums]   = useState<CustomerSummary[]>([]);
-  const [sumLoading, setSumLoading] = useState(true);
-
-  // ── Filters ─────────────────────────────────────────────────────────────────
   const [monthFilter,  setMonthFilter]  = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [custFilter,   setCustFilter]   = useState('');         // customer_id
+  const [custFilter,   setCustFilter]   = useState('');
   const [searchQ,      setSearchQ]      = useState('');
 
-  // ── Generate ─────────────────────────────────────────────────────────────────
-  const [genMonth,         setGenMonth]         = useState(thisMonth);
-  const [genCustomerId,    setGenCustomerId]    = useState('');  // '' = all customers
-  const [generating,       setGenerating]       = useState(false);
-  const [confirmGenerate,  setConfirmGenerate]  = useState(false);
+  const [genMonth,        setGenMonth]        = useState(thisMonth);
+  const [genCustomerId,   setGenCustomerId]   = useState('');
+  const [generating,      setGenerating]      = useState(false);
+  const [confirmGenerate, setConfirmGenerate] = useState(false);
 
-  // ── Pay modal ────────────────────────────────────────────────────────────────
   const [payBill,   setPayBill]   = useState<Bill | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payMode,   setPayMode]   = useState<'cash' | 'online'>('cash');
   const [paying,    setPaying]    = useState(false);
 
-  // ── Customer view ─────────────────────────────────────────────────────────────
+  const [viewTab,      setViewTab]      = useState<'customer' | 'bills' | 'summary'>('customer');
   const [expandedCust, setExpandedCust] = useState<number | null>(null);
 
-  // ── Delivery report ──────────────────────────────────────────────────────────
   const [showReport,    setShowReport]    = useState(false);
   const [reportCustId,  setReportCustId]  = useState('');
   const [reportStart,   setReportStart]   = useState(() => `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`);
-  const [reportEnd,     setReportEnd]     = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
+  const [reportEnd,     setReportEnd]     = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const [report,        setReport]        = useState<DeliveryReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [customers,     setCustomers]     = useState<{id:number;name:string;phone:string}[]>([]);
 
-  // ── View tab ─────────────────────────────────────────────────────────────────
-  const [viewTab, setViewTab] = useState<'customer' | 'bills' | 'summary'>('customer');
-
-  // ── Load bills ───────────────────────────────────────────────────────────────
   const loadBills = useCallback(async () => {
     setBillsLoading(true);
     try {
@@ -100,7 +112,6 @@ export const AdminBilling = () => {
     finally { setBillsLoading(false); }
   }, [monthFilter, statusFilter, custFilter]);
 
-  // ── Load summary ─────────────────────────────────────────────────────────────
   const loadSummary = useCallback(async () => {
     setSumLoading(true);
     try {
@@ -121,7 +132,6 @@ export const AdminBilling = () => {
 
   const refresh = () => { loadBills(); loadSummary(); };
 
-  // ── Generate ──────────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
     setConfirmGenerate(false);
     setGenerating(true);
@@ -130,14 +140,12 @@ export const AdminBilling = () => {
       const { data } = await billingApi.generate(genMonth, custId);
       const recalc   = data.recalculated ?? 0;
       const cleaned  = data.deleted      ?? 0;
-      const custName = custId
-        ? customers.find(c => c.id === custId)?.name || `#${custId}`
-        : 'All Customers';
+      const custName = custId ? customers.find(c => c.id === custId)?.name || `#${custId}` : 'All Customers';
       const parts = [
-        data.generated  > 0 ? `Generated: ${data.generated}`  : null,
-        recalc          > 0 ? `Updated: ${recalc}`            : null,
-        cleaned         > 0 ? `Cleaned: ${cleaned}`           : null,
-        data.skipped    > 0 ? `Skipped: ${data.skipped}`      : null,
+        data.generated > 0 ? `Generated: ${data.generated}` : null,
+        recalc         > 0 ? `Updated: ${recalc}`           : null,
+        cleaned        > 0 ? `Cleaned: ${cleaned}`          : null,
+        data.skipped   > 0 ? `Skipped: ${data.skipped}`     : null,
       ].filter(Boolean).join(' · ');
       toast(`${custName} — ${parts || 'No changes'}`, data.errors > 0 ? 'warning' : 'success');
       refresh();
@@ -146,14 +154,13 @@ export const AdminBilling = () => {
     } finally { setGenerating(false); }
   };
 
-  // ── Pay ───────────────────────────────────────────────────────────────────────
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payBill || !payAmount || Number(payAmount) <= 0) { toast('Enter valid amount', 'error'); return; }
+    if (!payBill || !payAmount || Number(payAmount) <= 0) { toast('Enter a valid amount', 'error'); return; }
     setPaying(true);
     try {
       await billingApi.recordPayment(payBill.id, Number(payAmount), payMode);
-      toast(`${payMode === 'cash' ? '💵 Cash' : '💳 Online'} payment of ₹${payAmount} recorded ✅`, 'success');
+      toast(`${payMode === 'cash' ? '💵 Cash' : '💳 Online'} ₹${payAmount} recorded ✅`, 'success');
       setPayBill(null); setPayAmount(''); setPayMode('cash');
       refresh();
     } catch (err: any) {
@@ -161,7 +168,8 @@ export const AdminBilling = () => {
     } finally { setPaying(false); }
   };
 
-  // ── Filtered bills (client-side search) ──────────────────────────────────────
+  const billDue = (b: Bill) => Math.max(0, Number(b.total_amount) - Number(b.paid_amount));
+
   const filteredBills = useMemo(() => {
     if (!searchQ.trim()) return bills;
     const q = searchQ.toLowerCase();
@@ -172,627 +180,401 @@ export const AdminBilling = () => {
     );
   }, [bills, searchQ]);
 
-  // ── Per-bill due ──────────────────────────────────────────────────────────────
-  const billDue = (b: Bill) => Math.max(0, Number(b.total_amount) - Number(b.paid_amount));
-
-  // ── Summary Bill: aggregate bills per customer for selected month ─────────────
   const summaryRows = useMemo(() => {
-    // Group bills (already filtered by month via API) by customer
-    const map = new Map<number, {
-      name: string; phone: string;
-      jars: number; total: number; cash: number; online: number;
-      advance: number; payLater: number; paid: number; pending: number;
-    }>();
+    const map = new Map<number, { name: string; phone: string; jars: number; total: number; cash: number; online: number; advance: number; payLater: number; paid: number; pending: number; }>();
     for (const b of bills) {
-      const existing = map.get(b.customer_id);
       const due = billDue(b);
-      if (existing) {
-        existing.jars    += Number(b.total_jars);
-        existing.total   += Number(b.total_amount);
-        existing.cash    += Number(b.cash_paid);
-        existing.online  += Number(b.online_paid);
-        existing.advance += Number(b.advance_paid);
-        existing.payLater+= Number(b.pay_later_amount);
-        existing.paid    += Number(b.paid_amount);
-        existing.pending += due;
-      } else {
-        map.set(b.customer_id, {
-          name: b.customer_name || '', phone: b.customer_phone || '',
-          jars: Number(b.total_jars),
-          total: Number(b.total_amount),
-          cash: Number(b.cash_paid),
-          online: Number(b.online_paid),
-          advance: Number(b.advance_paid),
-          payLater: Number(b.pay_later_amount),
-          paid: Number(b.paid_amount),
-          pending: due,
-        });
-      }
+      const ex  = map.get(b.customer_id);
+      if (ex) { ex.jars += Number(b.total_jars); ex.total += Number(b.total_amount); ex.cash += Number(b.cash_paid); ex.online += Number(b.online_paid); ex.advance += Number(b.advance_paid); ex.payLater += Number(b.pay_later_amount); ex.paid += Number(b.paid_amount); ex.pending += due; }
+      else { map.set(b.customer_id, { name: b.customer_name || '', phone: b.customer_phone || '', jars: Number(b.total_jars), total: Number(b.total_amount), cash: Number(b.cash_paid), online: Number(b.online_paid), advance: Number(b.advance_paid), payLater: Number(b.pay_later_amount), paid: Number(b.paid_amount), pending: due }); }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [bills]);
 
   const summaryTotals = useMemo(() => summaryRows.reduce((acc, r) => ({
-    jars: acc.jars + r.jars,
-    total: acc.total + r.total,
-    cash: acc.cash + r.cash,
-    online: acc.online + r.online,
-    advance: acc.advance + r.advance,
-    payLater: acc.payLater + r.payLater,
-    paid: acc.paid + r.paid,
-    pending: acc.pending + r.pending,
+    jars: acc.jars + r.jars, total: acc.total + r.total, cash: acc.cash + r.cash, online: acc.online + r.online,
+    advance: acc.advance + r.advance, payLater: acc.payLater + r.payLater, paid: acc.paid + r.paid, pending: acc.pending + r.pending,
   }), { jars: 0, total: 0, cash: 0, online: 0, advance: 0, payLater: 0, paid: 0, pending: 0 }), [summaryRows]);
+
+  const genCustName = customers.find(c => String(c.id) === genCustomerId)?.name;
 
   return (
     <div className="max-w-6xl space-y-5">
 
-      <div className="flex items-center gap-2 flex-wrap justify-end">
-        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={refresh}>Refresh</Button>
-        <div className="flex flex-col gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-3 shadow-card min-w-[240px]">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Generate Bill</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <input type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)}
-              className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[110px]" />
-            <select
-              value={genCustomerId}
-              onChange={e => setGenCustomerId(e.target.value)}
-              className="text-sm outline-none text-slate-700 bg-transparent flex-1 min-w-[130px] border-l border-slate-200 pl-2">
+      {/* ── Top Bar: Overview + Generate ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
+
+        {/* Billing Overview */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-5 relative overflow-hidden">
+          <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-white/5" />
+          <div className="absolute right-20 -bottom-8 w-24 h-24 rounded-full bg-brand-500/10" />
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-brand-500/20 flex items-center justify-center">
+                  <BarChart3 className="w-4 h-4 text-brand-400" />
+                </div>
+                <div>
+                  <p className="text-white font-bold text-sm">Billing Overview</p>
+                  <p className="text-white/40 text-[10px]">{monthFilter || 'All Time'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} title="Filter month"
+                  className="text-xs bg-white/10 text-white border border-white/10 rounded-lg px-2.5 py-1.5 outline-none focus:border-brand-400 transition-all" />
+                <button onClick={refresh}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-all">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {sumLoading ? (
+              <div className="grid grid-cols-3 gap-3">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl bg-white/5" />)}</div>
+            ) : summary ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                  <StatTile icon={IndianRupee} label="Total Billed"   value={fmt(summary.total_billed)}  sub={`${summary.total_bills} bills`} />
+                  <StatTile icon={CheckCircle} label="Total Paid"     value={fmt(summary.total_paid)}    valueColor="text-emerald-400" />
+                  <StatTile icon={AlertCircle} label="Total Pending"  value={fmt(summary.total_pending)} valueColor="text-red-400" sub={`${summary.unpaid_count} unpaid · ${summary.partial_count} partial`} />
+                  <StatTile icon={CreditCard}  label="Online Paid"    value={fmt(summary.online_paid)}   valueColor="text-blue-400" />
+                  <StatTile icon={Banknote}    label="Cash Paid"      value={fmt(summary.cash_paid)}     valueColor="text-emerald-300" />
+                  <StatTile icon={Banknote}    label="Cash Pending ✓" value={fmt(summary.cash_pending_verification)} valueColor="text-amber-400" />
+                </div>
+                <div className="flex items-center gap-4 pt-3 mt-3 border-t border-white/10">
+                  {[
+                    { label: `${summary.paid_count} Paid`,      dot: 'bg-emerald-400' },
+                    { label: `${summary.partial_count} Partial`, dot: 'bg-amber-400'   },
+                    { label: `${summary.unpaid_count} Unpaid`,   dot: 'bg-red-400'     },
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${item.dot}`} />
+                      <span className="text-white/50 text-xs">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </motion.div>
+
+        {/* Generate Bills */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-card p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-brand-50 flex items-center justify-center">
+              <Zap className="w-4 h-4 text-brand-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">Generate Bills</p>
+              <p className="text-[10px] text-slate-400">Create or recalculate bills</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Month</label>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
+              <input type="month" value={genMonth} onChange={e => setGenMonth(e.target.value)}
+                className="flex-1 bg-transparent text-sm text-slate-700 outline-none" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Customer</label>
+            <select value={genCustomerId} onChange={e => setGenCustomerId(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-brand-400 transition-all">
               <option value="">All Customers</option>
-              {customers.map(c => (
-                <option key={c.id} value={String(c.id)}>{c.name} ({c.phone})</option>
-              ))}
+              {customers.map(c => <option key={c.id} value={String(c.id)}>{c.name} ({c.phone})</option>)}
             </select>
           </div>
-          <Button size="sm" loading={generating} icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={() => setConfirmGenerate(true)}>
-            {genCustomerId
-              ? `Generate for ${customers.find(c => String(c.id) === genCustomerId)?.name || 'Customer'}`
-              : 'Generate All'}
+
+          <Button loading={generating} icon={<Plus className="w-4 h-4" />} onClick={() => setConfirmGenerate(true)} className="w-full">
+            {genCustomerId ? `Generate for ${genCustName || 'Customer'}` : 'Generate All'}
           </Button>
-        </div>
+        </motion.div>
       </div>
 
-      {/* ── Confirm Generate Dialog ── */}
-      {confirmGenerate && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-          onClick={() => setConfirmGenerate(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center shrink-0">
-                <span className="text-2xl">⚠️</span>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800">Generate Bills?</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {genCustomerId
-                    ? `For ${customers.find(c => String(c.id) === genCustomerId)?.name || 'selected customer'}`
-                    : 'For all active customers'} · <strong>{genMonth}</strong>
-                </p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-500 bg-slate-50 rounded-2xl px-4 py-3">
-              Existing bills for this month will be <strong>recalculated</strong> from fresh delivery data.
-              Months with no deliveries will be skipped automatically.
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmGenerate(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
-                Cancel
-              </button>
-              <button onClick={handleGenerate} disabled={generating}
-                className="flex-1 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-bold hover:bg-brand-700 disabled:opacity-50">
-                {generating ? 'Generating…' : 'Yes, Generate'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════
-          SUMMARY STRIP
-      ══════════════════════════════════════════════════════════════ */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-slate-900 rounded-2xl p-5">
-
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" />
-            Billing Overview {monthFilter ? `· ${monthFilter}` : '· All Time'}
-          </p>
-          <input type="month" value={monthFilter} onChange={e => { setMonthFilter(e.target.value); }}
-            className="text-xs bg-slate-800 text-slate-300 border border-slate-700 rounded-lg px-2.5 py-1.5 outline-none focus:border-brand-500 transition-all"
-            title="Filter by month" />
-        </div>
-
-        {sumLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
-          </div>
-        ) : summary ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <SCard label="Total Billed"    value={fmt(summary.total_billed)}   sub={`${summary.total_bills} bills`} />
-            <SCard label="Total Paid"      value={fmt(summary.total_paid)}      color="text-emerald-400" />
-            <SCard label="Online Paid"     value={fmt(summary.online_paid)}     color="text-blue-400"    accent="bg-slate-800" />
-            <SCard label="Cash Paid"       value={fmt(summary.cash_paid)}       color="text-green-400"   accent="bg-slate-800" />
-            <SCard label="Cash (Pending ✓)" value={fmt(summary.cash_pending_verification)} color="text-amber-400" accent="bg-slate-800" />
-            <SCard label="Total Pending"   value={fmt(summary.total_pending)}   color="text-red-400"
-              sub={`${summary.unpaid_count} unpaid · ${summary.partial_count} partial`} />
-          </div>
-        ) : null}
-
-        {/* Status mini-badges */}
-        {summary && (
-          <div className="flex gap-3 mt-3">
-            {[
-              { label: `${summary.paid_count} Paid`,    dot: 'bg-green-400' },
-              { label: `${summary.partial_count} Partial`, dot: 'bg-amber-400' },
-              { label: `${summary.unpaid_count} Unpaid`, dot: 'bg-red-400' },
-            ].map(item => (
-              <div key={item.label} className="flex items-center gap-1.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${item.dot}`} />
-                <span className="text-slate-400 text-xs">{item.label}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
-
-      {/* ══════════════════════════════════════════════════════════════
-          VIEW TABS
-      ══════════════════════════════════════════════════════════════ */}
-      <div className="flex gap-2">
+      {/* ── View Tabs ── */}
+      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
         {([
-          { id: 'customer', label: 'Customer Billing', icon: <User className="w-3.5 h-3.5" /> },
-          { id: 'bills',    label: 'All Bills',        icon: <FileText className="w-3.5 h-3.5" /> },
-          { id: 'summary',  label: 'Summary Bill',     icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+          { id: 'customer', label: 'Customers',   icon: User     },
+          { id: 'bills',    label: 'All Bills',    icon: FileText },
+          { id: 'summary',  label: 'Summary Bill', icon: BarChart3 },
         ] as const).map(tab => (
           <button key={tab.id} onClick={() => setViewTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all
-              ${viewTab === tab.id
-                ? tab.id === 'summary'
-                  ? 'bg-purple-600 text-white border-purple-600'
-                  : 'bg-brand-600 text-white border-brand-600'
-                : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
-            {tab.icon} {tab.label}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all
+              ${viewTab === tab.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            <tab.icon className="w-3.5 h-3.5" />
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════
-          CUSTOMER BREAKDOWN TABLE
-      ══════════════════════════════════════════════════════════════ */}
+      {/* ── Customer Billing Tab ── */}
+      <AnimatePresence mode="wait">
       {viewTab === 'customer' && (
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <User className="w-4 h-4 text-brand-600" />
-            Customer-wise Billing
-          </h3>
-          <span className="text-xs text-slate-400">{custSums.filter(c => Number(c.total_pending) > 0).length} customers with dues</span>
-        </div>
-
-        {sumLoading ? (
-          <div className="p-4 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
-        ) : (
-          <div className="divide-y divide-slate-50 max-h-[480px] overflow-y-auto">
-            {custSums.filter(c => Number(c.bill_count) > 0 || Number(c.total_billed) > 0).map((c, i) => {
-              const isExpanded = expandedCust === c.customer_id;
-              const custBills  = filteredBills.filter(b => b.customer_id === c.customer_id);
-              const hasDue     = Number(c.total_pending) > 0;
-
-              return (
-                <motion.div key={c.customer_id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
-                  {/* Row */}
-                  <button
-                    onClick={() => {
-                      setExpandedCust(isExpanded ? null : c.customer_id);
-                      // Load bills filtered by this customer
-                      if (!isExpanded) setCustFilter(String(c.customer_id));
-                      else setCustFilter('');
-                    }}
-                    className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-slate-50/60 transition-colors">
-
-                    {/* Avatar */}
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold
-                      ${hasDue ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                      {c.customer_name.charAt(0).toUpperCase()}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-800 truncate">{c.customer_name}</p>
-                        <span className="text-[10px] text-slate-400">{c.customer_phone}</span>
-                        {hasDue && (
-                          <span className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">
-                            {c.due_bills} due
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Amounts — always visible including mobile */}
-                    <div className="flex items-center gap-3 sm:gap-6 shrink-0 text-right">
-                      <div className="hidden sm:block">
-                        <p className="text-[10px] text-slate-400">Billed</p>
-                        <p className="text-sm font-bold text-slate-700">{fmt(c.total_billed)}</p>
-                      </div>
-                      <div className="hidden sm:block">
-                        <p className="text-[10px] text-slate-400">Paid</p>
-                        <p className="text-sm font-bold text-green-600">{fmt(c.total_paid)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-400">Pending</p>
-                        <p className={`text-sm font-bold ${hasDue ? 'text-red-600' : 'text-slate-400'}`}>
-                          {hasDue ? fmt(c.total_pending) : '—'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {isExpanded
-                      ? <ChevronUp   className="w-4 h-4 text-slate-400 shrink-0" />
-                      : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
-                  </button>
-
-                  {/* Expanded: customer's bills */}
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                        className="overflow-hidden bg-slate-50 border-t border-slate-100">
-                        {billsLoading ? (
-                          <div className="p-4"><Skeleton className="h-12 rounded-xl" /></div>
-                        ) : custBills.length === 0 ? (
-                          <p className="text-xs text-slate-400 text-center py-6">No bills for this customer yet</p>
-                        ) : (
-                          <div className="p-4 space-y-2">
-                            {custBills.map(b => {
-                              const cfg = STATUS_CFG[b.status] || STATUS_CFG.unpaid;
-                              const due = billDue(b);
-                              return (
-                                <div key={b.id} className="bg-white rounded-xl border border-slate-200 px-4 py-3 space-y-2">
-                                  <div className="flex items-center gap-4">
-                                    {/* Month */}
-                                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex flex-col items-center justify-center shrink-0">
-                                      <span className="text-white text-[9px] font-bold leading-none">
-                                        {['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][Number(b.month.split('-')[1]) - 1]}
-                                      </span>
-                                      <span className="text-slate-400 text-[9px] leading-none mt-0.5">{b.month.split('-')[0].slice(2)}</span>
-                                    </div>
-
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-xs font-bold text-slate-700">{b.month}</p>
-                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                                          {cfg.label}
-                                        </span>
-                                      </div>
-                                      <p className="text-[10px] text-slate-400">{b.total_jars} jars × ₹{b.jar_rate}</p>
-                                    </div>
-
-                                    {/* Amounts — visible on all screen sizes */}
-                                    <div className="flex items-center gap-2 sm:gap-4 text-right shrink-0">
-                                      <div className="hidden sm:block">
-                                        <p className="text-[9px] text-slate-400">Total</p>
-                                        <p className="text-xs font-bold text-slate-800">{fmt(b.total_amount)}</p>
-                                      </div>
-                                      <div className="hidden sm:block">
-                                        <p className="text-[9px] text-slate-400">Collected</p>
-                                        <p className="text-xs font-bold text-green-600">{fmt(b.paid_amount)}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400">Due</p>
-                                        <p className={`text-xs font-bold ${due > 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                                          {due > 0 ? fmt(due) : '—'}
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    {/* Actions — always visible */}
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
-                                        className="p-1.5 rounded-lg hover:bg-brand-50 text-brand-500 transition-colors" title="PDF">
-                                        <Download className="w-3.5 h-3.5" />
-                                      </button>
-                                      {b.status !== 'paid' && (
-                                        <button
-                                          onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); setPayMode('cash'); }}
-                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold transition-colors"
-                                          title="Record payment">
-                                          <IndianRupee className="w-3 h-3" />
-                                          <span className="hidden sm:inline">Record</span>
-                                          <span className="sm:hidden">{fmt(due)}</span>
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Payment breakdown pills */}
-                                  <div className="flex flex-wrap gap-1.5 pl-14">
-                                    {Number(b.cash_paid) > 0 && (
-                                      <span className="text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5">
-                                        💵 Cash {fmt(b.cash_paid)}
-                                      </span>
-                                    )}
-                                    {Number(b.online_paid) > 0 && (
-                                      <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">
-                                        💳 Online {fmt(b.online_paid)}
-                                      </span>
-                                    )}
-                                    {Number(b.advance_paid) > 0 && (
-                                      <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-2 py-0.5">
-                                        🏦 Advance {fmt(b.advance_paid)}
-                                      </span>
-                                    )}
-                                    {Number(b.pay_later_amount) > 0 && (
-                                      <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
-                                        ⏳ Pay-Later {fmt(b.pay_later_amount)}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════
-          ALL BILLS TABLE
-      ══════════════════════════════════════════════════════════════ */}
-      {viewTab === 'bills' && (
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
-
-        {/* Table header bar */}
-        <div className="px-5 py-4 border-b border-slate-100 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-brand-600" />
-              All Bills
-              {filteredBills.length !== bills.length && (
-                <span className="text-xs text-brand-600 font-bold">({filteredBills.length} of {bills.length})</span>
-              )}
-            </h3>
-
-            {/* Search */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-                placeholder="Search customer…"
-                className="pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-400 transition-all w-48" />
+        <motion.div key="customer" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><User className="w-4 h-4 text-brand-600" />Customer-wise Billing</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">{custSums.filter(c => Number(c.total_pending) > 0).length} customers with pending dues</p>
             </div>
           </div>
 
-          {/* Filter row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Customer filter */}
-            <select value={custFilter} onChange={e => setCustFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-brand-400 transition-all">
-              <option value="">All Customers</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-
-            {/* Status filter */}
-            {['', 'paid', 'partial', 'unpaid'].map(s => (
-              <button key={s} onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold border transition-all capitalize
-                  ${statusFilter === s
-                    ? 'bg-brand-600 text-white border-brand-600'
-                    : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
-                {s || 'All Status'}
-              </button>
-            ))}
-
-            {/* Clear filters */}
-            {(custFilter || statusFilter || monthFilter || searchQ) && (
-              <button onClick={() => { setCustFilter(''); setStatusFilter(''); setMonthFilter(''); setSearchQ(''); }}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-all">
-                <X className="w-3 h-3" /> Clear
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Desktop table — scrollable */}
-        <div className="hidden md:block overflow-x-auto">
-          <div className="max-h-[520px] overflow-y-auto">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-slate-50 border-b border-slate-100">
-                {['#', 'Customer', 'Month', 'Jars', 'Total', 'Paid (Online)', 'Paid (Cash)', 'Total Paid', 'Due', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {billsLoading ? (
-                [...Array(4)].map(i => (
-                  <tr key={i}>
-                    {[...Array(11)].map(j => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-14" /></td>)}
-                  </tr>
-                ))
-              ) : filteredBills.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="text-center py-12 text-slate-400 text-sm">
-                    No bills found — try adjusting the filters
-                  </td>
-                </tr>
-              ) : filteredBills.map((b, i) => {
-                const cfg = STATUS_CFG[b.status] || STATUS_CFG.unpaid;
-                const due = billDue(b);
-                // Parse paid amount by mode from bill (we use paid_amount as total paid; online vs cash split comes from transactions — show what bill has)
-                const paidOnline = Number((b as any).paid_online_amount || 0);
-                const paidCash   = Number(b.paid_amount) - paidOnline;
-
+          {sumLoading ? (
+            <div className="p-5 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+          ) : custSums.filter(c => Number(c.bill_count) > 0 || Number(c.total_billed) > 0).length === 0 ? (
+            <div className="py-16 text-center">
+              <User className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-slate-500">No customer billing data</p>
+              <p className="text-xs text-slate-400 mt-1">Generate bills first</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 max-h-[520px] overflow-y-auto">
+              {custSums.filter(c => Number(c.bill_count) > 0 || Number(c.total_billed) > 0).map((c, i) => {
+                const isExpanded = expandedCust === c.customer_id;
+                const custBills  = filteredBills.filter(b => b.customer_id === c.customer_id);
+                const hasDue     = Number(c.total_pending) > 0;
                 return (
-                  <motion.tr key={b.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                    className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-4 py-3 text-xs font-bold text-slate-400">#{b.id}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-slate-800">{b.customer_name}</p>
-                      <p className="text-[10px] text-slate-400">{b.customer_phone}</p>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 font-medium">{b.month}</td>
-                    <td className="px-4 py-3 text-sm text-slate-700">{b.total_jars}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-slate-800">{fmt(b.total_amount)}</td>
-                    <td className="px-4 py-3">
-                      {paidOnline > 0
-                        ? <span className="flex items-center gap-1 text-sm font-semibold text-blue-600">
-                            <CreditCard className="w-3 h-3" />{fmt(paidOnline)}
-                          </span>
-                        : <span className="text-slate-300 text-xs">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {paidCash > 0
-                        ? <span className="flex items-center gap-1 text-sm font-semibold text-green-600">
-                            <Banknote className="w-3 h-3" />{fmt(paidCash)}
-                          </span>
-                        : <span className="text-slate-300 text-xs">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-600">{fmt(b.paid_amount)}</td>
-                    <td className="px-4 py-3">
-                      {due > 0
-                        ? <span className="text-sm font-bold text-red-600">{fmt(due)}</span>
-                        : <span className="text-slate-300 text-xs">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border capitalize ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
-                          className="p-1.5 rounded-lg hover:bg-brand-50 text-brand-500 transition-colors opacity-0 group-hover:opacity-100" title="PDF">
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                        {b.status !== 'paid' && (
-                          <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); }}
-                            className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 transition-colors opacity-0 group-hover:opacity-100" title="Record payment">
-                            <IndianRupee className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                  <motion.div key={c.customer_id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.025 }}>
+                    <button
+                      onClick={() => { setExpandedCust(isExpanded ? null : c.customer_id); if (!isExpanded) setCustFilter(String(c.customer_id)); else setCustFilter(''); }}
+                      className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/70 transition-colors">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-extrabold
+                        ${hasDue ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                        {c.customer_name.charAt(0).toUpperCase()}
                       </div>
-                    </td>
-                  </motion.tr>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold text-slate-800">{c.customer_name}</p>
+                          <span className="text-[10px] text-slate-400">{c.customer_phone}</span>
+                          {hasDue && <span className="text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full font-bold">{c.due_bills} due</span>}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{c.bill_count} bills</p>
+                      </div>
+                      <div className="hidden sm:flex items-center gap-6 text-right shrink-0">
+                        <div><p className="text-[10px] text-slate-400">Billed</p><p className="text-sm font-bold text-slate-700">{fmt(c.total_billed)}</p></div>
+                        <div><p className="text-[10px] text-slate-400">Paid</p><p className="text-sm font-bold text-emerald-600">{fmt(c.total_paid)}</p></div>
+                        <div><p className="text-[10px] text-slate-400">Pending</p><p className={`text-sm font-bold ${hasDue ? 'text-red-600' : 'text-slate-300'}`}>{hasDue ? fmt(c.total_pending) : '—'}</p></div>
+                      </div>
+                      <div className="sm:hidden text-right shrink-0">
+                        <p className="text-[10px] text-slate-400">Pending</p>
+                        <p className={`text-sm font-bold ${hasDue ? 'text-red-600' : 'text-slate-300'}`}>{hasDue ? fmt(c.total_pending) : '—'}</p>
+                      </div>
+                      {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                    </button>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                          className="overflow-hidden bg-slate-50 border-t border-slate-100">
+                          {billsLoading ? (
+                            <div className="p-4"><Skeleton className="h-12 rounded-xl" /></div>
+                          ) : custBills.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-6">No bills yet</p>
+                          ) : (
+                            <div className="p-4 space-y-2">
+                              {custBills.map(b => {
+                                const due = billDue(b);
+                                return (
+                                  <div key={b.id} className="bg-white rounded-xl border border-slate-200 px-4 py-3 space-y-2.5">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-slate-900 flex flex-col items-center justify-center shrink-0">
+                                        <span className="text-white text-[9px] font-bold leading-none">{MONTH_NAMES[Number(b.month.split('-')[1]) - 1]}</span>
+                                        <span className="text-slate-400 text-[9px] leading-none mt-0.5">{b.month.split('-')[0].slice(2)}</span>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2"><p className="text-xs font-bold text-slate-700">{b.month}</p><StatusBadge status={b.status} /></div>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">{b.total_jars} jars × ₹{b.jar_rate}</p>
+                                      </div>
+                                      <div className="hidden sm:flex items-center gap-4 text-right shrink-0">
+                                        <div><p className="text-[9px] text-slate-400">Total</p><p className="text-xs font-bold text-slate-800">{fmt(b.total_amount)}</p></div>
+                                        <div><p className="text-[9px] text-slate-400">Paid</p><p className="text-xs font-bold text-emerald-600">{fmt(b.paid_amount)}</p></div>
+                                        <div><p className="text-[9px] text-slate-400">Due</p><p className={`text-xs font-bold ${due > 0 ? 'text-red-600' : 'text-slate-300'}`}>{due > 0 ? fmt(due) : '—'}</p></div>
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')} title="PDF"
+                                          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand-50 text-brand-500 transition-colors">
+                                          <Download className="w-3.5 h-3.5" />
+                                        </button>
+                                        {b.status !== 'paid' && (
+                                          <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); setPayMode('cash'); }}
+                                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition-colors">
+                                            <IndianRupee className="w-3 h-3" />
+                                            <span className="hidden sm:inline">Record</span>
+                                            <span className="sm:hidden">{fmt(due)}</span>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <PayPills b={b} />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
                 );
               })}
-            </tbody>
-          </table>
-          </div>
-        </div>
-
-        {/* Mobile card list */}
-        <div className="md:hidden divide-y divide-slate-100">
-          {billsLoading ? (
-            [...Array(3)].map((_, i) => <div key={i} className="p-4 space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24" /></div>)
-          ) : filteredBills.map(b => {
-            const cfg = STATUS_CFG[b.status] || STATUS_CFG.unpaid;
-            const due = billDue(b);
-            return (
-              <div key={b.id} className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">{b.customer_name}</p>
-                    <p className="text-xs text-slate-400">{b.month} · {b.total_jars} jars</p>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border capitalize ${cfg.bg} ${cfg.text} ${cfg.border}`}>{cfg.label}</span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: 'Total',   value: fmt(b.total_amount),  color: 'text-slate-800' },
-                    { label: 'Paid',    value: fmt(b.paid_amount),   color: 'text-green-600' },
-                    { label: 'Due',     value: due > 0 ? fmt(due) : '—', color: due > 0 ? 'text-red-600' : 'text-slate-300' },
-                  ].map(item => (
-                    <div key={item.label} className="bg-slate-50 rounded-xl p-2.5 text-center">
-                      <p className="text-[9px] text-slate-400 font-medium">{item.label}</p>
-                      <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex gap-2">
-                  <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
-                    <Download className="w-3.5 h-3.5" /> PDF
-                  </button>
-                  {b.status !== 'paid' && (
-                    <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-green-50 border border-green-200 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors">
-                      <IndianRupee className="w-3.5 h-3.5" /> Record Payment
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
+            </div>
+          )}
+        </motion.div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════
-          SUMMARY BILL TAB
-      ══════════════════════════════════════════════════════════════ */}
-      {viewTab === 'summary' && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      {/* ── All Bills Tab ── */}
+      {viewTab === 'bills' && (
+        <motion.div key="bills" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
           className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-brand-600" /> All Bills
+                {filteredBills.length !== bills.length && <span className="text-xs text-brand-600 font-bold">({filteredBills.length} of {bills.length})</span>}
+              </h3>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search customer…"
+                  className="pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-400 transition-all w-44" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select value={custFilter} onChange={e => setCustFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-brand-400 transition-all">
+                <option value="">All Customers</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <div className="flex items-center gap-1">
+                {['', 'paid', 'partial', 'unpaid'].map(s => (
+                  <button key={s} onClick={() => setStatusFilter(s)}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold border transition-all capitalize
+                      ${statusFilter === s ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-500 border-slate-200 hover:border-brand-300'}`}>
+                    {s || 'All'}
+                  </button>
+                ))}
+              </div>
+              {(custFilter || statusFilter || monthFilter || searchQ) && (
+                <button onClick={() => { setCustFilter(''); setStatusFilter(''); setMonthFilter(''); setSearchQ(''); }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-all">
+                  <X className="w-3 h-3" /> Clear
+                </button>
+              )}
+            </div>
+          </div>
 
-          {/* Header */}
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <div className="max-h-[520px] overflow-y-auto">
+              <table className="w-full">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    {['#', 'Customer', 'Month', 'Jars', 'Total', 'Online', 'Cash', 'Total Paid', 'Due', 'Status', ''].map(h => (
+                      <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {billsLoading ? [...Array(4)].map((_, i) => (
+                    <tr key={i}>{[...Array(10)].map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-14" /></td>)}</tr>
+                  )) : filteredBills.length === 0 ? (
+                    <tr><td colSpan={10} className="text-center py-14 text-slate-400 text-sm">No bills found — try adjusting filters</td></tr>
+                  ) : filteredBills.map((b, i) => {
+                    const due = billDue(b);
+                    return (
+                      <motion.tr key={b.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
+                        className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-4 py-3 text-xs font-bold text-slate-300">#{b.id}</td>
+                        <td className="px-4 py-3"><p className="text-sm font-semibold text-slate-800">{b.customer_name}</p><p className="text-[10px] text-slate-400">{b.customer_phone}</p></td>
+                        <td className="px-4 py-3 text-sm text-slate-600 font-medium">{b.month}</td>
+                        <td className="px-4 py-3 text-sm font-semibold text-slate-700">{b.total_jars}</td>
+                        <td className="px-4 py-3 text-sm font-bold text-slate-800">{fmt(b.total_amount)}</td>
+                        <td className="px-4 py-3">{Number(b.online_paid) > 0 ? <span className="flex items-center gap-1 text-sm font-semibold text-blue-600"><CreditCard className="w-3 h-3" />{fmt(b.online_paid)}</span> : <span className="text-slate-200 text-xs">—</span>}</td>
+                        <td className="px-4 py-3">{Number(b.cash_paid) > 0 ? <span className="flex items-center gap-1 text-sm font-semibold text-emerald-600"><Banknote className="w-3 h-3" />{fmt(b.cash_paid)}</span> : <span className="text-slate-200 text-xs">—</span>}</td>
+                        <td className="px-4 py-3 text-sm font-bold text-emerald-600">{fmt(b.paid_amount)}</td>
+                        <td className="px-4 py-3">{due > 0 ? <span className="text-sm font-bold text-red-600">{fmt(due)}</span> : <span className="text-slate-200 text-xs">—</span>}</td>
+                        <td className="px-4 py-3"><StatusBadge status={b.status} /></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')} title="PDF"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-brand-50 text-brand-500 transition-colors"><Download className="w-3.5 h-3.5" /></button>
+                            {b.status !== 'paid' && (
+                              <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); setPayMode('cash'); }} title="Record payment"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors"><IndianRupee className="w-3.5 h-3.5" /></button>
+                            )}
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {billsLoading ? [...Array(3)].map((_, i) => <div key={i} className="p-4 space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24" /></div>)
+              : filteredBills.map(b => {
+                  const due = billDue(b);
+                  return (
+                    <div key={b.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between"><div><p className="text-sm font-bold text-slate-800">{b.customer_name}</p><p className="text-xs text-slate-400">{b.month} · {b.total_jars} jars</p></div><StatusBadge status={b.status} /></div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[{label:'Total',value:fmt(b.total_amount),color:'text-slate-800'},{label:'Paid',value:fmt(b.paid_amount),color:'text-emerald-600'},{label:'Due',value:due>0?fmt(due):'—',color:due>0?'text-red-600':'text-slate-300'}].map(item => (
+                          <div key={item.label} className="bg-slate-50 rounded-xl p-2.5 text-center"><p className="text-[9px] text-slate-400">{item.label}</p><p className={`text-sm font-bold ${item.color}`}>{item.value}</p></div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"><Download className="w-3.5 h-3.5" /> PDF</button>
+                        {b.status !== 'paid' && (
+                          <button onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); setPayMode('cash'); }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"><IndianRupee className="w-3.5 h-3.5" /> Record Payment</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Summary Bill Tab ── */}
+      {viewTab === 'summary' && (
+        <motion.div key="summary" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <LayoutGrid className="w-4 h-4 text-purple-600" />
-                All Customers Summary Bill
-              </h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">
-                {monthFilter ? monthFilter : 'All Time'} · {summaryRows.length} customers
-              </p>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><BarChart3 className="w-4 h-4 text-purple-600" />All Customers Summary Bill</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">{monthFilter || 'All Time'} · {summaryRows.length} customers</p>
             </div>
-            <button
-              onClick={() => {
-                if (!monthFilter) { toast('Select a month first to download the summary bill', 'error'); return; }
-                window.open(billingApi.summaryBillPdfUrl(monthFilter), '_blank');
-              }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:opacity-90 transition-all">
+            <button onClick={() => { if (!monthFilter) { toast('Select a month first', 'error'); return; } window.open(billingApi.summaryBillPdfUrl(monthFilter), '_blank'); }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:opacity-90 transition-all">
               <Printer className="w-3.5 h-3.5" /> Download PDF
             </button>
           </div>
-
-          {/* Hint if no month selected */}
           {!monthFilter && (
             <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
               <span className="text-xs text-amber-700">⚠️ Select a month in the Billing Overview to see per-month summary</span>
             </div>
           )}
-
           {billsLoading ? (
-            <div className="p-5 space-y-2">{[...Array(5)].map((_,i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
+            <div className="p-5 space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
           ) : summaryRows.length === 0 ? (
-            <div className="p-12 text-center">
-              <LayoutGrid className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-slate-500">No bills found for this period</p>
-              <p className="text-xs text-slate-400 mt-1">Generate bills first or select a different month</p>
-            </div>
+            <div className="p-12 text-center"><BarChart3 className="w-10 h-10 text-slate-200 mx-auto mb-3" /><p className="text-sm font-semibold text-slate-500">No bills for this period</p><p className="text-xs text-slate-400 mt-1">Generate bills first or pick a different month</p></div>
           ) : (
             <div className="overflow-x-auto">
               <div className="max-h-[520px] overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-50 border-b border-slate-100">
-                      {['#', 'Customer', 'Phone', 'Jars', 'Total', 'Cash Paid', 'Online Paid', 'Advance', 'Pay-Later', 'Total Paid', 'Pending'].map(h => (
+                      {['#', 'Customer', 'Phone', 'Jars', 'Total', 'Cash', 'Online', 'Advance', 'Pay-Later', 'Paid', 'Pending'].map(h => (
                         <th key={h} className="text-left px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50">{h}</th>
                       ))}
                     </tr>
@@ -800,55 +582,31 @@ export const AdminBilling = () => {
                   <tbody className="divide-y divide-slate-50">
                     {summaryRows.map((r, i) => (
                       <tr key={i} className={`hover:bg-slate-50/50 transition-colors ${r.pending > 0 ? 'bg-red-50/20' : ''}`}>
-                        <td className="px-3 py-3 text-slate-400 font-bold">{i + 1}</td>
+                        <td className="px-3 py-3 text-slate-300 font-bold">{i + 1}</td>
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0
-                              ${r.pending > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                              {r.name.charAt(0).toUpperCase()}
-                            </div>
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-extrabold shrink-0 ${r.pending > 0 ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-700'}`}>{r.name.charAt(0).toUpperCase()}</div>
                             <span className="font-semibold text-slate-800 whitespace-nowrap">{r.name}</span>
                           </div>
                         </td>
                         <td className="px-3 py-3 text-slate-400">{r.phone}</td>
                         <td className="px-3 py-3 font-bold text-slate-700">{r.jars}</td>
                         <td className="px-3 py-3 font-bold text-slate-800">{fmt(r.total)}</td>
-                        <td className="px-3 py-3">
-                          {r.cash > 0
-                            ? <span className="flex items-center gap-1 font-semibold text-green-700"><Banknote className="w-3 h-3" />{fmt(r.cash)}</span>
-                            : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="px-3 py-3">
-                          {r.online > 0
-                            ? <span className="flex items-center gap-1 font-semibold text-blue-700"><CreditCard className="w-3 h-3" />{fmt(r.online)}</span>
-                            : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="px-3 py-3">
-                          {r.advance > 0
-                            ? <span className="font-semibold text-purple-700">{fmt(r.advance)}</span>
-                            : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="px-3 py-3">
-                          {r.payLater > 0
-                            ? <span className="font-semibold text-amber-700">{fmt(r.payLater)}</span>
-                            : <span className="text-slate-300">—</span>}
-                        </td>
+                        <td className="px-3 py-3">{r.cash > 0 ? <span className="flex items-center gap-1 font-semibold text-emerald-700"><Banknote className="w-3 h-3" />{fmt(r.cash)}</span> : <span className="text-slate-200">—</span>}</td>
+                        <td className="px-3 py-3">{r.online > 0 ? <span className="flex items-center gap-1 font-semibold text-blue-700"><CreditCard className="w-3 h-3" />{fmt(r.online)}</span> : <span className="text-slate-200">—</span>}</td>
+                        <td className="px-3 py-3">{r.advance > 0 ? <span className="font-semibold text-purple-700">{fmt(r.advance)}</span> : <span className="text-slate-200">—</span>}</td>
+                        <td className="px-3 py-3">{r.payLater > 0 ? <span className="font-semibold text-amber-700">{fmt(r.payLater)}</span> : <span className="text-slate-200">—</span>}</td>
                         <td className="px-3 py-3 font-bold text-emerald-700">{fmt(r.paid)}</td>
-                        <td className="px-3 py-3">
-                          {r.pending > 0
-                            ? <span className="font-bold text-red-600">{fmt(r.pending)}</span>
-                            : <span className="text-green-500 font-semibold">✔ Clear</span>}
-                        </td>
+                        <td className="px-3 py-3">{r.pending > 0 ? <span className="font-bold text-red-600">{fmt(r.pending)}</span> : <span className="text-emerald-500 font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Clear</span>}</td>
                       </tr>
                     ))}
                   </tbody>
-                  {/* Totals footer */}
                   <tfoot className="sticky bottom-0 z-10">
                     <tr className="bg-slate-900 border-t-2 border-slate-700">
-                      <td className="px-3 py-3 text-slate-400 text-[10px] font-bold uppercase" colSpan={3}>Totals</td>
+                      <td colSpan={3} className="px-3 py-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider">Totals</td>
                       <td className="px-3 py-3 font-extrabold text-white">{summaryTotals.jars}</td>
                       <td className="px-3 py-3 font-extrabold text-white">{fmt(summaryTotals.total)}</td>
-                      <td className="px-3 py-3 font-extrabold text-green-400">{fmt(summaryTotals.cash)}</td>
+                      <td className="px-3 py-3 font-extrabold text-emerald-400">{fmt(summaryTotals.cash)}</td>
                       <td className="px-3 py-3 font-extrabold text-blue-400">{fmt(summaryTotals.online)}</td>
                       <td className="px-3 py-3 font-extrabold text-purple-400">{fmt(summaryTotals.advance)}</td>
                       <td className="px-3 py-3 font-extrabold text-amber-400">{fmt(summaryTotals.payLater)}</td>
@@ -862,17 +620,20 @@ export const AdminBilling = () => {
           )}
         </motion.div>
       )}
+      </AnimatePresence>
 
-      {/* ══════════════════════════════════════════════════════════════
-          DELIVERY REPORT SECTION
-      ══════════════════════════════════════════════════════════════ */}
+      {/* ── Delivery Report ── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
         <button onClick={() => setShowReport(r => !r)}
           className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50/50 transition-colors">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-brand-600" />
-            <h3 className="text-sm font-bold text-slate-800">Delivery Report</h3>
-            <span className="text-[10px] text-slate-400">Day / Date Range</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 text-slate-600" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-slate-800">Delivery Report</p>
+              <p className="text-[10px] text-slate-400">Day-by-day delivery breakdown for a customer</p>
+            </div>
           </div>
           {showReport ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
         </button>
@@ -881,26 +642,25 @@ export const AdminBilling = () => {
           {showReport && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-              <div className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
-
-                <div className="flex gap-3 flex-wrap items-end">
-                  <div className="flex-1 min-w-[160px]">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase block mb-1">Customer</label>
+              <div className="px-5 pb-5 pt-4 border-t border-slate-100 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Customer</label>
                     <select value={reportCustId} onChange={e => setReportCustId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-brand-400 transition-all">
-                      <option value="">Select customer...</option>
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand-400 transition-all">
+                      <option value="">Select customer…</option>
                       {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
                     </select>
                   </div>
-                  <div className="min-w-[130px]">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase block mb-1">From</label>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">From</label>
                     <input type="date" value={reportStart} onChange={e => setReportStart(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-brand-400 transition-all" />
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand-400 transition-all" />
                   </div>
-                  <div className="min-w-[130px]">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase block mb-1">To</label>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">To</label>
                     <input type="date" value={reportEnd} onChange={e => setReportEnd(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-brand-400 transition-all" />
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand-400 transition-all" />
                   </div>
                   <Button size="sm" loading={reportLoading}
                     onClick={async () => {
@@ -911,14 +671,12 @@ export const AdminBilling = () => {
                         setReport(data.report);
                       } catch { toast('Failed to load report', 'error'); }
                       finally { setReportLoading(false); }
-                    }}>
-                    View Report
-                  </Button>
+                    }}>View Report</Button>
                 </div>
 
                 {report && (
-                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                    className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                    className="bg-slate-50 rounded-2xl p-4 space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-bold text-slate-800">{report.customer.name}</p>
@@ -931,36 +689,24 @@ export const AdminBilling = () => {
                         <Download className="w-3.5 h-3.5" /> PDF
                       </button>
                     </div>
-
                     <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { label: 'Jars',   value: String(report.totalJars),  color: 'text-slate-800' },
-                        { label: 'Rate',   value: `₹${report.jarRate}`,      color: 'text-slate-800' },
-                        { label: 'Amount', value: `₹${report.totalAmount}`,  color: 'text-brand-700' },
-                      ].map(item => (
-                        <div key={item.label} className="bg-white rounded-xl p-3 text-center">
-                          <p className="text-[10px] text-slate-400">{item.label}</p>
-                          <p className={`text-lg font-bold ${item.color}`}>{item.value}</p>
-                        </div>
+                      {[{ label: 'Jars', value: String(report.totalJars), color: 'text-slate-800' }, { label: 'Rate', value: `₹${report.jarRate}`, color: 'text-slate-800' }, { label: 'Amount', value: `₹${report.totalAmount}`, color: 'text-brand-700' }].map(item => (
+                        <div key={item.label} className="bg-white rounded-xl p-3 text-center"><p className="text-[10px] text-slate-400">{item.label}</p><p className={`text-lg font-extrabold ${item.color}`}>{item.value}</p></div>
                       ))}
                     </div>
-
                     {(() => {
-                      const jarMap = new Map(report.days.map(d => [d.date, d.jars]));
-                      const allDates = eachDateInRange(report.startDate, report.endDate).map(date => ({
-                        date, jars: (jarMap.get(date) as number) ?? 0,
-                      }));
+                      const jarMap   = new Map(report.days.map(d => [d.date, d.jars]));
+                      const allDates = eachDateInRange(report.startDate, report.endDate).map(date => ({ date, jars: (jarMap.get(date) as number) ?? 0 }));
                       return (
-                        <div className="grid gap-1 max-h-48 overflow-y-auto"
-                          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(40px, 1fr))' }}>
+                        <div className="grid gap-1 max-h-52 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))' }}>
                           {allDates.map(({ date, jars }) => {
                             const d = new Date(date + 'T00:00:00');
-                            const hasJars = jars > 0;
+                            const h = jars > 0;
                             return (
-                              <div key={date} className={`rounded-lg p-1 text-center border ${hasJars ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100'}`}>
+                              <div key={date} className={`rounded-xl p-1.5 text-center border transition-colors ${h ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-100'}`}>
                                 <p className="text-[8px] text-slate-400 leading-none">{d.toLocaleDateString('en-IN', { weekday: 'short' })}</p>
-                                <p className={`text-[10px] font-bold leading-tight mt-0.5 ${hasJars ? 'text-slate-700' : 'text-slate-300'}`}>{d.getDate()}</p>
-                                <p className={`text-xs font-bold ${hasJars ? 'text-green-600' : 'text-slate-200'}`}>{jars}</p>
+                                <p className={`text-[11px] font-bold leading-tight mt-0.5 ${h ? 'text-slate-700' : 'text-slate-300'}`}>{d.getDate()}</p>
+                                <p className={`text-xs font-bold ${h ? 'text-brand-600' : 'text-slate-200'}`}>{jars}</p>
                               </div>
                             );
                           })}
@@ -975,78 +721,91 @@ export const AdminBilling = () => {
         </AnimatePresence>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════
-          RECORD PAYMENT MODAL
-      ══════════════════════════════════════════════════════════════ */}
+      {/* ── Confirm Generate Dialog ── */}
+      <AnimatePresence>
+        {confirmGenerate && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setConfirmGenerate(false)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center shrink-0 text-2xl">⚠️</div>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">Generate Bills?</p>
+                  <p className="text-xs text-slate-500 mt-1">{genCustomerId ? `For ${genCustName || 'selected customer'}` : 'For all active customers'} · <strong>{genMonth}</strong></p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 bg-slate-50 rounded-2xl px-4 py-3 leading-relaxed">
+                Existing bills for this month will be <strong>recalculated</strong> from fresh delivery data. Months with no deliveries will be skipped automatically.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmGenerate(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+                <button onClick={handleGenerate} disabled={generating}
+                  className="flex-1 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-bold hover:bg-brand-700 disabled:opacity-50 transition-colors">
+                  {generating ? 'Generating…' : 'Yes, Generate'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Record Payment Modal ── */}
       <AnimatePresence>
         {payBill && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
             onClick={() => setPayBill(null)}>
-            <motion.div
-              initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+            <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
               exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={e => e.stopPropagation()}
               className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
-
-              {/* Header */}
               <div className="bg-slate-900 px-5 pt-5 pb-4">
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-green-500/20 flex items-center justify-center">
-                      <IndianRupee className="w-4 h-4 text-green-400" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                      <IndianRupee className="w-5 h-5 text-emerald-400" />
                     </div>
                     <div>
                       <h3 className="text-white font-bold text-sm">Record Payment</h3>
                       <p className="text-slate-400 text-xs mt-0.5">{payBill.customer_name} · {payBill.month}</p>
                     </div>
                   </div>
-                  <button onClick={() => setPayBill(null)} className="w-7 h-7 flex items-center justify-center rounded-xl bg-slate-800 text-slate-400 hover:text-white">
+                  <button onClick={() => setPayBill(null)}
+                    className="w-7 h-7 flex items-center justify-center rounded-xl bg-white/10 text-slate-400 hover:text-white transition-colors">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-
-                {/* Bill summary */}
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: 'Total',     value: fmt(payBill.total_amount), color: 'text-white' },
-                    { label: 'Collected', value: fmt(payBill.paid_amount),  color: 'text-green-400' },
-                    { label: 'Due',       value: fmt(billDue(payBill)),     color: 'text-red-400'   },
-                  ].map(item => (
+                  {[{ label: 'Total', value: fmt(payBill.total_amount), color: 'text-white' }, { label: 'Collected', value: fmt(payBill.paid_amount), color: 'text-emerald-400' }, { label: 'Due', value: fmt(billDue(payBill)), color: 'text-red-400' }].map(item => (
                     <div key={item.label} className="bg-slate-800 rounded-xl p-2.5 text-center">
-                      <p className="text-[9px] text-slate-400">{item.label}</p>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider mb-0.5">{item.label}</p>
                       <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Body */}
-              <div className="px-5 py-4">
+              <div className="px-5 py-5">
                 <form onSubmit={handlePay} className="space-y-4">
-
-                  {/* Payment Mode */}
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Payment Mode</label>
                     <div className="grid grid-cols-2 gap-2">
-                      <button type="button" onClick={() => setPayMode('cash')}
-                        className={`flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm transition-all
-                          ${payMode === 'cash'
-                            ? 'bg-green-50 border-green-400 text-green-700 ring-2 ring-green-400/20'
-                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
-                        💵 Cash
-                      </button>
-                      <button type="button" onClick={() => setPayMode('online')}
-                        className={`flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm transition-all
-                          ${payMode === 'online'
-                            ? 'bg-blue-50 border-blue-400 text-blue-700 ring-2 ring-blue-400/20'
-                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
-                        💳 Online
-                      </button>
+                      {([
+                        { id: 'cash',   label: '💵 Cash',   active: 'bg-emerald-50 border-emerald-400 text-emerald-700 ring-2 ring-emerald-400/20' },
+                        { id: 'online', label: '💳 Online', active: 'bg-blue-50 border-blue-400 text-blue-700 ring-2 ring-blue-400/20' },
+                      ] as const).map(m => (
+                        <button key={m.id} type="button" onClick={() => setPayMode(m.id)}
+                          className={`flex items-center justify-center py-3 rounded-2xl border font-bold text-sm transition-all
+                            ${payMode === m.id ? m.active : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                          {m.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
-
-                  {/* Amount */}
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount (₹)</label>
                     <input type="number" min={0.01} step="0.01" value={payAmount}
@@ -1054,9 +813,7 @@ export const AdminBilling = () => {
                       placeholder={`Due: ₹${billDue(payBill).toFixed(0)}`}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xl font-bold outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
                   </div>
-
-                  <Button type="submit" loading={paying} size="lg" className="w-full"
-                    icon={<CheckCircle className="w-4 h-4" />}>
+                  <Button type="submit" loading={paying} size="lg" className="w-full" icon={<CheckCircle className="w-4 h-4" />}>
                     Record {payMode === 'cash' ? '💵 Cash' : '💳 Online'} ₹{payAmount || '0'}
                   </Button>
                 </form>

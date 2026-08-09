@@ -827,6 +827,34 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
 
     res.json({ message: 'Profile updated successfully' });
+
+    // ── BUG-9 FIX: if jar_rate changed, recalculate all unpaid/partial bills ──
+    // bills.jar_rate and bills.subtotal stay stale without this —  customers would
+    // see wrong totals on any bill generated before the rate change.
+    if (jar_rate != null && Number(jar_rate) >= 0) {
+      (async () => {
+        try {
+          const [billRows] = await pool.query<RowDataPacket[]>(
+            `SELECT id, month FROM bills WHERE customer_id = ? AND status != 'paid'`,
+            [targetId]
+          );
+          for (const b of billRows as RowDataPacket[]) {
+            // Also update bills.jar_rate so future recalculations use the new rate
+            await pool.query(
+              'UPDATE bills SET jar_rate = ? WHERE id = ?',
+              [Number(jar_rate), b.id]
+            );
+            await BillingModel.recalculateBillForCustomer(targetId, String(b.month), Number(b.id));
+          }
+          if ((billRows as RowDataPacket[]).length) {
+            SSE.sendToUser(targetId, 'bill_updated', { reason: 'jar_rate_changed' });
+            SSE.broadcastToRole('admin', 'bill_updated', { customerId: targetId, reason: 'jar_rate_changed' });
+          }
+        } catch (e: any) {
+          console.warn('[Billing] jar_rate change recalc failed:', e?.message);
+        }
+      })();
+    }
   } catch (err) {
     console.error('updateUserProfile error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });

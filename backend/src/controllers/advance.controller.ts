@@ -320,11 +320,9 @@ export const payOrderWithAdvance = async (req: AuthRequest, res: Response): Prom
         [userId, orderId, due]
       );
 
-      // Mark order as paid
-      await conn.query(
-        `UPDATE orders SET status = 'paid' WHERE id = ? AND status NOT IN ('completed','delivered','cancelled')`,
-        [orderId]
-      );
+      // NOTE: We do NOT update orders.status here — 'paid' is not a valid order status
+      // enum value (pending/assigned/delivered/completed/cancelled).
+      // Payment is tracked purely through the transactions table + bill recalculation.
 
       await conn.commit();
     } catch (e) {
@@ -351,6 +349,18 @@ export const payOrderWithAdvance = async (req: AuthRequest, res: Response): Prom
     SSE.sendToUser(userId, 'advance_updated', { balance: newBalance });
 
     res.json({ message: 'Order paid via advance balance', balance: newBalance });
+
+    // Recalculate bill for this month so advance_paid/paid_amount reflects immediately
+    const BillingModel = await import('../models/billing.model');
+    const payMonth = new Date().toISOString().slice(0, 7);
+    BillingModel.generateBillForCustomer(userId, payMonth)
+      .then(updated => {
+        if (updated) {
+          SSE.sendToUser(userId, 'bill_updated', { month: payMonth });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId: userId, month: payMonth });
+        }
+      })
+      .catch((e: Error) => console.warn('[Billing] payOrderWithAdvance recalc failed:', e?.message));
   } catch (err) {
     console.error('payOrderWithAdvance error:', err);
     res.status(500).json({ message: 'Internal server error' });

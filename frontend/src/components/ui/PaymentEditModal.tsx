@@ -26,6 +26,7 @@ export interface PaymentEditTarget {
   total_amount?: number;
   delivery_payment_mode?: string | null;
   delivery_collected_amount?: number | null;
+  advance_access?: string | null; // 'approved' | 'pending' | null
 }
 
 interface Props {
@@ -101,17 +102,34 @@ export const PaymentEditModal = ({ target, onSaved, onClose }: Props) => {
           <div>
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2 block">Change To</label>
             <div className="grid grid-cols-2 gap-2">
-              {PAYMENT_MODES.map(pm => (
-                <button key={pm.value} onClick={() => setMode(pm.value)}
-                  className={`flex items-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all ${
-                    mode === pm.value
-                      ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
-                  }`}>
-                  <span>{pm.icon}</span> {pm.label}
-                </button>
-              ))}
+              {PAYMENT_MODES.map(pm => {
+                const isAdvance = pm.value === 'advance';
+                const advanceApproved = target.advance_access === 'approved';
+                const isLocked = isAdvance && !advanceApproved;
+                return (
+                  <button key={pm.value}
+                    onClick={() => !isLocked && setMode(pm.value)}
+                    title={isLocked ? 'This customer does not have advance payment access' : undefined}
+                    className={`flex items-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all relative
+                      ${isLocked
+                        ? 'opacity-40 blur-[0.5px] cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400'
+                        : mode === pm.value
+                          ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+                      }`}>
+                    <span>{pm.icon}</span> {pm.label}
+                    {isLocked && (
+                      <span className="absolute top-1 right-1 text-[10px]">🔒</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+            {target.advance_access !== 'approved' && (
+              <p className="text-[10px] text-slate-400 mt-1.5">
+                🔒 Advance option is locked — customer has not been granted advance payment access.
+              </p>
+            )}
           </div>
 
           {mode !== 'pay_later' && (

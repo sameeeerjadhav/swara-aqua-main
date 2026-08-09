@@ -61,7 +61,8 @@ const orderQuery = (where: string, suffix = '') => `
     d.id               AS delivery_id,
     d.payment_mode     AS delivery_payment_mode,
     d.collected_amount AS delivery_collected_amount,
-    d.status           AS delivery_status
+    d.status           AS delivery_status,
+    c.advance_access   AS customer_advance_access
   FROM orders o
   JOIN  users c ON c.id = o.customer_id
   LEFT JOIN users s ON s.id = o.staff_id

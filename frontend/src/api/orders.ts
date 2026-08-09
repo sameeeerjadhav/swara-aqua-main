@@ -27,6 +27,8 @@ export interface Order {
   delivery_payment_mode?: 'cash' | 'online' | 'advance' | 'pay_later' | null;
   delivery_collected_amount?: number | null;
   delivery_status?: string | null;
+  // Customer advance access
+  customer_advance_access?: string | null;
 }
 
 export interface Delivery {

@@ -146,7 +146,7 @@ export const getCustomerProfile = async (req: AuthRequest, res: Response): Promi
 
     // Basic info
     const [userRows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, name, phone, role, status, jar_rate, advance_balance, profile_photo, created_at
+      `SELECT id, name, phone, role, status, jar_rate, advance_balance, advance_access, profile_photo, created_at
        FROM users WHERE id = ? AND role = 'customer'`,
       [id]
     );

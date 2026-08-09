@@ -1075,6 +1075,7 @@ export const AdminCustomerProfile = () => {
                             total_amount: Number(o.total_amount),
                             delivery_payment_mode: o.delivery_payment_mode,
                             delivery_collected_amount: Number(o.delivery_collected_amount ?? 0),
+                            advance_access: profile?.advance_access,
                           })}
                           title="Correct payment mode"
                           className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors">

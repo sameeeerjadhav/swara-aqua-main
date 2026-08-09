@@ -692,6 +692,7 @@ export const AdminOrders = () => {
                             total_amount: o.total_amount,
                             delivery_payment_mode: o.delivery_payment_mode,
                             delivery_collected_amount: o.delivery_collected_amount,
+                            advance_access: o.customer_advance_access,
                           }); }}
                           title="Correct payment mode"
                           className="p-1 rounded-lg hover:bg-brand-100 text-slate-400 hover:text-brand-600 transition-colors opacity-0 group-hover:opacity-100">
@@ -773,6 +774,7 @@ export const AdminOrders = () => {
                       total_amount: o.total_amount,
                       delivery_payment_mode: o.delivery_payment_mode,
                       delivery_collected_amount: o.delivery_collected_amount,
+                      advance_access: o.customer_advance_access,
                     })}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100 transition-all active:scale-95">
                     <Edit3 className="w-3.5 h-3.5" />

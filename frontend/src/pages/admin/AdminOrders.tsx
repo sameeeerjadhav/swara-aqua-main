@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -281,7 +281,7 @@ const OrderDetailModal = ({ orderId, onClose }: { orderId: number; onClose: () =
 // ── Main Component ────────────────────────────────────────────────────────────
 export const AdminOrders = () => {
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -297,8 +297,29 @@ export const AdminOrders = () => {
   const [dateFilter, setDateFilter] = useState('');   // YYYY-MM-DD
   const [monthFilter, setMonthFilter] = useState('');   // YYYY-MM
   const [dateMode, setDateMode] = useState<'date' | 'month' | null>(null);
-  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+
+  // ── URL-driven detail panels: ?orderId=N opens order panel, ?editOrderId=N opens payment edit ──
+  // This makes browser Back properly close panels instead of leaving the page.
+  const selectedOrderId = searchParams.get('orderId') ? Number(searchParams.get('orderId')) : null;
+  const editingPaymentOrderId = searchParams.get('editOrderId') ? Number(searchParams.get('editOrderId')) : null;
+
+  const openOrderDetail = useCallback((id: number) => {
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('orderId', String(id)); return p; });
+  }, [setSearchParams]);
+  const closeOrderDetail = useCallback(() => {
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('orderId'); return p; });
+  }, [setSearchParams]);
+
+  // editingPaymentOrder needs the full object — keep that in local state but gate display on URL
   const [editingPaymentOrder, setEditingPaymentOrder] = useState<PaymentEditTarget | null>(null);
+  const openPaymentEdit = useCallback((target: PaymentEditTarget) => {
+    setEditingPaymentOrder(target);
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('editOrderId', String(target.orderId)); return p; });
+  }, [setSearchParams]);
+  const closePaymentEdit = useCallback(() => {
+    setEditingPaymentOrder(null);
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('editOrderId'); return p; });
+  }, [setSearchParams]);
 
   // New Order modal
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -654,7 +675,7 @@ export const AdminOrders = () => {
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No orders found</td></tr>
               ) : orders.map((o, i) => (
                 <motion.tr key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                  onClick={() => setSelectedOrderId(o.id)}
+                  onClick={() => openOrderDetail(o.id)}
                   className="hover:bg-brand-50/50 transition-colors cursor-pointer group">
                   <td className="px-4 py-3.5 text-xs font-bold text-slate-400">#{o.id}</td>
                   <td className="px-4 py-3.5">
@@ -684,7 +705,7 @@ export const AdminOrders = () => {
                       {/* Edit payment — only for delivered orders */}
                       {(o.status === 'completed' || o.status === 'delivered') && (
                         <button
-                          onClick={e => { e.stopPropagation(); setEditingPaymentOrder({
+                          onClick={e => { e.stopPropagation(); openPaymentEdit({
                             order_id: o.id,
                             delivery_id: o.delivery_id,
                             customer_name: o.customer_name,
@@ -759,14 +780,14 @@ export const AdminOrders = () => {
               {/* Action buttons */}
               <div className="flex gap-2 mt-3">
                 <button
-                  onClick={() => setSelectedOrderId(o.id)}
+                  onClick={() => openOrderDetail(o.id)}
                   className="flex-1 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-brand-300 transition-all active:scale-95">
                   View Details
                 </button>
                 {/* Edit payment — for all completed/delivered orders */}
                 {(o.status === 'completed' || o.status === 'delivered') && (
                   <button
-                    onClick={() => setEditingPaymentOrder({
+                    onClick={() => openPaymentEdit({
                       order_id: o.id,
                       delivery_id: o.delivery_id,
                       customer_name: o.customer_name,
@@ -1024,18 +1045,18 @@ export const AdminOrders = () => {
         {selectedOrderId !== null && (
           <OrderDetailModal
             orderId={selectedOrderId}
-            onClose={() => setSelectedOrderId(null)}
+            onClose={closeOrderDetail}
           />
         )}
       </AnimatePresence>
 
       {/* ─── Payment Correction Modal ─── */}
       <AnimatePresence>
-        {editingPaymentOrder && (
+        {editingPaymentOrder && editingPaymentOrderId && (
           <PaymentEditModal
             target={editingPaymentOrder}
-            onSaved={() => { setEditingPaymentOrder(null); load(undefined, true); }}
-            onClose={() => setEditingPaymentOrder(null)}
+            onSaved={() => { closePaymentEdit(); load(undefined, true); }}
+            onClose={closePaymentEdit}
           />
         )}
       </AnimatePresence>

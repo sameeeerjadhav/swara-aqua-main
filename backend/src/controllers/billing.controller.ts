@@ -3,6 +3,7 @@ import { errDetail } from '../utils/errors';
 import { AuthRequest } from '../middleware/auth.middleware';
 import * as BillingModel from '../models/billing.model';
 import * as NotifService from '../services/notification.service';
+import * as SSE from '../services/sse.service';
 import { generateBillPDF, generateReportPDF, generateSummaryBillPDF, SummaryBillRow } from '../services/pdf.service';
 import pool from '../config/db';
 import { RowDataPacket } from 'mysql2/promise';
@@ -228,6 +229,17 @@ export const payBillWithAdvance = async (req: AuthRequest, res: Response): Promi
     );
 
     res.json({ message: 'Bill paid via advance balance' });
+
+    // Recalculate bill for this month so the bill status reflects the advance payment
+    const payMonth = bill.month; // use the bill's actual month, not current month
+    BillingModel.generateBillForCustomer(bill.customer_id, payMonth)
+      .then(updated => {
+        if (updated) {
+          SSE.sendToUser(bill.customer_id, 'bill_updated', { month: payMonth });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId: bill.customer_id, month: payMonth });
+        }
+      })
+      .catch((e: Error) => console.warn('[Billing] payBillWithAdvance recalc failed:', e?.message));
   } catch (err) {
     console.error('payBillWithAdvance error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });
@@ -565,10 +577,10 @@ const getReportData = async (customerId: number, startDate: string, endDate: str
   const [onlineRows] = await pool.query<RowDataPacket[]>(
     `SELECT COALESCE(SUM(t.amount), 0) AS online_paid
      FROM transactions t
-     WHERE t.user_id = ?
+     WHERE t.customer_id = ?
        AND DATE(t.created_at) BETWEEN ? AND ?
        AND t.type = 'credit'
-       AND t.payment_mode = 'online'
+       AND t.mode = 'online'
        AND t.status = 'completed'`,
     [customerId, startDate, endDate]
   );
@@ -577,10 +589,10 @@ const getReportData = async (customerId: number, startDate: string, endDate: str
   const [advRows] = await pool.query<RowDataPacket[]>(
     `SELECT COALESCE(SUM(t.amount), 0) AS advance_paid
      FROM transactions t
-     WHERE t.user_id = ?
+     WHERE t.customer_id = ?
        AND DATE(t.created_at) BETWEEN ? AND ?
        AND t.type = 'credit'
-       AND t.payment_mode = 'advance'
+       AND t.mode = 'advance'
        AND t.status = 'completed'`,
     [customerId, startDate, endDate]
   );

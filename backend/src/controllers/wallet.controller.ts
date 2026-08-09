@@ -346,6 +346,22 @@ export const payOrderWithWallet = async (req: AuthRequest, res: Response): Promi
     SSE.sendToUser(userId, 'wallet_updated', { balance: newBalance });
 
     res.json({ message: 'Order paid via wallet', balance: newBalance });
+
+    // ── BUG-7 FIX: recalculate bill for this month so advance_paid/paid_amount
+    // reflects the wallet payment immediately ────────────────────────────────
+    (async () => {
+      try {
+        const BillingModel = await import('../models/billing.model');
+        const payMonth = new Date().toISOString().slice(0, 7);
+        const updated = await BillingModel.generateBillForCustomer(userId, payMonth);
+        if (updated) {
+          SSE.sendToUser(userId, 'bill_updated', { month: payMonth });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId: userId, month: payMonth });
+        }
+      } catch (e: any) {
+        console.warn('[Billing] payOrderWithWallet recalc failed:', e?.message);
+      }
+    })();
   } catch (err) {
     console.error('payOrderWithWallet error:', err);
     res.status(500).json({ message: 'Internal server error' });

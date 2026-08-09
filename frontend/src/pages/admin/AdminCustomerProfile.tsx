@@ -13,6 +13,7 @@ import { OrderStatusBadge } from '../../components/ui/OrderStatusBadge';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { EditProfileModal } from '../../components/ui/EditProfileModal';
+import { PaymentEditModal, PaymentEditTarget, PM_LABEL } from '../../components/ui/PaymentEditModal';
 import {
   calendarApi, DayDelivery, CustomerProfile, CustomerProfileStats,
   ManualDeliveryPayload, DeliveryPaymentPayload,
@@ -417,7 +418,7 @@ export const AdminCustomerProfile = () => {
   const [editingEntry,   setEditingEntry]   = useState<DayDelivery | null>(null);
   const [deletingId,     setDeletingId]     = useState<number | null>(null);
   const [editingPayment, setEditingPayment] = useState<DayDelivery | null>(null); // for non-manual order deliveries
-  const [editingOrderPayment, setEditingOrderPayment] = useState<any | null>(null); // for Recent Orders row payment edit
+  const [editingOrderPayment, setEditingOrderPayment] = useState<PaymentEditTarget | null>(null); // for Recent Orders modal
 
   const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
 
@@ -579,6 +580,7 @@ export const AdminCustomerProfile = () => {
   };
 
   return (
+    <>
     <div className="max-w-4xl space-y-6">
 
       {/* Edit Profile Modal */}
@@ -1038,30 +1040,8 @@ export const AdminCustomerProfile = () => {
         ) : (
           <div className="divide-y divide-slate-50">
             {orders.map((o: any) => {
-              const pmLabel: Record<string, { label: string; icon: string; cls: string }> = {
-                cash:      { label: 'Cash',      icon: '💵', cls: 'bg-green-50 text-green-700 border-green-200' },
-                online:    { label: 'Online',    icon: '📱', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-                pay_later: { label: 'Pay Later', icon: '🕒', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-                advance:   { label: 'Advance',   icon: '💰', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
-                none:      { label: 'N/A',       icon: '—',  cls: 'bg-slate-50 text-slate-400 border-slate-200' },
-              };
-              const pm  = pmLabel[o.delivery_payment_mode] ?? pmLabel['none'];
+               const pm  = PM_LABEL[o.delivery_payment_mode] ?? { label: 'N/A', icon: '—', cls: 'bg-slate-50 text-slate-400 border-slate-200' };
               const canEdit = o.delivery_id && o.delivery_status === 'delivered';
-              const isEditing = editingOrderPayment?.id === o.id;
-
-              // Build a DayDelivery-shaped object so PaymentEditForm can reuse it
-              const asDayDelivery: DayDelivery = {
-                id: o.id,
-                delivery_id: o.delivery_id,
-                jars: o.quantity,
-                time: new Date(o.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                period: 'morning',
-                staff_name: o.staff_name || '',
-                is_manual: false,
-                is_paid: o.delivery_status === 'delivered',
-                payment_mode: o.delivery_payment_mode || 'none',
-                amount_collected: Number(o.delivery_collected_amount ?? o.total_amount ?? 0),
-              };
 
               return (
                 <div key={o.id}>
@@ -1087,44 +1067,47 @@ export const AdminCustomerProfile = () => {
                       {/* Edit payment button — only for delivered orders */}
                       {canEdit && (
                         <button
-                          onClick={() => setEditingOrderPayment(isEditing ? null : o)}
+                          onClick={() => setEditingOrderPayment({
+                            delivery_id: o.delivery_id,
+                            order_id: o.id,
+                            customer_name: profile?.name,
+                            quantity: o.quantity,
+                            total_amount: Number(o.total_amount),
+                            delivery_payment_mode: o.delivery_payment_mode,
+                            delivery_collected_amount: Number(o.delivery_collected_amount ?? 0),
+                          })}
                           title="Correct payment mode"
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            isEditing ? 'bg-brand-100 text-brand-600' : 'hover:bg-slate-100 text-slate-400 hover:text-brand-600'
-                          }`}>
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors">
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
                   </div>
-                  {/* Inline payment edit form */}
-                  <AnimatePresence>
-                    {isEditing && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden px-5 pb-4">
-                        <PaymentEditForm
-                          delivery={asDayDelivery}
-                          onSaved={async () => {
-                            setEditingOrderPayment(null);
-                            // Reload profile to get updated pending/stats
-                            const [profileRes] = await Promise.all([
-                              calendarApi.getCustomerProfile(Number(id)),
-                            ]);
-                            setStats(profileRes.data.stats);
-                            setOrders(profileRes.data.orders);
-                          }}
-                          onCancel={() => setEditingOrderPayment(null)}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
+
               );
             })}
           </div>
         )}
       </div>
     </div>
+
+      {/* Payment Correction Modal */}
+      <AnimatePresence>
+        {editingOrderPayment && (
+          <PaymentEditModal
+            target={editingOrderPayment}
+            onSaved={async () => {
+              setEditingOrderPayment(null);
+              const profileRes = await calendarApi.getCustomerProfile(Number(id));
+              setStats(profileRes.data.stats);
+              setOrders(profileRes.data.orders);
+            }}
+            onClose={() => setEditingOrderPayment(null)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 };
+

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, CheckCircle, XCircle, RefreshCw, X, IndianRupee, Pencil, Eye, ChevronRight, Calendar, User, UserPlus, Package, Droplets, Sun, CloudSun, Sunset, Plus, Minus, RotateCcw, Check, Copy, MapPin, Camera, Trash2, AlertTriangle, GripVertical, ListOrdered, KeyRound, Tag, Phone, Navigation } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
@@ -136,6 +136,7 @@ const DraggableAdminCustomerItem = ({
 export const AdminCustomers = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers]   = useState<CustomerRow[]>([]);
   const [loading,   setLoading]     = useState(true);
   const [actionId,  setActionId]    = useState<number | null>(null);
@@ -144,8 +145,23 @@ export const AdminCustomers = () => {
   const [editingRate, setEditingRate] = useState<CustomerRow | null>(null);
   const [rateValue, setRateValue]   = useState('');
 
-  // Mobile modal
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
+  // Mobile panel — URL-driven so browser Back closes panel (not the page)
+  const panelCustomerId = searchParams.get('customerId') ? Number(searchParams.get('customerId')) : null;
+  const [selectedCustomer, _setSelectedCustomer] = useState<CustomerRow | null>(null);
+
+  const openCustomerPanel = useCallback((c: CustomerRow) => {
+    _setSelectedCustomer(c);
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('customerId', String(c.id)); return p; });
+  }, [setSearchParams]);
+  const closeCustomerPanel = useCallback(() => {
+    _setSelectedCustomer(null);
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('customerId'); return p; });
+  }, [setSearchParams]);
+
+  // When URL param disappears (browser Back), sync local state
+  useEffect(() => {
+    if (!panelCustomerId) _setSelectedCustomer(null);
+  }, [panelCustomerId]);
 
   // Delete
   const [deleteTarget,  setDeleteTarget]  = useState<CustomerRow | null>(null);
@@ -219,7 +235,7 @@ export const AdminCustomers = () => {
     try {
       const { data } = await api.post(`/admin/users/${u.id}/reset-password`);
       setTempPwdResult({ name: u.name, phone: u.phone, pwd: data.tempPassword });
-      setSelectedCustomer(null);
+      closeCustomerPanel();
     } catch {
       toast('Failed to reset password', 'error');
     } finally {
@@ -271,7 +287,7 @@ export const AdminCustomers = () => {
       await api.patch(`/admin/users/${id}/status`, { status });
       toast(status === 'active' ? 'Customer approved' : 'Customer rejected',
             status === 'active' ? 'success' : 'warning');
-      setSelectedCustomer(null);
+      closeCustomerPanel();
       await load();
     } catch { toast('Action failed', 'error'); }
     finally { setActionId(null); }
@@ -286,7 +302,7 @@ export const AdminCustomers = () => {
       setCustomers(prev => prev.filter(c => c.id !== deleteTarget.id));
       setReorderedList(prev => prev.filter(c => c.id !== deleteTarget.id));
       setDeleteTarget(null);
-      setSelectedCustomer(null);
+      closeCustomerPanel();
     } catch (err: any) {
       toast(err?.response?.data?.message || 'Failed to delete', 'error');
     } finally { setDeleting(false); }
@@ -742,7 +758,7 @@ export const AdminCustomers = () => {
               <motion.div key={u.id}
                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.025 }}
-                onClick={() => u.status === 'pending' ? fetchPendingDetail(u) : setSelectedCustomer(u)}
+                onClick={() => u.status === 'pending' ? fetchPendingDetail(u) : openCustomerPanel(u)}
                 className="bg-white rounded-2xl border border-slate-100 shadow-sm px-3 py-2.5 cursor-pointer hover:shadow-md hover:border-slate-200 active:scale-[0.99] transition-all">
                 <div className="flex items-center gap-2.5">
                   {/* Avatar — medium, no extra whitespace */}
@@ -819,7 +835,7 @@ export const AdminCustomers = () => {
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center md:hidden"
-            onClick={() => setSelectedCustomer(null)}>
+            onClick={() => closeCustomerPanel()}>
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 32 }}
@@ -875,7 +891,7 @@ export const AdminCustomers = () => {
                       <PhoneLink phone={selectedCustomer.phone} className="text-xs text-slate-400" />
                     </div>
                   </div>
-                  <button onClick={() => setSelectedCustomer(null)}
+                  <button onClick={() => closeCustomerPanel()}
                     className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400">
                     <X className="w-4 h-4" />
                   </button>
@@ -895,7 +911,7 @@ export const AdminCustomers = () => {
                       <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Jar Rate</p>
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-bold text-brand-600">₹{selectedCustomer.jar_rate || 50}/jar</p>
-                        <button onClick={() => { setEditingRate(selectedCustomer); setRateValue(String(selectedCustomer.jar_rate || 50)); setSelectedCustomer(null); }}
+                        <button onClick={() => { setEditingRate(selectedCustomer); setRateValue(String(selectedCustomer.jar_rate || 50)); closeCustomerPanel(); }}
                           className="ml-0.5">
                           <Pencil className="w-3 h-3 text-slate-400" />
                         </button>
@@ -987,7 +1003,7 @@ export const AdminCustomers = () => {
                               try {
                                 await groupsApi.assignCustomer(selectedCustomer.id, null);
                                 setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, group_id: null, group_name: null, group_color: null, group_icon: null } : c));
-                                setSelectedCustomer(s => s ? { ...s, group_id: null, group_name: null, group_color: null, group_icon: null } : s);
+                                _setSelectedCustomer(s => s ? { ...s, group_id: null, group_name: null, group_color: null, group_icon: null } : s);
                                 await loadGroups();
                                 toast('Removed from group', 'success');
                               } catch { toast('Failed', 'error'); }
@@ -1005,7 +1021,7 @@ export const AdminCustomers = () => {
                               try {
                                 await groupsApi.assignCustomer(selectedCustomer.id, g.id);
                                 setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, group_id: g.id, group_name: g.name, group_color: g.color, group_icon: g.icon } : c));
-                                setSelectedCustomer(s => s ? { ...s, group_id: g.id, group_name: g.name, group_color: g.color, group_icon: g.icon } : s);
+                                _setSelectedCustomer(s => s ? { ...s, group_id: g.id, group_name: g.name, group_color: g.color, group_icon: g.icon } : s);
                                 await loadGroups();
                                 toast(`Moved to "${g.name}"`, 'success');
                               } catch { toast('Failed', 'error'); }
@@ -1025,19 +1041,19 @@ export const AdminCustomers = () => {
                   {/* Action buttons */}
                   <div className="space-y-2 pt-1">
                     <button
-                      onClick={() => { setSelectedCustomer(null); navigate(`/admin/customers/${selectedCustomer.id}`); }}
+                      onClick={() => { closeCustomerPanel(); navigate(`/admin/customers/${selectedCustomer!.id}`); }}
                       className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-600 text-white text-sm font-semibold rounded-2xl hover:bg-brand-700 transition-colors shadow-brand">
                       <User className="w-4 h-4" /> View Full Profile
                     </button>
                     {selectedCustomer.status === 'active' && (
                       <>
                         <button
-                          onClick={() => { setSelectedCustomer(null); setOrderForCustomer(selectedCustomer); setOrderForm({ type: 'instant', quantity: 1, deliveryDate: '', notes: '', address: '' }); }}
+                          onClick={() => { closeCustomerPanel(); setOrderForCustomer(selectedCustomer!); setOrderForm({ type: 'instant', quantity: 1, deliveryDate: '', notes: '', address: '' }); }}
                           className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-aqua-500/10 text-aqua-600 text-sm font-semibold rounded-2xl border border-aqua-500/20 hover:bg-aqua-500/20 transition-colors">
                           <Package className="w-4 h-4" /> Place Order
                         </button>
                         <button
-                          onClick={() => { setSelectedCustomer(null); setPlanSlots({}); setPlanAddress(''); setPlanAutoRenew(true); setPlanForCustomer(selectedCustomer); }}
+                          onClick={() => { closeCustomerPanel(); setPlanSlots({}); setPlanAddress(''); setPlanAutoRenew(true); setPlanForCustomer(selectedCustomer!); }}
                           className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-50 text-purple-600 text-sm font-semibold rounded-2xl border border-purple-200 hover:bg-purple-100 transition-colors">
                           <Droplets className="w-4 h-4" /> Create Monthly Plan
                         </button>
@@ -1068,7 +1084,7 @@ export const AdminCustomers = () => {
                     </button>
                     {/* Delete */}
                     <button
-                      onClick={() => { setDeleteTarget(selectedCustomer); setSelectedCustomer(null); }}
+                      onClick={() => { setDeleteTarget(selectedCustomer); closeCustomerPanel(); }}
                       className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white text-sm font-semibold rounded-2xl hover:bg-red-700 transition-colors">
                       <Trash2 className="w-4 h-4" /> Delete Customer
                     </button>

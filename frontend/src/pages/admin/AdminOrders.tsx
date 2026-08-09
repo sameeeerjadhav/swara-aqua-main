@@ -314,7 +314,7 @@ export const AdminOrders = () => {
   const [editingPaymentOrder, setEditingPaymentOrder] = useState<PaymentEditTarget | null>(null);
   const openPaymentEdit = useCallback((target: PaymentEditTarget) => {
     setEditingPaymentOrder(target);
-    setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('editOrderId', String(target.orderId)); return p; });
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('editOrderId', String(target.order_id)); return p; });
   }, [setSearchParams]);
   const closePaymentEdit = useCallback(() => {
     setEditingPaymentOrder(null);
@@ -559,7 +559,7 @@ export const AdminOrders = () => {
         <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNewOrder(true)}>
           New Order
         </Button>
-        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={load}>
+        <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={() => load()}>
           Refresh
         </Button>
       </div>

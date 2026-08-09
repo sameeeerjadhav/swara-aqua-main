@@ -548,6 +548,12 @@ export const adjustDelivery = async (req: AuthRequest, res: Response): Promise<v
             `UPDATE users SET pending_balance = GREATEST(0, pending_balance + ?) WHERE id = ?`,
             [balanceAdjust, del.customer_id]
           );
+          // ── BUG-3 FIX: also update pending_payments.amount so billing model
+          // reads the correct pay_later_amount for this month's bill ───────────
+          await conn.query(
+            `UPDATE pending_payments SET amount = ? WHERE order_id = ? AND status = 'pending'`,
+            [newTotal, del.order_id]
+          );
         }
       } else if (amtDiff !== 0) {
         await conn.query(
@@ -1192,6 +1198,18 @@ export const verifyOrderPayment = async (req: AuthRequest, res: Response): Promi
     SSE.broadcastToRole('admin', 'order_updated', { orderId, status: 'paid_online' });
 
     res.json({ message: 'Payment verified successfully', orderId, amount });
+
+    // ── BUG-4 FIX: recalculate the bill for this month so online_paid/paid_amount
+    // immediately reflect this payment without waiting for syncStaleBills ────────
+    const payMonth = new Date().toISOString().slice(0, 7);
+    BillingModel.generateBillForCustomer(userId, payMonth)
+      .then(updated => {
+        if (updated) {
+          SSE.sendToUser(userId, 'bill_updated', { month: payMonth });
+          SSE.broadcastToRole('admin', 'bill_updated', { customerId: userId, month: payMonth });
+        }
+      })
+      .catch(e => console.warn('[Billing] verifyOrderPayment recalc failed:', e?.message));
   } catch (err) {
     console.error('verifyOrderPayment error:', err);
     res.status(500).json({ message: 'Internal server error', ...errDetail(err) });

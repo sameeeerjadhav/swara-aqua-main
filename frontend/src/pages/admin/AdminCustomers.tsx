@@ -720,15 +720,14 @@ export const AdminCustomers = () => {
           </table>
         </div>
 
-        {/* ─── Mobile: Groups-style cards ─── */}
-        <div className="md:hidden p-3 space-y-3">
+        {/* ─── Mobile: compact cards ─── */}
+        <div className="md:hidden p-3 space-y-2">
           {loading ? (
             [0,1,2,3].map(i => (
-              <div key={i} className="bg-white rounded-3xl border border-slate-100 p-4 flex gap-3">
-                <Skeleton className="w-14 h-14 rounded-2xl shrink-0" />
-                <div className="flex-1 space-y-2 pt-1">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-24" />
+              <div key={i} className="bg-white rounded-2xl border border-slate-100 p-3 flex gap-2.5">
+                <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+                <div className="flex-1 space-y-1.5 pt-0.5">
+                  <Skeleton className="h-3.5 w-28" />
                   <Skeleton className="h-3 w-20" />
                 </div>
               </div>
@@ -741,63 +740,66 @@ export const AdminCustomers = () => {
             const payLater = payLaterMap[u.id] || 0;
             return (
               <motion.div key={u.id}
-                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.025 }}
                 onClick={() => u.status === 'pending' ? fetchPendingDetail(u) : setSelectedCustomer(u)}
-                className="bg-white rounded-3xl border border-slate-100 shadow-sm px-4 py-4 cursor-pointer hover:shadow-md hover:border-slate-200 active:scale-[0.99] transition-all">
-                <div className="flex items-start gap-3">
-                  {/* Avatar */}
-                  <Avatar name={u.name} photo={u.profile_photo} size="lg" className="shrink-0" />
+                className="bg-white rounded-2xl border border-slate-100 shadow-sm px-3 py-2.5 cursor-pointer hover:shadow-md hover:border-slate-200 active:scale-[0.99] transition-all">
+                <div className="flex items-center gap-2.5">
+                  {/* Avatar — medium, no extra whitespace */}
+                  <Avatar name={u.name} photo={u.profile_photo} size="sm" className="w-10 h-10 shrink-0 rounded-xl" />
 
-                  {/* Info */}
+                  {/* Info — all packed tightly */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-bold text-slate-900 truncate">{u.name}</p>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border capitalize ${statusColor[u.status] || 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                    {/* Row 1: name + status */}
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-bold text-slate-900 truncate">{u.name}</p>
+                      <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full border capitalize ${statusColor[u.status] || 'bg-slate-50 text-slate-500 border-slate-200'}`}>
                         {u.status}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      <span className="flex items-center gap-1 text-xs text-slate-400">
-                        <Phone className="w-3 h-3" /> {u.phone}
+                    {/* Row 2: phone · address */}
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="flex items-center gap-0.5 text-[11px] text-slate-400">
+                        <Phone className="w-2.5 h-2.5" /> {u.phone}
                       </span>
                       {u.address && (
-                        <span className="flex items-center gap-1 text-xs text-slate-400 truncate max-w-[130px]">
-                          <MapPin className="w-3 h-3 shrink-0" /> {u.address_label || u.address}
+                        <span className="flex items-center gap-0.5 text-[11px] text-slate-400 truncate max-w-[110px]">
+                          <MapPin className="w-2.5 h-2.5 shrink-0" /> {u.address_label || u.address}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className="flex items-center gap-1 text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">
+                    {/* Row 3: badges — jar rate + financials */}
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <span className="flex items-center gap-0.5 text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded-full font-semibold">
                         <Package className="w-2.5 h-2.5" /> ₹{u.jar_rate || 50}/jar
                       </span>
                       {hasPending && (
-                        <span className="flex items-center gap-1 text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold border border-red-100">
+                        <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-semibold border border-red-100">
                           ₹{bal.total.toLocaleString('en-IN')} due
                         </span>
                       )}
                       {payLater > 0 && (
-                        <span className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-100">
+                        <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold border border-amber-100">
                           ⏳ ₹{payLater.toLocaleString('en-IN')} later
                         </span>
                       )}
                       {u.status === 'active' && u.advance_access === 'approved' && Number(u.prepaid_balance ?? 0) <= LOW_BAL_THRESHOLD && (
-                        <span className="flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">
-                          ⚠️ Low Adv ₹{Number(u.prepaid_balance ?? 0)}
+                        <span className="text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">
+                          ⚠️ ₹{Number(u.prepaid_balance ?? 0)}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Actions — right side */}
+                  <div className="flex items-center gap-1 shrink-0">
                     {u.address && (
                       <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(u.address)}`}
                         target="_blank" rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()}
-                        className="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 active:scale-95 transition-all"
+                        className="w-7 h-7 flex items-center justify-center rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 active:scale-95 transition-all"
                         title="Navigate">
-                        <Navigation className="w-4 h-4" />
+                        <Navigation className="w-3.5 h-3.5" />
                       </a>
                     )}
                     <ChevronRight className="w-4 h-4 text-slate-300" />

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download, RefreshCw, Plus, X, IndianRupee, CheckCircle, FileText,
@@ -98,6 +99,19 @@ export const AdminBilling = () => {
   const [reportEnd,     setReportEnd]     = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const [report,        setReport]        = useState<DeliveryReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+
+  // ── Auto-apply ?customerId= param coming from customer profile links ──────────
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const cid = searchParams.get('customerId');
+    if (cid) {
+      setCustFilter(cid);
+      setViewTab('bills'); // jump straight to All Bills tab
+      // Clean up the URL param so it doesn't persist after the filter is applied
+      setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('customerId'); return p; }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadBills = useCallback(async () => {
     setBillsLoading(true);

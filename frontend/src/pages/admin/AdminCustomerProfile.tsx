@@ -5,6 +5,7 @@ import {
   ArrowLeft, Phone, MapPin, Droplets, Package, CreditCard, IndianRupee,
   ChevronLeft, ChevronRight, FileText, CalendarDays, Pencil, Trash2, AlertTriangle, Camera, Copy,
   Plus, Check, X, Clock, Banknote, Smartphone, Wallet, Save, Edit3,
+  Download, CheckCircle, ExternalLink,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
@@ -14,11 +15,11 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { EditProfileModal } from '../../components/ui/EditProfileModal';
 import { PaymentEditModal, PaymentEditTarget, PM_LABEL } from '../../components/ui/PaymentEditModal';
-import {
-  calendarApi, DayDelivery, CustomerProfile, CustomerProfileStats,
+import { calendarApi, DayDelivery, CustomerProfile, CustomerProfileStats,
   ManualDeliveryPayload, DeliveryPaymentPayload,
 } from '../../api/calendar';
 import { customerOrderApi } from '../../api/customerOrder';
+import { billingApi } from '../../api/billing';
 import api from '../../api/axios';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -420,6 +421,30 @@ export const AdminCustomerProfile = () => {
   const [deletingId,     setDeletingId]     = useState<number | null>(null);
   const [editingPayment, setEditingPayment] = useState<DayDelivery | null>(null); // for non-manual order deliveries
   const [editingOrderPayment, setEditingOrderPayment] = useState<PaymentEditTarget | null>(null); // for Recent Orders modal
+
+  // Bill payment modal state
+  const [payBill,   setPayBill]   = useState<any | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMode,   setPayMode]   = useState<'cash' | 'online'>('cash');
+  const [paying,    setPaying]    = useState(false);
+
+  const billDue = (b: any) => Math.max(0, Number(b.total_amount) - Number(b.paid_amount));
+
+  const handlePayBill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payBill || !payAmount || Number(payAmount) <= 0) { toast('Enter a valid amount', 'error'); return; }
+    setPaying(true);
+    try {
+      await billingApi.recordPayment(payBill.id, Number(payAmount), payMode);
+      toast(`${payMode === 'cash' ? '💵 Cash' : '💳 Online'} ₹${payAmount} recorded ✅`, 'success');
+      setPayBill(null); setPayAmount(''); setPayMode('cash');
+      // Refresh bills list
+      const profileRes = await calendarApi.getCustomerProfile(Number(id));
+      setBills(profileRes.data.bills);
+    } catch (err: any) {
+      toast(err?.response?.data?.message || 'Payment failed', 'error');
+    } finally { setPaying(false); }
+  };
 
   const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
 
@@ -1002,29 +1027,79 @@ export const AdminCustomerProfile = () => {
 
       {/* ── Bills History ── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <FileText className="w-4 h-4 text-slate-400" /> Bills History
           </h3>
+          <button
+            onClick={() => navigate(`/admin/billing?customerId=${id}`)}
+            className="flex items-center gap-1 text-[10px] font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+            <ExternalLink className="w-3 h-3" /> View in Billing
+          </button>
         </div>
         {bills.length === 0 ? (
           <div className="p-6 text-center text-sm text-slate-400">No bills generated yet</div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {bills.map((b: any) => (
-              <div key={b.id} className="px-5 py-3.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                <div>
-                  <p className="text-sm font-semibold text-slate-700">{b.month}</p>
-                  <p className="text-xs text-slate-400">{b.total_jars} jars · Due {new Date(b.due_date).toLocaleDateString('en-IN')}</p>
+            {bills.map((b: any) => {
+              const due = billDue(b);
+              const cfg = BILL_STATUS[b.status] || BILL_STATUS.unpaid;
+              return (
+                <div key={b.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-slate-50/60 transition-colors group">
+                  {/* Month chip */}
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 flex flex-col items-center justify-center shrink-0">
+                    <span className="text-white text-[9px] font-bold leading-none">
+                      {['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][Number(b.month.split('-')[1]) - 1]}
+                    </span>
+                    <span className="text-slate-400 text-[9px] leading-none mt-0.5">{b.month.split('-')[0].slice(2)}</span>
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-700">{b.month}</p>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${cfg}`}>{b.status}</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">{b.total_jars} jars · ₹{b.jar_rate}/jar · Due {new Date(b.due_date).toLocaleDateString('en-IN')}</p>
+                  </div>
+
+                  {/* Amounts */}
+                  <div className="text-right shrink-0 hidden sm:block">
+                    <p className="text-sm font-bold text-brand-600">₹{Number(b.total_amount).toLocaleString('en-IN')}</p>
+                    {due > 0 && <p className="text-[10px] text-red-500 font-semibold">Due: ₹{due.toLocaleString('en-IN')}</p>}
+                    {due === 0 && <p className="text-[10px] text-emerald-500 font-semibold">Fully paid</p>}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* PDF Download */}
+                    <button
+                      onClick={() => window.open(billingApi.pdfUrl(b.id), '_blank')}
+                      title="Download PDF"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand-50 text-brand-500 opacity-0 group-hover:opacity-100 transition-all">
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    {/* Record Payment */}
+                    {b.status !== 'paid' && (
+                      <button
+                        onClick={() => { setPayBill(b); setPayAmount(String(due.toFixed(2))); setPayMode('cash'); }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition-colors">
+                        <IndianRupee className="w-3 h-3" />
+                        <span className="hidden sm:inline">Record</span>
+                        <span className="sm:hidden">₹{due.toLocaleString('en-IN')}</span>
+                      </button>
+                    )}
+                    {/* Navigate to billing page */}
+                    <button
+                      onClick={() => navigate(`/admin/billing?customerId=${id}`)}
+                      title="Open in Billing page"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 opacity-0 group-hover:opacity-100 transition-all">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-sm font-bold text-brand-600">₹{b.total_amount}</p>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${BILL_STATUS[b.status]}`}>
-                    {b.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1107,6 +1182,91 @@ export const AdminCustomerProfile = () => {
             }}
             onClose={() => setEditingOrderPayment(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── Record Bill Payment Modal ── */}
+      <AnimatePresence>
+        {payBill && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+            onClick={() => setPayBill(null)}>
+            <motion.div
+              initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+
+              {/* Dark header */}
+              <div className="bg-slate-900 px-5 pt-5 pb-4">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                      <IndianRupee className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-bold text-sm">Record Payment</h3>
+                      <p className="text-slate-400 text-xs mt-0.5">{profile?.name} · {payBill.month}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setPayBill(null)}
+                    className="w-7 h-7 flex items-center justify-center rounded-xl bg-white/10 text-slate-400 hover:text-white transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* Bill summary strip */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Total',     value: `₹${Number(payBill.total_amount).toLocaleString('en-IN')}`, color: 'text-white' },
+                    { label: 'Collected', value: `₹${Number(payBill.paid_amount).toLocaleString('en-IN')}`,  color: 'text-emerald-400' },
+                    { label: 'Due',       value: `₹${billDue(payBill).toLocaleString('en-IN')}`,             color: 'text-red-400' },
+                  ].map(item => (
+                    <div key={item.label} className="bg-slate-800 rounded-xl p-2.5 text-center">
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider mb-0.5">{item.label}</p>
+                      <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Form body */}
+              <div className="px-5 py-5">
+                <form onSubmit={handlePayBill} className="space-y-4">
+                  {/* Mode selector */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Payment Mode</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { id: 'cash',   label: '💵 Cash',   active: 'bg-emerald-50 border-emerald-400 text-emerald-700 ring-2 ring-emerald-400/20' },
+                        { id: 'online', label: '💳 Online', active: 'bg-blue-50 border-blue-400 text-blue-700 ring-2 ring-blue-400/20' },
+                      ] as const).map(m => (
+                        <button key={m.id} type="button" onClick={() => setPayMode(m.id)}
+                          className={`flex items-center justify-center py-3 rounded-2xl border font-bold text-sm transition-all
+                            ${payMode === m.id ? m.active : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Amount (₹)</label>
+                    <input
+                      type="number" min={0.01} step="0.01" value={payAmount}
+                      onChange={e => setPayAmount(e.target.value)}
+                      placeholder={`Due: ₹${billDue(payBill).toFixed(0)}`}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xl font-bold outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/10 transition-all" />
+                  </div>
+
+                  <Button type="submit" loading={paying} size="lg" className="w-full"
+                    icon={<CheckCircle className="w-4 h-4" />}>
+                    Record {payMode === 'cash' ? '💵 Cash' : '💳 Online'} ₹{payAmount || '0'}
+                  </Button>
+                </form>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </>

@@ -355,7 +355,7 @@ export const AdminBilling = () => {
                 return (
                   <motion.div key={c.customer_id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.025 }}>
                     <button
-                      onClick={() => { setExpandedCust(isExpanded ? null : c.customer_id); if (!isExpanded) setCustFilter(String(c.customer_id)); else setCustFilter(''); }}
+                      onClick={() => setExpandedCust(isExpanded ? null : c.customer_id)}
                       className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-slate-50/70 transition-colors">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-extrabold
                         ${hasDue ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>

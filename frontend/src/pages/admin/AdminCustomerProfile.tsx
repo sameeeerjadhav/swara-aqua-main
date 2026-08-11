@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -446,6 +446,13 @@ export const AdminCustomerProfile = () => {
     } finally { setPaying(false); }
   };
 
+  // Scroll refs for stat card navigation
+  const calendarRef = useRef<HTMLDivElement>(null);
+  const billsRef    = useRef<HTMLDivElement>(null);
+
+  const scrollTo = (ref: React.RefObject<HTMLDivElement>) =>
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
 
   useEffect(() => {
@@ -715,19 +722,55 @@ export const AdminCustomerProfile = () => {
 
       {/* Profile cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Jar Rate',     value: `₹${profile.jar_rate || 50}`, icon: IndianRupee, color: 'from-brand-500 to-aqua-500' },
-          { label: 'Total Jars',   value: stats?.total_jars_delivered || 0, icon: Droplets, color: 'from-blue-500 to-cyan-500' },
-          { label: 'Total Orders', value: stats?.total_orders || 0, icon: Package, color: 'from-purple-500 to-pink-500' },
-          { label: 'Pending',      value: `₹${stats?.pending_amount || 0}`, icon: CreditCard, color: 'from-red-500 to-orange-500' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl border border-slate-100 shadow-card p-4">
+        {([
+          {
+            label: 'Jar Rate',
+            value: `₹${profile.jar_rate || 50}`,
+            icon: IndianRupee,
+            color: 'from-brand-500 to-aqua-500',
+            onClick: () => setShowEdit(true),
+            hint: 'Click to edit rate',
+          },
+          {
+            label: 'Total Jars',
+            value: stats?.total_jars_delivered || 0,
+            icon: Droplets,
+            color: 'from-blue-500 to-cyan-500',
+            onClick: () => scrollTo(calendarRef),
+            hint: 'View calendar',
+          },
+          {
+            label: 'Total Orders',
+            value: stats?.total_orders || 0,
+            icon: Package,
+            color: 'from-purple-500 to-pink-500',
+            onClick: () => scrollTo(calendarRef),
+            hint: 'View calendar',
+          },
+          {
+            label: 'Pending',
+            value: `₹${stats?.pending_amount || 0}`,
+            icon: CreditCard,
+            color: 'from-red-500 to-orange-500',
+            onClick: () => scrollTo(billsRef),
+            hint: 'View bills',
+          },
+        ] as const).map(({ label, value, icon: Icon, color, onClick, hint }) => (
+          <motion.div
+            key={label}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={onClick}
+            title={hint}
+            className="bg-white rounded-2xl border border-slate-100 shadow-card p-4 cursor-pointer hover:border-brand-200 hover:shadow-md transition-all select-none">
             <div className={`w-9 h-9 bg-gradient-to-br ${color} rounded-xl flex items-center justify-center mb-2`}>
               <Icon className="w-4.5 h-4.5 text-white" />
             </div>
             <p className="text-xl font-bold text-slate-800">{value}</p>
             <p className="text-xs text-slate-400 mt-0.5">{label}</p>
+            <p className="text-[9px] text-brand-400 font-semibold mt-1 uppercase tracking-wide">{hint} →</p>
           </motion.div>
         ))}
       </div>
@@ -769,7 +812,7 @@ export const AdminCustomerProfile = () => {
       )}
 
       {/* ── Delivery Calendar ── */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+      <div ref={calendarRef} className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
         {/* Calendar Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
@@ -1026,7 +1069,7 @@ export const AdminCustomerProfile = () => {
       </div>
 
       {/* ── Bills History ── */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+      <div ref={billsRef} className="bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <FileText className="w-4 h-4 text-slate-400" /> Bills History
